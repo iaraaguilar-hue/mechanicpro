@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getFleetStatus, deleteClient, type FleetItem } from "@/lib/api";
 import { RapidIntakeWizard } from "@/components/RapidIntakeWizard";
+import MigradorDatos from "@/components/MigradorDatos"; // [NEW]
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Search, PlusCircle, Trash2, Clock, CheckCircle } from "lucide-react";
@@ -51,6 +52,11 @@ export default function Home() {
 
     return (
         <div className="space-y-8 max-w-7xl mx-auto py-8 px-6 animate-in fade-in duration-500">
+            {/* TEMPORARY MIGRATION TOOL */}
+            <div className="mb-8 p-4 bg-orange-50 border border-orange-200 rounded-xl">
+                <MigradorDatos />
+            </div>
+
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-center gap-6 pb-2">
                 <div className="flex items-center gap-3">

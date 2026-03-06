@@ -162,7 +162,7 @@ export default function History() {
                 const bikes: Bike[] = Array.isArray(db.bikes) ? db.bikes : [];
                 const clients: Client[] = Array.isArray(db.clients) ? db.clients : [];
 
-                const joinedJobs = services.map(service => {
+                const joinedJobs = services.filter((s: any) => !s.deleted_at).map(service => {
                     const bike = bikes.find(b => b.id === service.bike_id);
                     const client = clients.find(c => c.id === bike?.client_id);
                     // Use date_out if available (Completed), otherwise date_in or created_at

@@ -94,6 +94,7 @@ export interface ServiceRecord {
     date_out?: string;
     status: string;
     service_type: ServiceType;
+    deleted_at?: string; // [NEW] Soft Delete flag
     checklist_data?: Record<string, boolean>;
     parts_used?: string;
     mechanic_notes?: string;
@@ -235,7 +236,7 @@ export const getBike = async (bikeId: number) => {
 export const getDashboardJobs = async () => {
     const db = getDB();
     // Join services with bike and client info
-    const activeServices = db.services.filter(s => s.status !== "Old_Completed"); // Assume we filter old ones differently or keep all
+    const activeServices = db.services.filter(s => s.status !== "Old_Completed" && !s.deleted_at); // Filter soft-deleted
     const jobs: DashboardJob[] = activeServices.map(s => {
         const bike = db.bikes.find(b => b.id === s.bike_id);
         const client = db.clients.find(c => c.id === bike?.client_id);
@@ -263,9 +264,9 @@ export const getDashboardJobs = async () => {
 export const getDashboardHistory = async (): Promise<DashboardJob[]> => {
     const db = getDB();
 
-    // Filter for completed services
+    // Filter for completed services and NOT deleted
     const historyServices = db.services.filter(s =>
-        ["Completed", "Finalizado", "Entregado"].includes(s.status)
+        ["Completed", "Finalizado", "Entregado"].includes(s.status) && !s.deleted_at
     );
 
     // Sort by date_out descending
@@ -300,7 +301,7 @@ export const getFullHistory = async () => {
     const db = getDB();
     // Return full service objects for advanced analysis
     return db.services.filter(s =>
-        ["Completed", "Finalizado", "Entregado"].includes(s.status)
+        ["Completed", "Finalizado", "Entregado"].includes(s.status) && !s.deleted_at
     );
 };
 
@@ -436,7 +437,20 @@ export const deleteService = async (serviceId: number) => {
     const index = db.services.findIndex(s => s.id === serviceId);
     if (index === -1) throw new Error("Service not found");
 
-    db.services.splice(index, 1);
+    const deleteTimestamp = new Date().toISOString();
+
+    // SUPABASE HYBRID APPROACH (Soft Delete Remote)
+    try {
+        const { supabase } = await import('@/lib/supabase');
+        await supabase.from('servicios')
+            .update({ deleted_at: deleteTimestamp })
+            .eq('id', serviceId);
+    } catch (err) {
+        console.error("Hybrid Supabase Soft Delete failed silently:", err);
+    }
+
+    // LOCAL STORAGE (Soft Delete Local)
+    db.services[index].deleted_at = deleteTimestamp;
     saveDB(db);
     return true;
 };
@@ -518,13 +532,14 @@ export const deduplicateReminders = async (bikeId: number) => {
 
 export const getBikeServices = async (bikeId: number) => {
     const db = getDB();
-    return db.services.filter(s => s.bike_id === bikeId);
+    return db.services.filter(s => s.bike_id === bikeId && !s.deleted_at);
 };
 
 export const getClientServices = async (clientId: number) => {
     const db = getDB();
-    // Filter services belonging to any bike owned by this client
+    // Filter services belonging to any bike owned by this client and NOT deleted
     return db.services.filter(s => {
+        if (s.deleted_at) return false;
         const bike = db.bikes.find(b => b.id === s.bike_id);
         return bike?.client_id === clientId;
     });

@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { updateBike, type Bike } from "@/lib/api";
+import { useDataStore, type SupabaseBike } from "@/store/dataStore";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -8,47 +7,52 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 interface EditBikeDialogProps {
-    bike: Bike;
+    bike: SupabaseBike;
     isOpen: boolean;
     onClose: () => void;
-    onBikeUpdated: (bike: Bike) => void;
+    onBikeUpdated: (bike: SupabaseBike) => void;
 }
 
 export function EditBikeDialog({ bike, isOpen, onClose, onBikeUpdated }: EditBikeDialogProps) {
     const [formData, setFormData] = useState({
-        brand: "",
-        model: "",
-        transmission: "",
-        notes: ""
+        marca: "",
+        modelo: "",
+        transmision: "",
+        notas: ""
     });
+    const [isSaving, setIsSaving] = useState(false);
+
+    const updateBicicleta = useDataStore(s => s.updateBicicleta);
 
     useEffect(() => {
         if (bike) {
             setFormData({
-                brand: bike.brand,
-                model: bike.model,
-                transmission: bike.transmission,
-                notes: bike.notes || ""
+                marca: bike.marca || "",
+                modelo: bike.modelo || "",
+                transmision: bike.transmision || "",
+                notas: bike.notas || ""
             });
         }
     }, [bike]);
 
-    const mutation = useMutation({
-        mutationFn: (data: Bike) => updateBike(bike.id!, data),
-        onSuccess: (data) => {
-            onBikeUpdated(data);
+    const handleSubmit = async () => {
+        if (!formData.marca || !formData.modelo) return alert("Marca y Modelo son obligatorios");
+        setIsSaving(true);
+        try {
+            await updateBicicleta(bike.id, {
+                marca: formData.marca,
+                modelo: formData.modelo,
+                transmision: formData.transmision || undefined,
+                notas: formData.notas || undefined,
+            });
+            onBikeUpdated({ ...bike, ...formData });
             onClose();
-        },
-        onError: () => alert("Error actualizando bicicleta")
-    });
-
-    const handleSubmit = () => {
-        if (!formData.brand || !formData.model) return alert("Marca y Modelo son obligatorios");
-        mutation.mutate({
-            ...bike, // keep id and client_id
-            ...formData
-        });
-    }
+        } catch (e: any) {
+            alert(`Error: ${e.message}`);
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -59,24 +63,24 @@ export function EditBikeDialog({ bike, isOpen, onClose, onBikeUpdated }: EditBik
                 <div className="grid gap-4 py-4">
                     <div className="space-y-2">
                         <Label>Marca</Label>
-                        <Input value={formData.brand} onChange={e => setFormData({ ...formData, brand: e.target.value })} placeholder="Ej: Specialized" />
+                        <Input value={formData.marca} onChange={e => setFormData({ ...formData, marca: e.target.value })} placeholder="Ej: Specialized" />
                     </div>
                     <div className="space-y-2">
                         <Label>Modelo</Label>
-                        <Input value={formData.model} onChange={e => setFormData({ ...formData, model: e.target.value })} placeholder="Ej: Tarmac SL7" />
+                        <Input value={formData.modelo} onChange={e => setFormData({ ...formData, modelo: e.target.value })} placeholder="Ej: Tarmac SL7" />
                     </div>
                     <div className="space-y-2">
                         <Label>Transmisión</Label>
-                        <Input value={formData.transmission} onChange={e => setFormData({ ...formData, transmission: e.target.value })} placeholder="Ej: Shimano Ultegra 12s" />
+                        <Input value={formData.transmision} onChange={e => setFormData({ ...formData, transmision: e.target.value })} placeholder="Ej: Shimano Ultegra 12s" />
                     </div>
                     <div className="space-y-2">
                         <Label>Notas Generales</Label>
-                        <Textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} placeholder="Detalles extra..." />
+                        <Textarea value={formData.notas} onChange={e => setFormData({ ...formData, notas: e.target.value })} placeholder="Detalles extra..." />
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button onClick={handleSubmit} disabled={mutation.isPending}>
-                        {mutation.isPending ? "Guardando..." : "Guardar Cambios"}
+                    <Button onClick={handleSubmit} disabled={isSaving}>
+                        {isSaving ? "Guardando..." : "Guardar Cambios"}
                     </Button>
                 </DialogFooter>
             </DialogContent>

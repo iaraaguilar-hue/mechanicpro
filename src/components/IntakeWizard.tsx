@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { searchClients, getClientBikes, createService, ServiceType, type Client, type Bike } from "@/lib/api";
+import { useDataStore, type SupabaseClient, type SupabaseBike } from "@/store/dataStore";
+import { useAuthStore } from "@/store/authStore";
+import { ServiceType } from "@/components/ServiceModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -18,8 +19,8 @@ import { EditBikeDialog } from "@/components/EditBikeDialog";
 interface IntakeWizardProps {
     isOpen?: boolean;
     onOpenChange?: (open: boolean) => void;
-    initialClient?: Client | null; // Allow null to match API return types easier
-    initialBike?: Bike | null;
+    initialClient?: SupabaseClient | null;
+    initialBike?: SupabaseBike | null;
     hideTrigger?: boolean;
 }
 
@@ -37,10 +38,9 @@ export function IntakeWizard({
     const setOpen = isControlled ? setControlledOpen! : setInternalOpen;
 
     const [step, setStep] = useState<"SEARCH_CLIENT" | "SELECT_BIKE" | "DEFINE_SERVICE">("SEARCH_CLIENT");
-    const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-    const [selectedBike, setSelectedBike] = useState<Bike | null>(null);
+    const [selectedClient, setSelectedClient] = useState<SupabaseClient | null>(null);
+    const [selectedBike, setSelectedBike] = useState<SupabaseBike | null>(null);
 
-    // Sync with props when opening
     useEffect(() => {
         if (open) {
             if (initialBike && initialClient) {
@@ -50,16 +50,10 @@ export function IntakeWizard({
             } else if (initialClient) {
                 setSelectedClient(initialClient);
                 setStep("SELECT_BIKE");
-            } else {
-                // Default clean slate
-                // Only reset if we are NOT already deep in a flow (persisting state if re-opened)
-                // But generally, on open, we might want reset.
-                // For now, trust the props if provided, else default.
             }
         }
     }, [open, initialBike, initialClient]);
 
-    // Reset flow on close
     const handleOpenChange = (newOpen: boolean) => {
         setOpen(newOpen);
         if (!newOpen) {
@@ -113,7 +107,7 @@ export function IntakeWizard({
                     {step === "DEFINE_SERVICE" && selectedBike && (
                         <ServiceDefinitionStep
                             bike={selectedBike}
-                            clientName={selectedClient?.name || initialClient?.name || ""}
+                            clientName={selectedClient?.nombre || initialClient?.nombre || ""}
                             onSuccess={() => setOpen(false)}
                             onBack={() => setStep("SELECT_BIKE")}
                         />
@@ -126,13 +120,21 @@ export function IntakeWizard({
 
 // --- SUB COMPONENTS ---
 
-function ClientSearchStep({ onClientSelect }: { onClientSelect: (c: Client) => void }) {
+function ClientSearchStep({ onClientSelect }: { onClientSelect: (c: SupabaseClient) => void }) {
     const [query, setQuery] = useState("");
-    const { data: clients, isLoading } = useQuery({
-        queryKey: ["clients", query],
-        queryFn: () => searchClients(query),
-        enabled: query.length > 0
-    });
+    const clientes = useDataStore(s => s.clientes);
+
+    const filtered = useMemo(() => {
+        if (!query) return clientes.filter(c => !c.isDeleted).slice(0, 20);
+        const q = query.toLowerCase();
+        return clientes
+            .filter(c => !c.isDeleted && (
+                c.nombre.toLowerCase().includes(q) ||
+                (c.telefono || "").includes(q) ||
+                (c.dni || "").includes(q)
+            ))
+            .slice(0, 20);
+    }, [clientes, query]);
 
     return (
         <div className="space-y-6">
@@ -148,15 +150,14 @@ function ClientSearchStep({ onClientSelect }: { onClientSelect: (c: Client) => v
             </div>
 
             <div className="space-y-2">
-                {isLoading && <p className="text-muted-foreground">Buscando...</p>}
-                {clients?.map(client => (
+                {filtered.map(client => (
                     <Card key={client.id} className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => onClientSelect(client)}>
                         <CardContent className="p-4 flex justify-between items-center">
                             <div>
-                                <h4 className="font-bold text-lg">{client.name}</h4>
-                                <p className="text-muted-foreground">{client.phone}</p>
+                                <h4 className="font-bold text-lg">{client.nombre}</h4>
+                                <p className="text-muted-foreground">{client.telefono}</p>
                             </div>
-                            <Badge>{client.usage_tier}</Badge>
+                            <Badge>{client.tipo_ciclista || "Standard"}</Badge>
                         </CardContent>
                     </Card>
                 ))}
@@ -165,9 +166,6 @@ function ClientSearchStep({ onClientSelect }: { onClientSelect: (c: Client) => v
             <div className="pt-4 border-t mt-4">
                 <AddClientDialog
                     onClientCreated={(client) => {
-                        // Redirect to Client Profile on Creation
-                        // This breaks the wizard flow but satisfies the user request to "teleport" to profile
-                        // and leverage the new "Add Bike" auto-prompt there.
                         window.location.href = `/clients/${client.id}`;
                     }}
                     variant="outline"
@@ -177,21 +175,19 @@ function ClientSearchStep({ onClientSelect }: { onClientSelect: (c: Client) => v
     )
 }
 
-function BikeSelectionStep({ client, onBikeSelect, onBack }: { client: Client, onBikeSelect: (b: Bike) => void, onBack: () => void }) {
-    const queryClient = useQueryClient();
-    const { data: bikes, isLoading } = useQuery({
-        queryKey: ["bikes", client.id],
-        queryFn: () => getClientBikes(client.id!)
-    });
+function BikeSelectionStep({ client, onBikeSelect, onBack }: { client: SupabaseClient, onBikeSelect: (b: SupabaseBike) => void, onBack: () => void }) {
+    const bicicletas = useDataStore(s => s.bicicletas);
+    const bikes = useMemo(() => bicicletas.filter(b => b.cliente_id === client.id), [bicicletas, client.id]);
+
     const [showAddBike, setShowAddBike] = useState(false);
-    const [editingBike, setEditingBike] = useState<Bike | null>(null);
+    const [editingBike, setEditingBike] = useState<SupabaseBike | null>(null);
 
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center bg-accent/20 p-3 rounded-lg border border-primary/20">
                 <div>
                     <p className="text-sm text-muted-foreground">Cliente</p>
-                    <p className="font-bold text-lg">{client.name}</p>
+                    <p className="font-bold text-lg">{client.nombre}</p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={onBack}>Cambiar</Button>
             </div>
@@ -199,35 +195,21 @@ function BikeSelectionStep({ client, onBikeSelect, onBack }: { client: Client, o
             <h3 className="text-lg font-semibold">Garage del Cliente</h3>
 
             <div className="min-h-[200px]">
-                {isLoading && <p>Cargando garage...</p>}
-
                 <div className="grid gap-3">
-                    {bikes?.map(bike => (
+                    {bikes.map(bike => (
                         <Card key={bike.id} className="cursor-pointer hover:border-primary group transition-all relative">
                             <CardContent className="p-4 flex items-center gap-4" onClick={() => onBikeSelect(bike)}>
                                 <div className="h-10 w-10 bg-secondary/20 rounded-full flex items-center justify-center text-secondary-foreground">
                                     <BikeIcon size={20} />
                                 </div>
                                 <div className="flex-1">
-                                    <h4 className="font-bold">{bike.brand} {bike.model}</h4>
-                                    <p className="text-sm text-muted-foreground">{bike.transmission}</p>
+                                    <h4 className="font-bold">{bike.marca} {bike.modelo}</h4>
+                                    <p className="text-sm text-muted-foreground">{bike.transmision}</p>
                                 </div>
-                                {/* Placeholder for last service info, would need API update to be real */}
-                                {/* <div className="text-right text-xs text-muted-foreground">
-                                    <p>Ult. Visita</p>
-                                    <p>12/10/2025</p>
-                                </div> */}
                                 <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100">Seleccionar</Button>
                             </CardContent>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="absolute top-2 right-2 h-8 w-8 text-muted-foreground hover:text-foreground z-10"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditingBike(bike);
-                                }}
-                            >
+                            <Button variant="ghost" size="icon" className="absolute top-2 right-2 h-8 w-8 text-muted-foreground hover:text-foreground z-10"
+                                onClick={(e) => { e.stopPropagation(); setEditingBike(bike); }}>
                                 <Pencil size={14} />
                             </Button>
                         </Card>
@@ -242,14 +224,11 @@ function BikeSelectionStep({ client, onBikeSelect, onBack }: { client: Client, o
             </div>
 
             <AddBikeDialog
-                clientId={client.id!}
-                clientName={client.name}
+                clientId={client.id}
+                clientName={client.nombre}
                 isOpen={showAddBike}
                 onClose={() => setShowAddBike(false)}
-                onBikeCreated={(bike) => {
-                    setShowAddBike(false);
-                    onBikeSelect(bike); // Auto-select new bike
-                }}
+                onBikeCreated={(bike) => { setShowAddBike(false); onBikeSelect(bike); }}
             />
 
             {editingBike && (
@@ -257,53 +236,54 @@ function BikeSelectionStep({ client, onBikeSelect, onBack }: { client: Client, o
                     bike={editingBike}
                     isOpen={true}
                     onClose={() => setEditingBike(null)}
-                    onBikeUpdated={() => {
-                        setEditingBike(null);
-                        queryClient.invalidateQueries({ queryKey: ["bikes", client.id] });
-                    }}
+                    onBikeUpdated={() => setEditingBike(null)}
                 />
             )}
         </div>
     )
 }
 
-function ServiceDefinitionStep({ bike, clientName, onSuccess, onBack }: { bike: Bike, clientName: string, onSuccess: () => void, onBack: () => void }) {
+function ServiceDefinitionStep({ bike, clientName, onSuccess, onBack }: { bike: SupabaseBike, clientName: string, onSuccess: () => void, onBack: () => void }) {
     const [serviceType, setServiceType] = useState<ServiceType>(ServiceType.SPORT);
     const [notes, setNotes] = useState("");
-    const queryClient = useQueryClient();
-    const navigate = useNavigate();
-    const mutation = useMutation({
-        mutationFn: createService,
-        onSuccess: (data) => {
-            queryClient.invalidateQueries({ queryKey: ["dashboard_jobs"] });
-            alert(`Service #${data.id} Creado!`);
-            onSuccess();
-            // Force redirect to workshop to ensure visibility
-            navigate("/workshop");
-        },
-        onError: () => alert("Error al crear servicio")
-    });
+    const [isSaving, setIsSaving] = useState(false);
 
-    // Auto-fill template notes based on type
+    const navigate = useNavigate();
+    const createServicio = useDataStore(s => s.createServicio);
+    const taller_id = useAuthStore(s => s.taller_id);
+
     const handleTypeChange = (type: ServiceType) => {
         setServiceType(type);
-    }
+    };
 
-    const handleSubmit = () => {
-        mutation.mutate({
-            bike_id: bike.id!,
-            service_type: serviceType,
-            status: "In Progress",
-            mechanic_notes: notes
-        });
-    }
+    const handleSubmit = async () => {
+        if (!taller_id) return alert("Error: sin taller_id");
+        setIsSaving(true);
+        try {
+            const created = await createServicio({
+                taller_id,
+                bicicleta_id: bike.id,
+                tipo_servicio: serviceType,
+                estado: "In Progress",
+                notas_mecanico: notes,
+                fecha_ingreso: new Date().toISOString(),
+            });
+            alert(`Service #${created.id.substring(0, 8)} creado!`);
+            onSuccess();
+            navigate("/workshop");
+        } catch (e: any) {
+            alert(`Error: ${e.message}`);
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center bg-accent/20 p-3 rounded-lg border border-primary/20">
                 <div>
                     <p className="text-sm text-muted-foreground">{clientName}</p>
-                    <p className="font-bold">{bike.brand} {bike.model}</p>
+                    <p className="font-bold">{bike.marca} {bike.modelo}</p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={onBack}>Cambiar Bici</Button>
             </div>
@@ -312,24 +292,9 @@ function ServiceDefinitionStep({ bike, clientName, onSuccess, onBack }: { bike: 
                 <div className="space-y-3">
                     <Label className="text-lg">Tipo de Service</Label>
                     <div className="grid grid-cols-3 gap-3">
-                        <ServiceOption
-                            selected={serviceType === ServiceType.SPORT}
-                            onClick={() => handleTypeChange(ServiceType.SPORT)}
-                            title="SPORT"
-                            desc="Básico"
-                        />
-                        <ServiceOption
-                            selected={serviceType === ServiceType.EXPERT}
-                            onClick={() => handleTypeChange(ServiceType.EXPERT)}
-                            title="EXPERT"
-                            desc="Completo"
-                        />
-                        <ServiceOption
-                            selected={serviceType === ServiceType.OTHER}
-                            onClick={() => handleTypeChange(ServiceType.OTHER)}
-                            title="OTRO"
-                            desc="Reparación"
-                        />
+                        <ServiceOption selected={serviceType === ServiceType.SPORT} onClick={() => handleTypeChange(ServiceType.SPORT)} title="SPORT" desc="Básico" />
+                        <ServiceOption selected={serviceType === ServiceType.EXPERT} onClick={() => handleTypeChange(ServiceType.EXPERT)} title="EXPERT" desc="Completo" />
+                        <ServiceOption selected={serviceType === ServiceType.OTHER} onClick={() => handleTypeChange(ServiceType.OTHER)} title="OTRO" desc="Reparación" />
                     </div>
                 </div>
 
@@ -345,8 +310,8 @@ function ServiceDefinitionStep({ bike, clientName, onSuccess, onBack }: { bike: 
             </div>
 
             <DialogFooter className="mt-8">
-                <Button size="lg" className="w-full text-lg h-12" onClick={handleSubmit} disabled={mutation.isPending}>
-                    {mutation.isPending ? "Procesando..." : "CONFIRMAR INGRESO"}
+                <Button size="lg" className="w-full text-lg h-12" onClick={handleSubmit} disabled={isSaving}>
+                    {isSaving ? "Procesando..." : "CONFIRMAR INGRESO"}
                 </Button>
             </DialogFooter>
         </div>

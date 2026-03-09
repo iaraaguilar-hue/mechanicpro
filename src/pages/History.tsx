@@ -1,7 +1,8 @@
-import { useState, useRef, Fragment, useMemo } from 'react';
-import { exportBackupToZip } from '@/lib/exportBackup';
+import { useState, Fragment, useMemo } from 'react';
 import { useAuthStore } from '@/store/authStore';
+import { useDataStore } from '@/store/dataStore';
 import { Card, CardContent } from '@/components/ui/card';
+import { formatOrdenNumber } from '@/lib/formatId';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,9 +20,8 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
-import { FileText, Eye, Download, Upload, ChevronUp, Pencil, Trash2, ClipboardList, Search, Calendar as CalendarIcon, FilterX, Wrench, Package, Info, Tag } from 'lucide-react';
+import { FileText, Eye, ChevronUp, Pencil, Trash2, ClipboardList, Search, Calendar as CalendarIcon, FilterX, Wrench, Package, Info, Tag } from 'lucide-react';
 import { printServiceReport } from '@/lib/printServiceBtn';
-import { deleteService } from '@/lib/api';
 import { ServiceModal } from '@/components/ServiceModal';
 import { es } from "date-fns/locale";
 import { format } from "date-fns";
@@ -34,19 +34,6 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { getBikeCategory } from '@/utils/bikeRecognition';
 
-// Interface definitions...
-interface Client { id: number; name: string; dni?: string; phone: string; }
-interface Bike { id: number; client_id: number; brand: string; model: string; }
-interface Service {
-    id: number;
-    bike_id: number;
-    status: string;
-    created_at?: string;
-    date_in?: string;
-    date_out?: string;
-    service_type: string;
-    [key: string]: any;
-}
 
 const datePickerRescueStyles = `
   /* RESET Y BASE */
@@ -156,63 +143,70 @@ const datePickerRescueStyles = `
 
 export default function History() {
     const { taller_id } = useAuthStore();
+    const storeClientes = useDataStore(s => s.clientes);
+    const storeBicicletas = useDataStore(s => s.bicicletas);
+    const storeServicios = useDataStore(s => s.servicios);
+    const storeDeleteServicio = useDataStore(s => s.deleteServicio);
+    const fetchDashboardData = useDataStore(s => s.fetchDashboardData);
 
-    const readDataFromStorage = () => {
-        try {
-            const rawDB = localStorage.getItem('mechanicPro_db');
-            if (rawDB) {
-                const db = JSON.parse(rawDB);
-                const services: Service[] = Array.isArray(db.services) ? db.services : [];
-                const bikes: Bike[] = Array.isArray(db.bikes) ? db.bikes : [];
-                const clients: Client[] = Array.isArray(db.clients) ? db.clients : [];
 
-                const joinedJobs = services.filter((s: any) => !s.deleted_at).map(service => {
-                    const bike = bikes.find(b => b.id === service.bike_id);
-                    const client = clients.find(c => c.id === bike?.client_id);
-                    // Use date_out if available (Completed), otherwise date_in or created_at
-                    const rawDate = service.date_out || service.date_in || service.created_at || "2024-01-01T00:00:00";
-                    let displayDate = "Sin fecha";
-                    let dateObj = new Date();
-                    try {
-                        const d = new Date(rawDate);
-                        dateObj = d;
-                        displayDate = d.toLocaleDateString('es-AR', {
-                            day: '2-digit', month: '2-digit', year: '2-digit'
-                        });
-                        if (displayDate === "Invalid Date") displayDate = String(rawDate);
-                    } catch { displayDate = String(rawDate); }
+    // Build joined jobs from store data (replaces readDataFromStorage)
+    const allJobs = useMemo(() => {
+        return storeServicios
+            .filter(s => !s.deleted_at)
+            .map(service => {
+                const bike = storeBicicletas.find(b => b.id === service.bicicleta_id);
+                const client = bike ? storeClientes.find(c => c.id === bike.cliente_id) : null;
+                const rawDate = service.fecha_entrega || service.fecha_ingreso || "2024-01-01T00:00:00";
+                let displayDate = "Sin fecha";
+                let dateObj = new Date();
+                try {
+                    const d = new Date(rawDate);
+                    dateObj = d;
+                    displayDate = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+                    if (displayDate === "Invalid Date") displayDate = String(rawDate);
+                } catch { displayDate = String(rawDate); }
 
-                    return {
-                        uniqueId: service.id,
-                        id: service.id,
-                        status: service.status || "Unknown",
-                        displayDate: displayDate,
-                        rawDate: rawDate,
-                        dateObj: dateObj,
-                        clientName: client?.name || "Cliente Desconocido",
-                        clientDni: client?.dni || "",
-                        clientPhone: client?.phone || "",
-                        bikeBrand: (bike?.brand || "").trim(),
-                        bikeModel: bike ? `${bike.brand} ${bike.model}` : "Bicicleta Desconocida",
-                        serviceType: service.service_type || "General",
-                        bikeCategory: getBikeCategory(bike?.model, service.service_type),
-                        rawJob: service
-                    };
-                });
+                const bikeBrand = (bike?.marca || "").trim();
+                const bikeModelFull = bike ? `${bike.marca} ${bike.modelo}` : "Bicicleta Desconocida";
 
-                joinedJobs.sort((a, b) => new Date(a.rawDate || 0).getTime() - new Date(b.rawDate || 0).getTime()).reverse();
-                return joinedJobs;
-            }
-        } catch (e) {
-            console.error("Load Error", e);
-        }
-        return [];
-    };
+                return {
+                    uniqueId: service.id,
+                    id: service.id,
+                    numero_orden: service.numero_orden,
+                    status: service.estado || "Unknown",
+                    displayDate,
+                    rawDate,
+                    dateObj,
+                    clientName: client?.nombre || "Cliente Desconocido",
+                    clientDni: client?.dni || "",
+                    clientPhone: client?.telefono || "",
+                    bikeBrand,
+                    bikeModel: bikeModelFull,
+                    serviceType: service.tipo_servicio || "General",
+                    bikeCategory: getBikeCategory(bike?.modelo, service.tipo_servicio),
+                    rawJob: {
+                        ...service,
+                        // Map to legacy shape for printServiceReport compatibility
+                        service_type: service.tipo_servicio,
+                        basePrice: service.precio_base,
+                        totalPrice: service.precio_total,
+                        mechanic_notes: service.notas_mecanico,
+                        extraItems: service.items_extra?.map((i: any) => ({
+                            id: i.id || crypto.randomUUID(),
+                            description: i.descripcion,
+                            price: i.precio,
+                            category: i.categoria,
+                        })),
+                    },
+                };
+            })
+            .sort((a, b) => new Date(b.rawDate).getTime() - new Date(a.rawDate).getTime());
+    }, [storeServicios, storeBicicletas, storeClientes]);
 
-    const [allJobs, setAllJobs] = useState<any[]>(() => readDataFromStorage());
-    const [expandedIds, setExpandedIds] = useState<number[]>([]);
-    const [editingServiceId, setEditingServiceId] = useState<number | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [expandedIds, setExpandedIds] = useState<string[]>([]);
+    const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+
 
     // Filters State
     const [searchQuery, setSearchQuery] = useState("");
@@ -220,17 +214,16 @@ export default function History() {
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [brandFilter, setBrandFilter] = useState("all");
 
-    const toggleExpand = (id: number) => {
+    const toggleExpand = (id: string) => {
         setExpandedIds(prev =>
             prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
         );
     };
 
-    const handleDelete = async (id: number) => {
+    const handleDelete = async (id: string) => {
         if (confirm("¿Estás seguro de eliminar este servicio? Esta acción no se puede deshacer.")) {
             try {
-                await deleteService(id);
-                setAllJobs(readDataFromStorage()); // Refresh list
+                await storeDeleteServicio(id);
             } catch {
                 alert("Error al eliminar servicio");
             }
@@ -302,56 +295,7 @@ export default function History() {
         setDateRange(undefined);
     };
 
-    // ... (Export/Import functions) ...
-    const exportBackup = async () => {
-        const rawData = localStorage.getItem('mechanicPro_db');
-        if (!rawData) return alert('No hay datos para exportar.');
-        try {
-            const result = await exportBackupToZip(taller_id);
-            const cascadeMsg = result.skippedTotal > 0
-                ? `\n\n⚠️ ${result.skippedTotal} filas descartadas en cascada (clientes eliminados y sus dependencias).`
-                : '';
-            alert(
-                `✅ Backup exportado exitosamente.\n\n` +
-                `📊 Resumen:\n` +
-                `• ${result.clients} Clientes\n` +
-                `• ${result.bikes} Bicicletas\n` +
-                `• ${result.services} Servicios\n` +
-                `• ${result.items} Items\n` +
-                `• ${result.reminders} Recordatorios` +
-                cascadeMsg
-            );
-        } catch (error: any) {
-            console.error('❌ ZIP Generation error:', error);
-            alert(`ERROR DE MIGRACIÓN:\n\n${error.message}`);
-        }
-    };
 
-    const triggerImport = () => {
-        if (confirm("⚠️ ¿RESTAURAR BASE DE DATOS?\nSe reemplazarán todos los datos actuales.")) {
-            fileInputRef.current?.click();
-        }
-    };
-
-    const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                const json = event.target?.result as string;
-                const parsed = JSON.parse(json);
-                if (parsed.clients && Array.isArray(parsed.clients) && parsed.services) {
-                    localStorage.setItem('mechanicPro_db', json);
-                    alert("✅ Base de datos restaurada. Recargando...");
-                    window.location.reload();
-                } else {
-                    alert("❌ Archivo inválido. No tiene el formato 'mechanicPro_db'.");
-                }
-            } catch { alert("Error leyendo archivo."); }
-        };
-        reader.readAsText(file);
-    };
 
     return (
         <div className="p-8 space-y-8 max-w-[1800px] mx-auto min-h-screen bg-transparent">
@@ -363,15 +307,6 @@ export default function History() {
                         Historial de Trabajos
                     </h1>
                     <p className="text-muted-foreground mt-1 text-lg">Gestión centralizada de servicios y mantenimientos.</p>
-                </div>
-                <div className="flex gap-2">
-                    <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={handleImport} />
-                    <Button variant="outline" size="sm" onClick={triggerImport} className="h-9">
-                        <Upload className="w-4 h-4 mr-2" /> Importar
-                    </Button>
-                    <Button onClick={exportBackup} variant="outline" size="sm" className="bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100 h-9">
-                        <Download className="w-4 h-4 mr-2" /> Exportar Backup
-                    </Button>
                 </div>
             </div>
 
@@ -528,7 +463,7 @@ export default function History() {
                                             <TableCell className="py-4">
                                                 <div className="flex flex-col">
                                                     <span className="font-bold text-slate-700">{job.displayDate}</span>
-                                                    <span className="text-[10px] text-slate-400 font-mono">#{job.id}</span>
+                                                    <span className="text-[10px] text-slate-400 font-mono" title={job.id}>{formatOrdenNumber(job.numero_orden, job.id)}</span>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="py-4">
@@ -608,7 +543,7 @@ export default function History() {
                         preSelectedServiceId={editingServiceId}
                         onSuccess={() => {
                             setEditingServiceId(null);
-                            setAllJobs(readDataFromStorage());
+                            if (taller_id) fetchDashboardData(taller_id);
                         }}
                     />
                 )
@@ -631,7 +566,7 @@ function ExpandedServiceDetail({ job }: { job: any }) {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 pb-4 border-b border-gray-100 gap-4">
                 <h2 className="text-xl font-bold text-orange-600 flex items-center gap-2">
                     <ClipboardList className="w-5 h-5" />
-                    Detalle del Service #{job.id} <span className="text-gray-400 font-normal text-sm ml-2">| {job.bikeModel}</span>
+                    Detalle del Service {formatOrdenNumber(job.numero_orden, job.id)} <span className="text-gray-400 font-normal text-sm ml-2">| {job.bikeModel}</span>
                 </h2>
                 <Button onClick={() => printServiceReport(job.rawJob, job.clientName, job.bikeModel, job.clientDni, job.clientPhone)} className="bg-orange-500 hover:bg-orange-600 text-white font-semibold">
                     <FileText className="w-4 h-4 mr-2" />

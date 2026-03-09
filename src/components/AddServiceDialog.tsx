@@ -1,48 +1,54 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { createService, ServiceType, type Bike, type ServiceRecord } from "@/lib/api";
+import { useDataStore, type SupabaseBike, type SupabaseService } from "@/store/dataStore";
+import { useAuthStore } from "@/store/authStore";
+import { ServiceType } from "@/components/ServiceModal";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-
 interface AddServiceDialogProps {
-    bike: Bike;
+    bike: SupabaseBike;
     isOpen: boolean;
     onClose: () => void;
-    onServiceCreated: (service: ServiceRecord) => void;
+    onServiceCreated: (service: SupabaseService) => void;
 }
 
 export function AddServiceDialog({ bike, isOpen, onClose, onServiceCreated }: AddServiceDialogProps) {
     const [serviceType, setServiceType] = useState<ServiceType>(ServiceType.SPORT);
     const [notes, setNotes] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
 
-    const mutation = useMutation({
-        mutationFn: createService,
-        onSuccess: (data) => {
+    const createServicio = useDataStore(s => s.createServicio);
+    const taller_id = useAuthStore(s => s.taller_id);
+
+    const handleSubmit = async () => {
+        if (!bike.id || !taller_id) return;
+        setIsSaving(true);
+        try {
+            const created = await createServicio({
+                taller_id,
+                bicicleta_id: bike.id,
+                tipo_servicio: serviceType,
+                estado: "Intake",
+                notas_mecanico: notes,
+                fecha_ingreso: new Date().toISOString(),
+            });
             setNotes("");
-            onServiceCreated(data);
-        },
-        onError: () => alert("Error creando servicio")
-    });
-
-    const handleSubmit = () => {
-        if (!bike.id) return;
-        mutation.mutate({
-            bike_id: bike.id,
-            service_type: serviceType,
-            status: "Intake",
-            mechanic_notes: notes
-        });
-    }
+            onServiceCreated(created);
+        } catch (e: any) {
+            alert(`Error: ${e.message}`);
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
-                    <DialogTitle>Ingresar Servicio: {bike.brand} {bike.model}</DialogTitle>
+                    <DialogTitle>Ingresar Servicio: {bike.marca} {bike.modelo}</DialogTitle>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="space-y-2">
@@ -67,8 +73,8 @@ export function AddServiceDialog({ bike, isOpen, onClose, onServiceCreated }: Ad
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button onClick={handleSubmit} disabled={mutation.isPending} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                        {mutation.isPending ? "Ingresando..." : "Confirmar Ingreso"}
+                    <Button onClick={handleSubmit} disabled={isSaving} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                        {isSaving ? "Ingresando..." : "Confirmar Ingreso"}
                     </Button>
                 </DialogFooter>
             </DialogContent>

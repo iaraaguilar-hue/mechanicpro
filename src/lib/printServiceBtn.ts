@@ -1,4 +1,5 @@
 import html2pdf from 'html2pdf.js';
+import { formatOrdenNumber } from '@/lib/formatId';
 
 const TASKS_SPORT = [
   "• Lavado de bicicleta y todos sus componentes",
@@ -124,7 +125,7 @@ export const printServiceReport = (
         </div>
         <div style="text-align: right;">
            <div style="font-size: 12px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Informe de Servicio</div>
-           <div style="font-size: 16px; font-weight: 700;">Service #${job.id}</div>
+           <div style="font-size: 16px; font-weight: 700;">Service ${formatOrdenNumber(job.numero_orden, job.id)}</div>
            <div style="font-size: 14px; font-weight: 400; margin-top: 5px;">${dateStr}</div>
         </div>
       </div>

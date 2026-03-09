@@ -1,0 +1,266 @@
+import { create } from 'zustand';
+import { supabase } from '@/lib/supabase';
+
+// ─────────────────────────────────────────────────────────────
+// Supabase shape types (columnas de la BD de producción)
+// ─────────────────────────────────────────────────────────────
+export interface SupabaseClient {
+    id: string;
+    taller_id: string;
+    nombre: string;
+    dni?: string;
+    telefono?: string;
+    email?: string;
+    tipo_ciclista?: string;
+    isDeleted?: boolean;
+    created_at?: string;
+}
+
+export interface SupabaseBike {
+    id: string;
+    taller_id: string;
+    cliente_id: string;
+    marca: string;
+    modelo: string;
+    transmision?: string;
+    categoria?: string;
+    notas?: string;
+}
+
+export interface SupabaseService {
+    id: string;
+    taller_id: string;
+    bicicleta_id: string;
+    numero_orden?: number;
+    fecha_ingreso?: string;
+    estado?: string;
+    tipo_servicio?: string;
+    precio_total?: number;
+    precio_base?: number;
+    notas_mecanico?: string;
+    fecha_entrega?: string;
+    deleted_at?: string;
+    checklist_data?: Record<string, boolean>;
+    items_extra?: { id: string; descripcion: string; precio: number; categoria?: string }[];
+}
+
+export interface SupabaseReminder {
+    id: string;
+    taller_id: string;
+    bicicleta_id: string;
+    componente?: string;
+    fecha_asignacion?: string;
+    fecha_vencimiento?: string;
+    estado?: string;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Store State & Actions
+// ─────────────────────────────────────────────────────────────
+interface DataState {
+    clientes: SupabaseClient[];
+    bicicletas: SupabaseBike[];
+    servicios: SupabaseService[];
+    recordatorios: SupabaseReminder[];
+    isHydrating: boolean;
+    hydrateError: string | null;
+    lastHydratedAt: number | null;
+
+    // Hidratación
+    fetchDashboardData: (tallerId: string) => Promise<void>;
+    invalidate: () => void;
+
+    // ── CRUD: Clientes ──
+    createCliente: (data: Omit<SupabaseClient, 'id'>) => Promise<SupabaseClient>;
+    updateCliente: (id: string, data: Partial<SupabaseClient>) => Promise<void>;
+    deleteCliente: (id: string) => Promise<void>;
+
+    // ── CRUD: Bicicletas ──
+    createBicicleta: (data: Omit<SupabaseBike, 'id'>) => Promise<SupabaseBike>;
+    updateBicicleta: (id: string, data: Partial<SupabaseBike>) => Promise<void>;
+    deleteBicicleta: (id: string) => Promise<void>;
+
+    // ── CRUD: Servicios ──
+    createServicio: (data: Omit<SupabaseService, 'id'>) => Promise<SupabaseService>;
+    updateServicio: (id: string, data: Partial<SupabaseService>) => Promise<void>;
+    deleteServicio: (id: string) => Promise<void>;
+
+    // ── CRUD: Recordatorios ──
+    createRecordatorio: (data: Omit<SupabaseReminder, 'id'>) => Promise<SupabaseReminder>;
+    upsertRecordatorios: (items: Omit<SupabaseReminder, 'id'>[]) => Promise<void>;
+}
+
+export const useDataStore = create<DataState>((set, get) => ({
+    // ── Initial state ──
+    clientes: [],
+    bicicletas: [],
+    servicios: [],
+    recordatorios: [],
+    isHydrating: false,
+    hydrateError: null,
+    lastHydratedAt: null,
+
+    // ─────────────────────────────────────────────────────────
+    // MOTOR DE HIDRATACIÓN
+    // ─────────────────────────────────────────────────────────
+    fetchDashboardData: async (tallerId: string) => {
+        if (!tallerId) {
+            console.warn('[DataStore] fetchDashboardData llamado sin tallerId — abortando.');
+            return;
+        }
+        if (get().isHydrating) return;
+
+        set({ isHydrating: true, hydrateError: null });
+        console.log(`[DataStore] 🔄 Hidratando datos para taller: ${tallerId}`);
+
+        try {
+            const [resC, resB, resS, resR] = await Promise.all([
+                supabase.from('clientes').select('*').eq('taller_id', tallerId),
+                supabase.from('bicicletas').select('*').eq('taller_id', tallerId),
+                supabase.from('servicios').select('*').eq('taller_id', tallerId).is('deleted_at', null),
+                supabase.from('recordatorios').select('*').eq('taller_id', tallerId),
+            ]);
+
+            console.log('[DataStore] Respuesta Clientes:', resC.data?.length, resC.error);
+            console.log('[DataStore] Respuesta Bicicletas:', resB.data?.length, resB.error);
+            console.log('[DataStore] Respuesta Servicios:', resS.data?.length, resS.error);
+            console.log('[DataStore] Respuesta Recordatorios:', resR.data?.length, resR.error);
+
+            const errors = [resC, resB, resS, resR].filter(r => r.error).map(r => r.error!.message);
+            if (errors.length > 0) throw new Error(`Errores Supabase: ${errors.join(' | ')}`);
+
+            set({
+                clientes: (resC.data as SupabaseClient[]) ?? [],
+                bicicletas: (resB.data as SupabaseBike[]) ?? [],
+                servicios: (resS.data as SupabaseService[]) ?? [],
+                recordatorios: (resR.data as SupabaseReminder[]) ?? [],
+                isHydrating: false,
+                lastHydratedAt: Date.now(),
+            });
+
+            console.log(`[DataStore] ✅ Hidratación completa: ${resC.data?.length} clientes, ${resB.data?.length} bicicletas, ${resS.data?.length} servicios, ${resR.data?.length} recordatorios`);
+        } catch (error: any) {
+            console.error('[DataStore] ❌ Error en hidratación:', error.message);
+            set({ isHydrating: false, hydrateError: error.message });
+        }
+    },
+
+    invalidate: () => set({
+        clientes: [], bicicletas: [], servicios: [], recordatorios: [],
+        isHydrating: false, hydrateError: null, lastHydratedAt: null,
+    }),
+
+    // ═════════════════════════════════════════════════════════
+    // CRUD: CLIENTES
+    // ═════════════════════════════════════════════════════════
+    createCliente: async (data) => {
+        const { data: row, error } = await supabase
+            .from('clientes').insert(data).select().single();
+        if (error) throw new Error(`Error creando cliente: ${error.message}`);
+        set({ clientes: [...get().clientes, row as SupabaseClient] });
+        return row as SupabaseClient;
+    },
+
+    updateCliente: async (id, data) => {
+        const { error } = await supabase.from('clientes').update(data).eq('id', id);
+        if (error) throw new Error(`Error actualizando cliente: ${error.message}`);
+        set({
+            clientes: get().clientes.map(c => c.id === id ? { ...c, ...data } : c),
+        });
+    },
+
+    deleteCliente: async (id) => {
+        const { error } = await supabase.from('clientes').delete().eq('id', id);
+        if (error) throw new Error(`Error eliminando cliente: ${error.message}`);
+        set({ clientes: get().clientes.filter(c => c.id !== id) });
+    },
+
+    // ═════════════════════════════════════════════════════════
+    // CRUD: BICICLETAS
+    // ═════════════════════════════════════════════════════════
+    createBicicleta: async (data) => {
+        const { data: row, error } = await supabase
+            .from('bicicletas').insert(data).select().single();
+        if (error) throw new Error(`Error creando bicicleta: ${error.message}`);
+        set({ bicicletas: [...get().bicicletas, row as SupabaseBike] });
+        return row as SupabaseBike;
+    },
+
+    updateBicicleta: async (id, data) => {
+        const { error } = await supabase.from('bicicletas').update(data).eq('id', id);
+        if (error) throw new Error(`Error actualizando bicicleta: ${error.message}`);
+        set({
+            bicicletas: get().bicicletas.map(b => b.id === id ? { ...b, ...data } : b),
+        });
+    },
+
+    deleteBicicleta: async (id) => {
+        const { error } = await supabase.from('bicicletas').delete().eq('id', id);
+        if (error) throw new Error(`Error eliminando bicicleta: ${error.message}`);
+        set({ bicicletas: get().bicicletas.filter(b => b.id !== id) });
+    },
+
+    // ═════════════════════════════════════════════════════════
+    // CRUD: SERVICIOS
+    // ═════════════════════════════════════════════════════════
+    createServicio: async (data) => {
+        const { data: row, error } = await supabase
+            .from('servicios').insert(data).select().single();
+        if (error) throw new Error(`Error creando servicio: ${error.message}`);
+        set({ servicios: [...get().servicios, row as SupabaseService] });
+        return row as SupabaseService;
+    },
+
+    updateServicio: async (id, data) => {
+        const { error } = await supabase.from('servicios').update(data).eq('id', id);
+        if (error) throw new Error(`Error actualizando servicio: ${error.message}`);
+        set({
+            servicios: get().servicios.map(s => s.id === id ? { ...s, ...data } : s),
+        });
+    },
+
+    deleteServicio: async (id) => {
+        // Soft delete
+        const deleted_at = new Date().toISOString();
+        const { error } = await supabase.from('servicios').update({ deleted_at }).eq('id', id);
+        if (error) throw new Error(`Error eliminando servicio: ${error.message}`);
+        set({ servicios: get().servicios.filter(s => s.id !== id) });
+    },
+
+    // ═════════════════════════════════════════════════════════
+    // CRUD: RECORDATORIOS
+    // ═════════════════════════════════════════════════════════
+    createRecordatorio: async (data) => {
+        const { data: row, error } = await supabase
+            .from('recordatorios').insert(data).select().single();
+        if (error) throw new Error(`Error creando recordatorio: ${error.message}`);
+        set({ recordatorios: [...get().recordatorios, row as SupabaseReminder] });
+        return row as SupabaseReminder;
+    },
+
+    upsertRecordatorios: async (items) => {
+        for (const item of items) {
+            // Check if exists by bicicleta_id + componente
+            const existing = get().recordatorios.find(
+                r => r.bicicleta_id === item.bicicleta_id &&
+                    r.componente?.toLowerCase() === item.componente?.toLowerCase()
+            );
+            if (existing) {
+                // Update
+                const { error } = await supabase.from('recordatorios').update(item).eq('id', existing.id);
+                if (error) console.error('Error upserting recordatorio:', error.message);
+                set({
+                    recordatorios: get().recordatorios.map(r =>
+                        r.id === existing.id ? { ...r, ...item } : r
+                    ),
+                });
+            } else {
+                // Insert
+                const { data: row, error } = await supabase
+                    .from('recordatorios').insert(item).select().single();
+                if (error) console.error('Error inserting recordatorio:', error.message);
+                if (row) set({ recordatorios: [...get().recordatorios, row as SupabaseReminder] });
+            }
+        }
+    },
+}));

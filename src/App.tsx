@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
 import { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Link, useNavigate } from "react-router-dom";
 import Reception from "./pages/Reception";
@@ -16,10 +16,10 @@ import Metrics from "./pages/Metrics";
 import { Button } from "@/components/ui/button";
 import { Home, ClipboardList, Settings, Wrench, History, Bell, LogOut, BarChart3, Trash2 } from "lucide-react";
 
-const queryClient = new QueryClient();
 
-import { migrateServiceIds, migrateClientIds } from "@/lib/api";
+
 import { useAuthStore } from "@/store/authStore";
+import { useDataStore } from "@/store/dataStore";
 import { supabase } from "@/lib/supabase";
 
 function AppContent() {
@@ -28,22 +28,11 @@ function AppContent() {
   const logout = useAuthStore((state) => state.logout);
   const rol = useAuthStore((state) => state.rol);
   const setAuth = useAuthStore((state) => state.setAuth);
+  const fetchDashboardData = useDataStore((state) => state.fetchDashboardData);
+  const invalidateData = useDataStore((state) => state.invalidate);
   const navigate = useNavigate();
 
-  // Run Data Migration on Startup
-  useEffect(() => {
-    try {
-      migrateServiceIds();
-    } catch (e) {
-      console.error("Migration ID error", e);
-    }
-
-    try {
-      migrateClientIds();
-    } catch (e) {
-      console.error("Migration Client ID error", e);
-    }
-  }, []);
+  // (localStorage migrations removed — data now comes from Supabase)
 
   // Global Auth Listener and Session Restoration (Hydration)
   useEffect(() => {
@@ -64,6 +53,9 @@ function AppContent() {
 
           if (userData && isMounted) {
             setAuth(currentSession, userData.taller_id, userData.rol, userData.nombre);
+            // ── HIDRATACIÓN: dispara el fetch a Supabase con el taller_id confirmado ──
+            console.log('[App] ✅ Auth confirmado. Disparando hidratación de datos...');
+            fetchDashboardData(userData.taller_id);
           }
         }
       } catch (error) {
@@ -80,6 +72,7 @@ function AppContent() {
       }
       if (event === 'SIGNED_OUT') {
         logout();
+        invalidateData(); // Limpiar todos los arrays de datos al desloguearse
         navigate("/");
       }
 
@@ -96,6 +89,7 @@ function AppContent() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     logout();
+    invalidateData();
     navigate("/");
   };
 
@@ -193,11 +187,9 @@ function AppContent() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AppContent />
-      </BrowserRouter>
-    </QueryClientProvider>
+    <BrowserRouter>
+      <AppContent />
+    </BrowserRouter>
   )
 }
 

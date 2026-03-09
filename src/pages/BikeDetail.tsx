@@ -1,7 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getBike, getBikeServices, getBikeReminders, getClient, updateClient, updateBike, deleteBike, getClientBikes, getClientServices } from "@/lib/api";
+import { useDataStore, type SupabaseBike } from "@/store/dataStore";
 import { printServiceReport } from "@/lib/printServiceBtn";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
@@ -20,220 +19,161 @@ import { ServiceModal } from "@/components/ServiceModal";
 
 export default function BikeDetail() {
     const { id, clientId } = useParams<{ id: string, clientId: string }>();
-    const queryClient = useQueryClient();
     const navigate = useNavigate();
     const location = useLocation();
 
-    // Determine ID context
-    const initialBikeId = parseInt(id || "0");
-    const paramClientId = parseInt(clientId || "0");
+    // Store data
+    const storeClientes = useDataStore(s => s.clientes);
+    const storeBicicletas = useDataStore(s => s.bicicletas);
+    const storeServicios = useDataStore(s => s.servicios);
+    const storeRecordatorios = useDataStore(s => s.recordatorios);
+    const isHydrating = useDataStore(s => s.isHydrating);
+    const updateCliente = useDataStore(s => s.updateCliente);
+    const updateBicicleta = useDataStore(s => s.updateBicicleta);
+    const deleteBicicleta = useDataStore(s => s.deleteBicicleta);
 
-    // Logic: 
-    // Case A: /bikes/:id -> We have bikeId. We fetch bike -> client.
-    // Case B: /clients/:clientId -> We have clientId. We fetch client -> we look for bikes.
-    //   -> If bikes exist, we switch to first bike view (setBikeId).
-    //   -> If NO bikes, we stay in "Client Mode" and prompt add bike.
+    // Find bike or client from store
+    const bike = useMemo(() => id ? storeBicicletas.find(b => b.id === id) : null, [storeBicicletas, id]);
+    const activeClientId = bike?.cliente_id || clientId || "";
 
-    const { data: bike, isLoading: loadingBike } = useQuery({
-        queryKey: ["bike", initialBikeId],
-        queryFn: () => getBike(initialBikeId),
-        enabled: initialBikeId > 0,
-    });
+    const client = useMemo(() => storeClientes.find(c => c.id === activeClientId), [storeClientes, activeClientId]);
 
-    // If we have a bike, we know the client.
-    // If not, we rely on paramClientId.
-    const activeClientId = bike?.client_id || paramClientId;
+    // All bikes for this client
+    const clientBikes = useMemo(() =>
+        storeBicicletas.filter(b => b.cliente_id === activeClientId),
+        [storeBicicletas, activeClientId]
+    );
 
-    const { data: client } = useQuery({
-        queryKey: ["client", activeClientId],
-        queryFn: () => getClient(activeClientId),
-        enabled: activeClientId > 0,
-    });
-
-    // --- STATE REFACTOR FOR MULTI-BIKE VIEW ---
-
-
-
-    // --- STATE REFACTOR FOR MULTI-BIKE VIEW ---
-    // Instead of relying purely on URL ID, we track "activeBikeId" locally.
-    // If URL has ID, that's the default. If not, we pick first bike.
-
-    // 1. Fetch Client Context First (Always valid if we have clientId or bikeId)
-    // We need to know who the client is early.
-
-    // Service Dialog State
+    // Active bike tracking
+    const [activeBikeId, setActiveBikeId] = useState<string>(id || "");
     const [isServiceDialogOpen, setIsServiceDialogOpen] = useState(false);
-
-    // Derived Active Client ID
-    const [derivedClientId, setDerivedClientId] = useState<number>(activeClientId);
-
-    // Update derived client if URL params change (refresh context)
-    useEffect(() => {
-        if (activeClientId > 0) setDerivedClientId(activeClientId);
-    }, [activeClientId]);
-
-    const { data: latestClientBikes, isLoading: loadingClientBikes } = useQuery({
-        queryKey: ["bikes", derivedClientId],
-        queryFn: () => getClientBikes(derivedClientId),
-        enabled: derivedClientId > 0,
-    });
-
-    const [activeBikeId, setActiveBikeId] = useState<number>(initialBikeId);
 
     // Auto-Select Logic
     useEffect(() => {
-        // If we entered via /bikes/:id, set that as active
-        if (initialBikeId > 0) {
-            setActiveBikeId(initialBikeId);
+        if (id) {
+            setActiveBikeId(id);
+        } else if (!id && clientBikes.length > 0) {
+            setActiveBikeId(clientBikes[0].id);
         }
-        // If we entered via /clients/:clientId, select first bike if available
-        else if (initialBikeId === 0 && latestClientBikes && latestClientBikes.length > 0) {
-            setActiveBikeId(latestClientBikes[0].id!);
-        }
-    }, [initialBikeId, latestClientBikes]);
+    }, [id, clientBikes]);
 
-    // --- LOGIC: Auto-Trigger Service Dialog ---
+    // Auto-Trigger Service Dialog
     useEffect(() => {
-        // Only trigger if specifically requested via state AND we have an active bike
         if (location.state?.autoStartService && activeBikeId) {
-            // Check if we already handled this to prevent re-opening on tab switch
-            // We use history replacement to clear the flag immediately
             setIsServiceDialogOpen(true);
-
-            // Clear the state so it doesn't trigger again on refresh or re-render
             navigate(location.pathname, { replace: true, state: {} });
         }
-    }, [location.state, activeBikeId, navigate, location.pathname, setIsServiceDialogOpen]);
+    }, [location.state, activeBikeId, navigate, location.pathname]);
 
-    // Active Bike Data
-    const activeBike = latestClientBikes?.find(b => b.id === activeBikeId);
+    const activeBike = clientBikes.find(b => b.id === activeBikeId);
 
-    // Client Stats (Total Services)
-    const { data: allClientServices } = useQuery({
-        queryKey: ["client_all_services", derivedClientId],
-        queryFn: () => getClientServices(derivedClientId),
-        enabled: derivedClientId > 0
-    });
+    // Services and reminders for active bike
+    const services = useMemo(() =>
+        storeServicios.filter(s => s.bicicleta_id === activeBikeId && !s.deleted_at),
+        [storeServicios, activeBikeId]
+    );
 
-    const clientTotalServices = allClientServices?.filter(s => s.status === "Completed").length || 0;
+    const reminders = useMemo(() =>
+        storeRecordatorios.filter(r => r.bicicleta_id === activeBikeId),
+        [storeRecordatorios, activeBikeId]
+    );
 
-
+    // Client total services (completed)
+    const clientTotalServices = useMemo(() => {
+        const clientBikeIds = clientBikes.map(b => b.id);
+        return storeServicios.filter(s =>
+            clientBikeIds.includes(s.bicicleta_id) && s.estado === "Completed" && !s.deleted_at
+        ).length;
+    }, [storeServicios, clientBikes]);
 
     // UI State
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [isAddBikeOpen, setIsAddBikeOpen] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
-    // Client State
+    // Client Edit State
     const [editName, setEditName] = useState("");
     const [editPhone, setEditPhone] = useState("");
     const [editEmail, setEditEmail] = useState("");
     const [editDni, setEditDni] = useState("");
 
-    // Bike State
+    // Bike Edit State
     const [editBrand, setEditBrand] = useState("");
     const [editModel, setEditModel] = useState("");
     const [editTransmission, setEditTransmission] = useState("");
+    const [editingBikeId, setEditingBikeId] = useState<string | null>(null);
 
-    // NEW: Track which bike we are editing in the Garage Tab
-    const [editingBikeId, setEditingBikeId] = useState<number | null>(null);
+    const handleEditClick = () => {
+        if (client) {
+            setEditName(client.nombre);
+            setEditPhone(client.telefono || "");
+            setEditEmail(client.email || "");
+            setEditDni(client.dni || "");
+            setEditingBikeId(null);
+            setEditBrand("");
+            setEditModel("");
+            setEditTransmission("");
+            setIsEditOpen(true);
+        }
+    };
 
-    const updateClientMutation = useMutation({
-        mutationFn: async () => {
-            // 1. Update Client
+    const startEditingBike = (b: SupabaseBike) => {
+        setEditingBikeId(b.id);
+        setEditBrand(b.marca);
+        setEditModel(b.modelo);
+        setEditTransmission(b.transmision || "");
+    };
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
             if (activeClientId) {
-                await updateClient(activeClientId, {
-                    name: editName,
-                    phone: editPhone,
+                await updateCliente(activeClientId, {
+                    nombre: editName,
+                    telefono: editPhone,
                     email: editEmail,
-                    dni: editDni
+                    dni: editDni,
                 });
             }
-            // 2. Update Bike (Only if we have one explicitly editing or context)
             const targetBikeId = editingBikeId || bike?.id;
             if (targetBikeId) {
-                await updateBike(targetBikeId, {
-                    brand: editBrand,
-                    model: editModel,
-                    transmission: editTransmission
+                await updateBicicleta(targetBikeId, {
+                    marca: editBrand,
+                    modelo: editModel,
+                    transmision: editTransmission,
                 });
             }
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["client", activeClientId] });
-            if (activeClientId) queryClient.invalidateQueries({ queryKey: ["bikes", activeClientId] });
-
-            // If we were editing a specific bike, go back to list
             if (editingBikeId) {
                 setEditingBikeId(null);
             } else {
                 setIsEditOpen(false);
             }
+        } catch (e: any) {
+            alert(`Error: ${e.message}`);
+        } finally {
+            setIsSaving(false);
         }
-    });
+    };
 
-    const deleteBikeMutation = useMutation({
-        mutationFn: async (idToDelete?: number) => {
-            const targetId = idToDelete || editingBikeId || bike?.id;
-            if (targetId) {
-                await deleteBike(targetId);
-            }
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["bikes", activeClientId] });
-            setEditingBikeId(null); // Go back to list if we were editing
-            // If the deleted bike was the active one, reset activeBikeId
-            // We rely on the effect to pick a new one, but let's be safe
-            // setActiveBikeId(0);
-        }
-    });
-
-    const handleEditClick = () => {
-        if (client) {
-            setEditName(client.name);
-            setEditPhone(client.phone);
-            setEditEmail(client.email || "");
-            setEditDni(client.dni || "");
-
-            // Reset Garage Tab Logic
+    const handleDeleteBike = async (bikeIdToDelete?: string) => {
+        const targetId = bikeIdToDelete || editingBikeId || bike?.id;
+        if (!targetId) return;
+        if (!confirm("¿Eliminar esta bicicleta?")) return;
+        try {
+            await deleteBicicleta(targetId);
             setEditingBikeId(null);
-            // Pre-fill inputs just in case, or clear them
-            setEditBrand("");
-            setEditModel("");
-            setEditTransmission("");
-
-            setIsEditOpen(true);
+        } catch (e: any) {
+            alert(`Error: ${e.message}`);
         }
     };
-
-    const startEditingBike = (b: any) => {
-        setEditingBikeId(b.id);
-        setEditBrand(b.brand);
-        setEditModel(b.model);
-        setEditTransmission(b.transmission);
-    };
-
-    const { data: services, isLoading: loadingServices } = useQuery({
-        queryKey: ["bike_services", activeBikeId],
-        queryFn: () => getBikeServices(activeBikeId),
-        enabled: activeBikeId > 0
-    });
-
-    const { data: reminders, isLoading: loadingReminders } = useQuery({
-        queryKey: ["bike_reminders", activeBikeId],
-        queryFn: () => getBikeReminders(activeBikeId),
-        enabled: activeBikeId > 0
-    });
 
     // Loading State
-    if (activeClientId > 0 && loadingBike && loadingClientBikes) return <div className="p-8"><Skeleton className="h-10 w-1/3 mb-4" /><Skeleton className="h-64 w-full" /></div>;
+    if (isHydrating) return <div className="p-8"><Skeleton className="h-10 w-1/3 mb-4" /><Skeleton className="h-64 w-full" /></div>;
 
-    // "No Bike" State
-    const isClientMode = !activeBikeId && latestClientBikes?.length === 0;
+    const isClientMode = !activeBikeId && clientBikes.length === 0;
+    if (!client && !isHydrating) return <div className="p-8">Cliente no encontrado.</div>;
 
-    // Safety check
-    if (!client && !loadingBike) return <div className="p-8">Cliente no encontrado.</div>;
-
-    const totalServices = services?.filter(s => s.status === "Completed").length || 0;
+    const totalServices = services.filter(s => s.estado === "Completed").length;
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 max-w-5xl mx-auto">
@@ -244,31 +184,24 @@ export default function BikeDetail() {
                         <ArrowLeft className="h-4 w-4" /> Volver al Inicio
                     </Link>
                     <span>/</span>
-                    <span className="font-semibold text-foreground">
-                        {client?.name}
-                    </span>
+                    <span className="font-semibold text-foreground">{client?.nombre}</span>
                 </div>
 
                 <div className="bg-white p-6 rounded-xl border shadow-sm space-y-6">
-                    {/* Header Row */}
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
                             <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                                {client?.name}
+                                {client?.nombre}
                                 <Button variant="ghost" size="icon" className="h-auto w-auto p-1 text-slate-400 hover:text-blue-600 self-center" onClick={handleEditClick}>
                                     <Info className="h-7 w-7" />
                                 </Button>
                             </h1>
                             <div className="flex items-center gap-3 mt-1 text-muted-foreground">
-                                <span className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded text-sm">
-                                    <span className="font-bold text-slate-700">#{client?.displayId}</span>
-                                </span>
                                 <span className="flex items-center gap-1">
                                     Total Services: <span className="font-bold text-slate-900">{clientTotalServices}</span>
                                 </span>
                             </div>
                         </div>
-
                         <div className="flex items-center gap-3">
                             <Button onClick={() => setIsAddBikeOpen(true)} variant="outline">
                                 <Plus className="mr-2 h-4 w-4" /> Nueva Bici
@@ -276,13 +209,13 @@ export default function BikeDetail() {
                         </div>
                     </div>
 
-                    {/* Bike Tabs / Switcher */}
-                    {latestClientBikes && latestClientBikes.length > 0 && (
+                    {/* Bike Tabs */}
+                    {clientBikes.length > 0 && (
                         <div className="flex overflow-x-auto gap-2 pb-1 border-b">
-                            {latestClientBikes.map(b => (
+                            {clientBikes.map(b => (
                                 <button
                                     key={b.id}
-                                    onClick={() => setActiveBikeId(b.id!)}
+                                    onClick={() => setActiveBikeId(b.id)}
                                     className={cn(
                                         "flex flex-col items-start px-4 py-2 rounded-t-lg transition-all min-w-[140px] border-b-2",
                                         activeBikeId === b.id
@@ -291,9 +224,9 @@ export default function BikeDetail() {
                                     )}
                                 >
                                     <span className={cn("font-bold text-sm", activeBikeId === b.id ? "text-orange-700" : "text-slate-700")}>
-                                        {b.model}
+                                        {b.modelo}
                                     </span>
-                                    <span className="text-[10px] uppercase tracking-wider">{b.brand}</span>
+                                    <span className="text-[10px] uppercase tracking-wider">{b.marca}</span>
                                 </button>
                             ))}
                         </div>
@@ -303,7 +236,7 @@ export default function BikeDetail() {
                     {activeBike && (
                         <div className="flex justify-between items-center pt-2">
                             <div className="text-sm text-slate-500">
-                                Transmisión: <span className="font-medium text-slate-900">{activeBike.transmission || "N/A"}</span>
+                                Transmisión: <span className="font-medium text-slate-900">{activeBike.transmision || "N/A"}</span>
                             </div>
                             <Button size="default" className="shadow-sm bg-blue-600 hover:bg-blue-700" onClick={() => setIsServiceDialogOpen(true)}>
                                 <Wrench className="mr-2 h-4 w-4" /> Iniciar Service
@@ -313,7 +246,6 @@ export default function BikeDetail() {
                 </div>
             </div>
 
-            {/* If Client Mode (No Bike Selected), show something else or just hide standard sections */}
             {isClientMode ? (
                 <div className="py-12 text-center border-2 border-dashed rounded-lg bg-slate-50">
                     <h3 className="text-xl font-bold text-slate-800">Este cliente no tiene bicicletas seleccionadas</h3>
@@ -324,16 +256,13 @@ export default function BikeDetail() {
                 </div>
             ) : (
                 <>
-                    {/* 2. Top Section: Bike Health (Critical Info) */}
+                    {/* 2. Bike Health */}
                     <section className="space-y-4">
                         <h3 className="text-xl font-bold flex items-center gap-2 text-slate-800">
                             <Clock className="h-5 w-5 text-primary" /> Estado de Salud & Mantenimiento
                         </h3>
-
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {loadingReminders ? (
-                                Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32" />)
-                            ) : reminders?.length === 0 ? (
+                            {reminders.length === 0 ? (
                                 <Card className="col-span-full border-dashed bg-muted/20">
                                     <CardContent className="flex flex-col items-center justify-center p-8 text-muted-foreground">
                                         <CheckCircle className="h-8 w-8 mb-2 opacity-50" />
@@ -341,31 +270,13 @@ export default function BikeDetail() {
                                     </CardContent>
                                 </Card>
                             ) : (
-                                reminders?.map((reminder) => {
+                                reminders.map((reminder) => {
                                     const now = new Date();
-                                    const dueDate = new Date(reminder.due_date);
-
-                                    // ---- Dynamic Health Logic ----
-                                    let calculatedHealth: number;
-
-                                    // ---- Dynamic Health Logic (Fixed 1 Year Standard) ----
-                                    // Per user request: 
-                                    // 100% = 1 Year or more remaining
-                                    // 50% = 6 Months remaining
-                                    // 0% = 0 Days remaining (Overdue)
+                                    const dueDate = new Date(reminder.fecha_vencimiento || "2099-01-01");
 
                                     const timeRemaining = dueDate.getTime() - now.getTime();
                                     const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
-
-                                    if (timeRemaining <= 0) {
-                                        calculatedHealth = 0;
-                                    } else {
-                                        // Calculate percentage based on 1 year lifespan standard
-                                        // If timeRemaining >= 1 year, result is >= 100, capped at 100.
-                                        calculatedHealth = Math.min(100, (timeRemaining / ONE_YEAR_MS) * 100);
-                                    }
-
-                                    // Visualize integer percent
+                                    const calculatedHealth = timeRemaining <= 0 ? 0 : Math.min(100, (timeRemaining / ONE_YEAR_MS) * 100);
                                     const healthPercent = Math.round(calculatedHealth);
 
                                     const diffTime = dueDate.getTime() - now.getTime();
@@ -381,7 +292,7 @@ export default function BikeDetail() {
                                             <CardContent className="p-5 flex flex-col h-full justify-between gap-4">
                                                 <div>
                                                     <div className="flex justify-between items-start mb-1">
-                                                        <span className="font-semibold text-lg">{reminder.component}</span>
+                                                        <span className="font-semibold text-lg">{reminder.componente}</span>
                                                         <Badge variant="secondary" className={cn(
                                                             "text-xs font-mono",
                                                             healthPercent < 30 ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
@@ -409,11 +320,8 @@ export default function BikeDetail() {
                                                             </span>
                                                         )}
                                                     </div>
-
                                                     {(isUrgent || isOverdue) && (
-                                                        <Button size="sm" variant="destructive" className="h-7 text-xs">
-                                                            Agendar
-                                                        </Button>
+                                                        <Button size="sm" variant="destructive" className="h-7 text-xs">Agendar</Button>
                                                     )}
                                                 </div>
                                             </CardContent>
@@ -424,7 +332,7 @@ export default function BikeDetail() {
                         </div>
                     </section>
 
-                    {/* 3. Bottom Section: Service History (Vertical Timeline) */}
+                    {/* 3. Service History */}
                     <section className="space-y-4 pt-4 border-t">
                         <div className="flex items-center justify-between">
                             <h3 className="text-xl font-bold flex items-center gap-2 text-slate-800">
@@ -437,38 +345,33 @@ export default function BikeDetail() {
 
                         <Card className="border-0 shadow-none bg-transparent">
                             <CardContent className="p-0">
-                                {loadingServices ? (
-                                    <div className="space-y-2">
-                                        <Skeleton className="h-12 w-full" />
-                                        <Skeleton className="h-12 w-full" />
-                                    </div>
-                                ) : services?.length === 0 ? (
+                                {services.length === 0 ? (
                                     <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-lg">
                                         No hay historial de servicios previos.
                                     </div>
                                 ) : (
                                     <Accordion type="single" collapsible className="w-full space-y-2">
-                                        {services?.map((service) => {
-                                            // Categorization Logic
-                                            const partItems = service.extraItems?.filter((i: any) => i.category === 'part') || [];
-                                            const laborItems = service.extraItems?.filter((i: any) => i.category === 'labor' || !i.category) || [];
-                                            const totalParts = partItems.reduce((acc: number, i: any) => acc + i.price, 0);
-                                            const totalLabor = (service.basePrice || 0) + laborItems.reduce((acc: number, i: any) => acc + i.price, 0);
+                                        {services.map((service) => {
+                                            const extraItems = service.items_extra || [];
+                                            const partItems = extraItems.filter((i: any) => i.categoria === 'part');
+                                            const laborItems = extraItems.filter((i: any) => i.categoria === 'labor' || !i.categoria);
+                                            const totalParts = partItems.reduce((acc: number, i: any) => acc + (i.precio || 0), 0);
+                                            const totalLabor = (service.precio_base || 0) + laborItems.reduce((acc: number, i: any) => acc + (i.precio || 0), 0);
 
                                             return (
                                                 <AccordionItem key={service.id} value={`item-${service.id}`} className="border rounded-lg bg-card px-4">
                                                     <AccordionTrigger className="hover:no-underline py-3">
                                                         <div className="flex items-center gap-4 w-full text-left">
-                                                            <Badge variant={service.service_type === "Expert" ? "default" : "secondary"} className="w-20 justify-center">
-                                                                {service.service_type}
+                                                            <Badge variant={service.tipo_servicio === "Expert" ? "default" : "secondary"} className="w-20 justify-center">
+                                                                {service.tipo_servicio}
                                                             </Badge>
                                                             <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-4 flex-1">
                                                                 <span className="font-semibold text-slate-800">
-                                                                    {new Date(service.date_in || "").toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                                                    {new Date(service.fecha_ingreso || "").toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                                                                 </span>
-                                                                {service.status !== "Completed" && (
+                                                                {service.estado !== "Completed" && (
                                                                     <Badge variant="outline" className="w-fit text-xs text-blue-600 border-blue-200 bg-blue-50">
-                                                                        {service.status}
+                                                                        {service.estado}
                                                                     </Badge>
                                                                 )}
                                                             </div>
@@ -476,21 +379,17 @@ export default function BikeDetail() {
                                                     </AccordionTrigger>
                                                     <AccordionContent className="pt-2 pb-4 border-t mt-2">
                                                         <div className="space-y-3">
-
                                                             <div className="space-y-3">
-
                                                                 <div>
                                                                     <h4 className="text-sm font-semibold mb-2 text-muted-foreground uppercase text-xs tracking-wider">Detalle de Costos</h4>
                                                                     <div className="bg-slate-50 rounded-lg p-3 text-sm space-y-2 border">
-
-                                                                        {/* Section A: Parts */}
                                                                         {partItems.length > 0 ? (
                                                                             <div className="mb-3 border-b border-slate-200 pb-2">
                                                                                 <div className="font-semibold text-slate-700 mb-1 flex items-center gap-1"><span className="text-xs">📦</span> REPUESTOS</div>
                                                                                 {partItems.map((item: any) => (
                                                                                     <div key={item.id} className="flex justify-between items-center text-slate-600 pl-2">
-                                                                                        <span>{item.description}</span>
-                                                                                        <span className="font-mono">$ {item.price?.toLocaleString("es-AR") || 0}</span>
+                                                                                        <span>{item.descripcion}</span>
+                                                                                        <span className="font-mono">$ {item.precio?.toLocaleString("es-AR") || 0}</span>
                                                                                     </div>
                                                                                 ))}
                                                                                 <div className="flex justify-end mt-1">
@@ -501,32 +400,27 @@ export default function BikeDetail() {
                                                                             <div className="mb-2 italic text-slate-400 text-xs text-center">- Sin Repuestos -</div>
                                                                         )}
 
-                                                                        {/* Section B: Labor */}
                                                                         <div>
                                                                             <div className="font-semibold text-slate-700 mb-1 flex items-center gap-1"><span className="text-xs">🛠️</span> MANO DE OBRA</div>
-
                                                                             <div className="flex justify-between items-center text-slate-600 pl-2">
-                                                                                <span>Service Base ({service.service_type})</span>
-                                                                                <span className="font-mono">$ {service.basePrice?.toLocaleString("es-AR") || 0}</span>
+                                                                                <span>Service Base ({service.tipo_servicio})</span>
+                                                                                <span className="font-mono">$ {service.precio_base?.toLocaleString("es-AR") || 0}</span>
                                                                             </div>
-
                                                                             {laborItems.map((item: any) => (
                                                                                 <div key={item.id} className="flex justify-between items-center text-slate-600 pl-2">
-                                                                                    <span>{item.description}</span>
-                                                                                    <span className="font-mono">$ {item.price?.toLocaleString("es-AR") || 0}</span>
+                                                                                    <span>{item.descripcion}</span>
+                                                                                    <span className="font-mono">$ {item.precio?.toLocaleString("es-AR") || 0}</span>
                                                                                 </div>
                                                                             ))}
-
                                                                             <div className="flex justify-end mt-1 border-t border-slate-200 pt-1">
                                                                                 <span className="text-xs font-bold text-slate-600 uppercase mr-2">Total Mano de Obra:</span>
                                                                                 <span className="font-mono font-bold text-slate-700">$ {totalLabor.toLocaleString("es-AR")}</span>
                                                                             </div>
                                                                         </div>
 
-                                                                        {/* Grand Total */}
                                                                         <div className="bg-slate-100 -mx-3 -mb-3 p-3 mt-2 border-t border-slate-200 flex justify-between items-center rounded-b-lg">
                                                                             <span className="font-bold text-slate-900">TOTAL FINAL</span>
-                                                                            <span className="text-lg font-black text-blue-600">$ {service.totalPrice?.toLocaleString("es-AR") || 0}</span>
+                                                                            <span className="text-lg font-black text-blue-600">$ {service.precio_total?.toLocaleString("es-AR") || 0}</span>
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -534,7 +428,7 @@ export default function BikeDetail() {
                                                                 <div>
                                                                     <h4 className="text-sm font-semibold mb-1 text-muted-foreground uppercase text-xs tracking-wider">Notas del Mecánico</h4>
                                                                     <p className="text-sm text-slate-700 italic">
-                                                                        "{service.mechanic_notes || "N/A"}"
+                                                                        "{service.notas_mecanico || "N/A"}"
                                                                     </p>
                                                                 </div>
                                                             </div>
@@ -547,7 +441,25 @@ export default function BikeDetail() {
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     if (activeBike && client) {
-                                                                        printServiceReport(service, client.name, activeBike.model, client.dni || '', client.phone || '');
+                                                                        printServiceReport(
+                                                                            {
+                                                                                ...service,
+                                                                                service_type: service.tipo_servicio,
+                                                                                basePrice: service.precio_base,
+                                                                                totalPrice: service.precio_total,
+                                                                                mechanic_notes: service.notas_mecanico,
+                                                                                extraItems: service.items_extra?.map((i: any) => ({
+                                                                                    id: i.id,
+                                                                                    description: i.descripcion,
+                                                                                    price: i.precio,
+                                                                                    category: i.categoria,
+                                                                                })),
+                                                                            },
+                                                                            client.nombre,
+                                                                            activeBike.modelo,
+                                                                            client.dni || '',
+                                                                            client.telefono || ''
+                                                                        );
                                                                     }
                                                                 }}
                                                             >
@@ -563,26 +475,24 @@ export default function BikeDetail() {
                             </CardContent>
                         </Card>
                     </section>
-
                 </>
             )}
 
-            {/* Add Bike Dialog (Auto-Prompt) */}
+            {/* Add Bike Dialog */}
             {client && (
                 <AddBikeDialog
-                    clientId={client.id!}
-                    clientName={client.name}
+                    clientId={client.id}
+                    clientName={client.nombre}
                     isOpen={isAddBikeOpen}
                     onClose={() => setIsAddBikeOpen(false)}
                     onBikeCreated={(newBike) => {
                         setIsAddBikeOpen(false);
-                        // Auto-Navigate to the new bike's page
                         navigate(`/bikes/${newBike.id}`, { state: { autoStartService: true } });
                     }}
                 />
             )}
 
-            {/* Edit Dialog - Refactored with Tabs */}
+            {/* Edit Dialog */}
             <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
                 <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
@@ -618,35 +528,26 @@ export default function BikeDetail() {
                         </TabsContent>
 
                         <TabsContent value="garage" className="space-y-4 py-4">
-                            {/* LIST VIEW */}
-                            {!editingBikeId && latestClientBikes && (
+                            {!editingBikeId && (
                                 <div className="space-y-3">
-                                    {latestClientBikes.length === 0 && <p className="text-center text-muted-foreground p-4">No hay bicicletas.</p>}
-                                    {latestClientBikes.map(b => (
+                                    {clientBikes.length === 0 && <p className="text-center text-muted-foreground p-4">No hay bicicletas.</p>}
+                                    {clientBikes.map(b => (
                                         <div key={b.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50 transition-colors">
                                             <div className="flex items-center gap-3">
                                                 <div className="h-8 w-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600">
                                                     <BikeIcon size={16} />
                                                 </div>
                                                 <div>
-                                                    <p className="font-bold text-sm text-slate-900">{b.brand} {b.model}</p>
-                                                    <p className="text-xs text-slate-500">{b.transmission}</p>
+                                                    <p className="font-bold text-sm text-slate-900">{b.marca} {b.modelo}</p>
+                                                    <p className="text-xs text-slate-500">{b.transmision}</p>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-1">
                                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-blue-600" onClick={() => startEditingBike(b)}>
                                                     <Pencil size={14} />
                                                 </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 text-slate-500 hover:text-red-600"
-                                                    onClick={() => {
-                                                        if (confirm(`¿Eliminar ${b.brand} ${b.model}?`)) {
-                                                            deleteBikeMutation.mutate(b.id);
-                                                        }
-                                                    }}
-                                                >
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-red-600"
+                                                    onClick={() => handleDeleteBike(b.id)}>
                                                     <Trash2 size={14} />
                                                 </Button>
                                             </div>
@@ -658,7 +559,6 @@ export default function BikeDetail() {
                                 </div>
                             )}
 
-                            {/* EDIT VIEW */}
                             {editingBikeId && (
                                 <div className="animate-in fade-in slide-in-from-right-4 duration-300">
                                     <div className="flex items-center gap-2 mb-4">
@@ -667,7 +567,6 @@ export default function BikeDetail() {
                                         </Button>
                                         <span className="font-bold text-sm">Editando Bicicleta</span>
                                     </div>
-
                                     <div className="space-y-3">
                                         <div className="space-y-1">
                                             <Label htmlFor="brand">Marca</Label>
@@ -681,19 +580,9 @@ export default function BikeDetail() {
                                             <Label htmlFor="transmission">Transmisión</Label>
                                             <Input id="transmission" value={editTransmission} onChange={(e) => setEditTransmission(e.target.value)} placeholder="Ej: Shimano 105" />
                                         </div>
-
                                         <div className="pt-4 border-t mt-4">
-                                            <Button
-                                                variant="destructive"
-                                                size="sm"
-                                                className="w-full gap-2"
-                                                onClick={() => {
-                                                    if (confirm("¿Estás seguro de que quieres eliminar esta bicicleta? Esta acción no se puede deshacer y borrará el historial asociado.")) {
-                                                        deleteBikeMutation.mutate(editingBikeId);
-                                                    }
-                                                }}
-                                                disabled={deleteBikeMutation.isPending}
-                                            >
+                                            <Button variant="destructive" size="sm" className="w-full gap-2"
+                                                onClick={() => handleDeleteBike(editingBikeId)}>
                                                 <Trash2 className="h-4 w-4" /> Eliminar Bicicleta del Sistema
                                             </Button>
                                         </div>
@@ -705,23 +594,22 @@ export default function BikeDetail() {
 
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancelar</Button>
-                        <Button onClick={() => updateClientMutation.mutate()} disabled={updateClientMutation.isPending}>
+                        <Button onClick={handleSave} disabled={isSaving}>
                             <Save className="mr-2 h-4 w-4" /> Guardar Todo
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
-            {/* Start Service Dialog (Refactored to Shared Modal) */}
+            {/* Start Service Dialog */}
             <ServiceModal
                 isOpen={isServiceDialogOpen}
                 onClose={() => setIsServiceDialogOpen(false)}
-                initialClientData={client ? client : null}
-                initialBikeData={activeBike ? activeBike : null}
+                initialClientData={client || null}
+                initialBikeData={activeBike || null}
                 preSelectedClientId={client?.id}
                 preSelectedBikeId={activeBike?.id}
             />
-
-        </div >
+        </div>
     );
 }

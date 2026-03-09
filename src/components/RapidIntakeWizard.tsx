@@ -4,7 +4,7 @@ import { AddBikeDialog } from "./AddBikeDialog";
 import { ServiceModal } from "./ServiceModal";
 import { Button } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
-import { type Client, type Bike } from "@/lib/api";
+import { type SupabaseClient, type SupabaseBike } from "@/store/dataStore";
 
 interface RapidIntakeWizardProps {
     onComplete?: () => void;
@@ -13,8 +13,8 @@ interface RapidIntakeWizardProps {
 
 export function RapidIntakeWizard({ onComplete, trigger }: RapidIntakeWizardProps) {
     const [step, setStep] = useState<"IDLE" | "CLIENT" | "BIKE" | "SERVICE">("IDLE");
-    const [newClient, setNewClient] = useState<Client | null>(null);
-    const [newBike, setNewBike] = useState<Bike | null>(null);
+    const [newClient, setNewClient] = useState<SupabaseClient | null>(null);
+    const [newBike, setNewBike] = useState<SupabaseBike | null>(null);
 
     // Step 1: Start Flow
     const startFlow = () => {
@@ -24,14 +24,14 @@ export function RapidIntakeWizard({ onComplete, trigger }: RapidIntakeWizardProp
     };
 
     // Step 2: Client Created
-    const handleClientCreated = (client: Client) => {
+    const handleClientCreated = (client: SupabaseClient) => {
         setNewClient(client);
         setStep("BIKE");
         // Simple toast/alert could go here
     };
 
     // Step 3: Bike Created
-    const handleBikeCreated = (bike: Bike) => {
+    const handleBikeCreated = (bike: SupabaseBike) => {
         setNewBike(bike);
         setStep("SERVICE");
     };
@@ -75,8 +75,8 @@ export function RapidIntakeWizard({ onComplete, trigger }: RapidIntakeWizardProp
                 <AddBikeDialog
                     isOpen={true}
                     onClose={handleClose}
-                    clientId={newClient.id!}
-                    clientName={newClient.name}
+                    clientId={newClient.id}
+                    clientName={newClient.nombre}
                     onBikeCreated={handleBikeCreated}
                     isRapidIntake={true}
                 />

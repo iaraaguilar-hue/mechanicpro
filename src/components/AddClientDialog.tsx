@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createClient, UsageTier, type Client } from "@/lib/api";
+import { useDataStore, type SupabaseClient } from "@/store/dataStore";
+import { useAuthStore } from "@/store/authStore";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -9,8 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UserPlus, Plus } from "lucide-react";
 
+
+
 interface AddClientDialogProps {
-    onClientCreated: (client: Client) => void;
+    onClientCreated: (client: SupabaseClient) => void;
     variant?: "default" | "outline" | "secondary";
     trigger?: React.ReactNode;
     isOpen?: boolean;
@@ -23,50 +25,49 @@ export function AddClientDialog({ onClientCreated, variant = "default", trigger,
     const isControlled = isOpen !== undefined;
     const open = isControlled ? isOpen : internalOpen;
     const setOpen = isControlled ? (onOpenChange || (() => { })) : setInternalOpen;
-    const [formData, setFormData] = useState<{
-        name: string;
-        dni: string;
-        phone: string;
-        usage_tier: UsageTier;
-    }>({
-        name: "",
+
+    const [formData, setFormData] = useState({
+        nombre: "",
         dni: "",
-        phone: "",
-        usage_tier: UsageTier.CASUAL
+        telefono: "",
+        tipo_ciclista: "Casual",
     });
+    const [isSaving, setIsSaving] = useState(false);
 
     const navigate = useNavigate();
-    const queryClient = useQueryClient();
+    const createCliente = useDataStore(s => s.createCliente);
+    const taller_id = useAuthStore(s => s.taller_id);
 
-    const mutation = useMutation({
-        mutationFn: createClient,
-        onSuccess: (data) => {
+    const handleSubmit = async () => {
+        if (!formData.nombre || !formData.telefono) return alert("Nombre y Teléfono son obligatorios");
+        if (!taller_id) return alert("Error: no taller_id");
+        setIsSaving(true);
+        try {
+            const created = await createCliente({
+                taller_id,
+                nombre: formData.nombre,
+                dni: formData.dni || undefined,
+                telefono: formData.telefono,
+                tipo_ciclista: formData.tipo_ciclista,
+            });
             setOpen(false);
-            setFormData({ name: "", dni: "", phone: "", usage_tier: UsageTier.CASUAL });
-            onClientCreated(data);
-
-            // Invalidate queries to ensure fresh data
-            queryClient.invalidateQueries({ queryKey: ["fleet"] });
-            queryClient.invalidateQueries({ queryKey: ["clients"] });
-
-            // Rapid Intake: Skip redirect, parent handles next step
+            setFormData({ nombre: "", dni: "", telefono: "", tipo_ciclista: "Casual" });
+            onClientCreated(created);
             if (!isRapidIntake) {
-                navigate(`/clients/${data.id}`);
+                navigate(`/clients/${created.id}`);
             }
-        },
-        onError: () => alert("Error Create Client")
-    });
-
-    const handleSubmit = () => {
-        if (!formData.name || !formData.phone) return alert("Name and Phone required");
-        mutation.mutate(formData);
-    }
+        } catch (e: any) {
+            alert(`Error: ${e.message}`);
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
                 {trigger ? trigger : (
-                    <Button variant={variant} size={variant === 'default' ? "default" : "default"} className={variant === 'default' ? "h-12 w-12 p-0 rounded-full" : "w-full"}>
+                    <Button variant={variant} size="default" className={variant === 'default' ? "h-12 w-12 p-0 rounded-full" : "w-full"}>
                         {variant === 'default' ? <UserPlus className="h-6 w-6" /> : <><Plus className="mr-2 h-4 w-4" /> Crear Nuevo Cliente</>}
                     </Button>
                 )}
@@ -78,7 +79,7 @@ export function AddClientDialog({ onClientCreated, variant = "default", trigger,
                 <div className="grid gap-4 py-4">
                     <div className="space-y-2">
                         <Label>Nombre Completo</Label>
-                        <Input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} placeholder="Ej: Juan Perez" />
+                        <Input value={formData.nombre} onChange={e => setFormData({ ...formData, nombre: e.target.value })} placeholder="Ej: Juan Perez" />
                     </div>
                     <div className="space-y-2">
                         <Label>DNI / Documento</Label>
@@ -86,25 +87,25 @@ export function AddClientDialog({ onClientCreated, variant = "default", trigger,
                     </div>
                     <div className="space-y-2">
                         <Label>Teléfono / WhatsApp</Label>
-                        <Input value={formData.phone} onChange={e => setFormData({ ...formData, phone: e.target.value })} placeholder="Ej: 11 1234 5678" />
+                        <Input value={formData.telefono} onChange={e => setFormData({ ...formData, telefono: e.target.value })} placeholder="Ej: 11 1234 5678" />
                     </div>
                     <div className="space-y-2">
                         <Label>Tipo de Ciclista (Tier)</Label>
-                        <Select onValueChange={(v) => setFormData({ ...formData, usage_tier: v as UsageTier })} defaultValue={UsageTier.CASUAL as string}>
+                        <Select onValueChange={(v) => setFormData({ ...formData, tipo_ciclista: v })} defaultValue="Casual">
                             <SelectTrigger>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value={UsageTier.CASUAL}>Casual (Uso Urbano/Paseo)</SelectItem>
-                                <SelectItem value={UsageTier.SPORT}>Sport (Entrenamiento/Ruta)</SelectItem>
-                                <SelectItem value={UsageTier.PRO_HEAVY}>PRO / Heavy (Competencia)</SelectItem>
+                                <SelectItem value="Casual">Casual (Uso Urbano/Paseo)</SelectItem>
+                                <SelectItem value="Sport">Sport (Entrenamiento/Ruta)</SelectItem>
+                                <SelectItem value="Pro/Heavy">PRO / Heavy (Competencia)</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button onClick={handleSubmit} disabled={mutation.isPending}>
-                        {mutation.isPending ? "Guardando..." : "Guardar Cliente"}
+                    <Button onClick={handleSubmit} disabled={isSaving}>
+                        {isSaving ? "Guardando..." : "Guardar Cliente"}
                     </Button>
                 </DialogFooter>
             </DialogContent>

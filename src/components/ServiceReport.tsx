@@ -1,5 +1,6 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
-import { type ServiceRecord, type Bike } from '@/lib/api';
+import { type SupabaseService, type SupabaseBike } from '@/store/dataStore';
+import { formatOrdenNumber } from '@/lib/formatId';
 
 const styles = StyleSheet.create({
     page: {
@@ -65,8 +66,8 @@ const styles = StyleSheet.create({
 });
 
 interface ServiceReportProps {
-    service: ServiceRecord;
-    bike: Bike;
+    service: SupabaseService;
+    bike: SupabaseBike;
     clientName: string;
 }
 
@@ -78,7 +79,7 @@ export const ServiceReport = ({ service, bike, clientName }: ServiceReportProps)
                     <Text style={styles.title}>MechanicPro</Text>
                     <Text style={styles.subtitle}>Informe de Servicio Técnico</Text>
                 </View>
-                <Text style={{ fontSize: 10 }}>#{service.id}</Text>
+                <Text style={{ fontSize: 10 }}>{formatOrdenNumber(service.numero_orden, service.id)}</Text>
             </View>
 
             <View style={styles.section}>
@@ -88,22 +89,22 @@ export const ServiceReport = ({ service, bike, clientName }: ServiceReportProps)
                 </View>
                 <View style={styles.row}>
                     <Text style={styles.label}>Bicicleta:</Text>
-                    <Text style={styles.value}>{bike.brand} {bike.model}</Text>
+                    <Text style={styles.value}>{bike.marca} {bike.modelo}</Text>
                 </View>
                 <View style={styles.row}>
                     <Text style={styles.label}>Transmisión:</Text>
-                    <Text style={styles.value}>{bike.transmission}</Text>
+                    <Text style={styles.value}>{bike.transmision}</Text>
                 </View>
             </View>
 
             <View style={styles.section}>
                 <View style={styles.row}>
                     <Text style={styles.label}>Tipo de Servicio:</Text>
-                    <Text style={styles.value}>{service.service_type}</Text>
+                    <Text style={styles.value}>{service.tipo_servicio}</Text>
                 </View>
                 <View style={styles.row}>
                     <Text style={styles.label}>Fecha:</Text>
-                    <Text style={styles.value}>{service.date_out ? new Date(service.date_out).toLocaleDateString("es-AR") : "En Curso"}</Text>
+                    <Text style={styles.value}>{service.fecha_entrega ? new Date(service.fecha_entrega).toLocaleDateString("es-AR") : "En Curso"}</Text>
                 </View>
             </View>
 
@@ -117,17 +118,10 @@ export const ServiceReport = ({ service, bike, clientName }: ServiceReportProps)
                 ))}
             </View>
 
-            {service.parts_used && (
-                <View style={styles.section}>
-                    <Text style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 5 }}>Repuestos / Insumos</Text>
-                    <Text style={styles.value}>{service.parts_used}</Text>
-                </View>
-            )}
-
-            {service.mechanic_notes && (
+            {service.notas_mecanico && (
                 <View style={styles.section}>
                     <Text style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 5 }}>Observaciones del Mecánico</Text>
-                    <Text style={styles.value}>{service.mechanic_notes}</Text>
+                    <Text style={styles.value}>{service.notas_mecanico}</Text>
                 </View>
             )}
 

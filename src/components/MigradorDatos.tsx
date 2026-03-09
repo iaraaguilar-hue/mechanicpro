@@ -12,6 +12,7 @@ export default function MigradorDatos() {
     const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [logs, setLogs] = useState<string[]>([]);
     const [progress, setProgress] = useState(0);
+    const [currentPhase, setCurrentPhase] = useState('');
 
     const addLog = (message: string) => {
         setLogs(prev => [...prev, `${new Date().toLocaleTimeString()} - ${message}`]);
@@ -23,6 +24,7 @@ export default function MigradorDatos() {
             setStatus('idle');
             setLogs([]);
             setProgress(0);
+            setCurrentPhase('');
         }
     };
 
@@ -50,8 +52,7 @@ export default function MigradorDatos() {
             addLog("Archivo JSON parseado correctamente.");
 
             // Diccionarios de Mapeo
-            const clientMap: Record<string, string> = {};
-            const bikeMap: Record<string, string> = {};
+            const idMapping: { clients: Record<string, string>, bikes: Record<string, string> } = { clients: {}, bikes: {} };
             const serviceMap: Record<string, string> = {};
 
             // Arrays temporales para items
@@ -87,8 +88,10 @@ export default function MigradorDatos() {
                     continue;
                 }
 
-                clientMap[client.id] = newClient.id;
+                idMapping.clients[String(client.id)] = newClient.id;
+                addLog(`✅ Mapeando cliente viejo ${client.id} a nuevo UUID ${newClient.id}`);
                 clientsMigrated++;
+                setCurrentPhase(`Insertando Clientes... ${clientsMigrated}/${clientes.length}`);
             }
             addLog(`✅ FASE 1 completada. ${clientsMigrated} clientes migrados.`);
             setProgress(25);
@@ -101,8 +104,8 @@ export default function MigradorDatos() {
             let bikesMigrated = 0;
 
             for (const bike of bicicletas) {
-                const viejo_cliente_id = bike.clientId || bike.cliente_id;
-                const nuevo_cliente_id = clientMap[viejo_cliente_id];
+                const viejo_cliente_id = String(bike.clientId || bike.cliente_id);
+                const nuevo_cliente_id = idMapping.clients[viejo_cliente_id];
 
                 if (!nuevo_cliente_id) {
                     addLog(`Advertencia: Bici ${bike.id} omitida (cliente origen no existe/migrado)`);
@@ -127,8 +130,10 @@ export default function MigradorDatos() {
                     continue;
                 }
 
-                bikeMap[bike.id] = newBike.id;
+                idMapping.bikes[String(bike.id)] = newBike.id;
+                addLog(`✅ Mapeando bici vieja ${bike.id} a nuevo UUID ${newBike.id}`);
                 bikesMigrated++;
+                setCurrentPhase(`Insertando Bicis... ${bikesMigrated}/${bicicletas.length}`);
             }
             addLog(`✅ FASE 2 completada. ${bikesMigrated} bicicletas migradas.`);
             setProgress(50);
@@ -141,11 +146,11 @@ export default function MigradorDatos() {
             let servicesMigrated = 0;
 
             for (const service of servicios) {
-                const viejo_cliente_id = service.clientId || service.cliente_id;
-                const viejo_bicicleta_id = service.bikeId || service.bicicleta_id;
+                const viejo_cliente_id = String(service.clientId || service.cliente_id);
+                const viejo_bicicleta_id = String(service.bikeId || service.bicicleta_id);
 
-                const nuevo_cliente_id = clientMap[viejo_cliente_id];
-                const nuevo_bicicleta_id = bikeMap[viejo_bicicleta_id];
+                const nuevo_cliente_id = idMapping.clients[viejo_cliente_id];
+                const nuevo_bicicleta_id = idMapping.bikes[viejo_bicicleta_id];
 
                 if (!nuevo_cliente_id || !nuevo_bicicleta_id) {
                     addLog(`Advertencia: Servicio ${service.id} omitido (cliente o bici no existe)`);
@@ -179,8 +184,9 @@ export default function MigradorDatos() {
                     continue;
                 }
 
-                serviceMap[service.id] = newService.id;
+                serviceMap[String(service.id)] = newService.id;
                 servicesMigrated++;
+                setCurrentPhase(`Insertando Servicios... ${servicesMigrated}/${servicios.length}`);
 
                 // Guardar items en array temporal marcando el nuevo servicio_id
                 for (const item of extraItems) {
@@ -215,15 +221,18 @@ export default function MigradorDatos() {
                     continue;
                 }
                 itemsMigrated++;
+                setCurrentPhase(`Insertando Extra Items... ${itemsMigrated}/${allExtraItems.length}`);
             }
             addLog(`✅ FASE 4 completada. ${itemsMigrated} items guardados.`);
             setProgress(100);
+            setCurrentPhase('Migración finalizada con éxito');
 
             setStatus('success');
             addLog("🎉 ¡MIGRACIÓN COMPLETADA CON ÉXITO!");
 
         } catch (error: any) {
             setStatus('error');
+            setCurrentPhase('');
             addLog(`💥 ERROR FATAL: ${error.message || 'Error desconocido'}`);
         }
     };
@@ -266,7 +275,7 @@ export default function MigradorDatos() {
                         {status === 'loading' ? (
                             <>
                                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                                Migrando Datos ({progress}%)
+                                {currentPhase || `Migrando Datos (${progress}%)`}
                             </>
                         ) : (
                             'Iniciar Migración Secuencial'

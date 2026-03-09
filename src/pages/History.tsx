@@ -1,4 +1,6 @@
 import { useState, useRef, Fragment, useMemo } from 'react';
+import { exportBackupToZip } from '@/lib/exportBackup';
+import { useAuthStore } from '@/store/authStore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -153,6 +155,8 @@ const datePickerRescueStyles = `
 `;
 
 export default function History() {
+    const { taller_id } = useAuthStore();
+
     const readDataFromStorage = () => {
         try {
             const rawDB = localStorage.getItem('mechanicPro_db');
@@ -298,16 +302,29 @@ export default function History() {
         setDateRange(undefined);
     };
 
-    // ... (Export/Import functions remain identical) ...
-    const exportBackup = () => {
-        const data = localStorage.getItem('mechanicPro_db');
-        if (!data) return alert("No hay datos para exportar.");
-        const blob = new Blob([data], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `mechanic_pro_db_backup_${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
+    // ... (Export/Import functions) ...
+    const exportBackup = async () => {
+        const rawData = localStorage.getItem('mechanicPro_db');
+        if (!rawData) return alert('No hay datos para exportar.');
+        try {
+            const result = await exportBackupToZip(taller_id);
+            const cascadeMsg = result.skippedTotal > 0
+                ? `\n\n⚠️ ${result.skippedTotal} filas descartadas en cascada (clientes eliminados y sus dependencias).`
+                : '';
+            alert(
+                `✅ Backup exportado exitosamente.\n\n` +
+                `📊 Resumen:\n` +
+                `• ${result.clients} Clientes\n` +
+                `• ${result.bikes} Bicicletas\n` +
+                `• ${result.services} Servicios\n` +
+                `• ${result.items} Items\n` +
+                `• ${result.reminders} Recordatorios` +
+                cascadeMsg
+            );
+        } catch (error: any) {
+            console.error('❌ ZIP Generation error:', error);
+            alert(`ERROR DE MIGRACIÓN:\n\n${error.message}`);
+        }
     };
 
     const triggerImport = () => {

@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, Wrench } from "lucide-react";
+import { Loader2, Wrench, Download } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/authStore";
+import { exportBackupToZip } from "@/lib/exportBackup";
 
 export default function LoginScreen() {
     const [email, setEmail] = useState("");
@@ -14,6 +15,9 @@ export default function LoginScreen() {
     const [isResetting, setIsResetting] = useState(false);
     const [rememberMe, setRememberMe] = useState(true);
     const [resetSuccess, setResetSuccess] = useState(false);
+
+    // Escape hatch: backup para usuarios no autenticados
+    const [isLoadingBackup, setIsLoadingBackup] = useState(false);
 
     const navigate = useNavigate();
     const setAuth = useAuthStore((state) => state.setAuth);
@@ -68,14 +72,48 @@ export default function LoginScreen() {
             }
         } finally {
             console.log("PASO 7: Ejecutando finally y liberando el botón");
-            // ¡ESTO ES LO QUE FALTA! APAGAR EL BOTÓN SÍ O SÍ
             setLoading(false);
+        }
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // ESCAPE HATCH: Descarga de backup sin autenticación
+    // taller_id = null aquí; exportBackupToZip lo resuelve desde
+    // localStorage o el UUID de producción de ProBikes.
+    // ─────────────────────────────────────────────────────────────
+    const handleDownloadBackup = async () => {
+        const rawData = localStorage.getItem('mechanicPro_db');
+        if (!rawData) {
+            alert("No se encontraron datos locales para exportar.");
+            return;
+        }
+        setIsLoadingBackup(true);
+        try {
+            const result = await exportBackupToZip(null); // null = no autenticado
+            const cascadeMsg = result.skippedTotal > 0
+                ? `\n\n⚠️ ${result.skippedTotal} filas descartadas (clientes eliminados y sus dependencias).`
+                : '';
+            alert(
+                `✅ Backup descargado exitosamente.\n\n` +
+                `📊 Resumen:\n` +
+                `• ${result.clients} Clientes\n` +
+                `• ${result.bikes} Bicicletas\n` +
+                `• ${result.services} Servicios\n` +
+                `• ${result.items} Items\n` +
+                `• ${result.reminders} Recordatorios` +
+                cascadeMsg
+            );
+        } catch (err: any) {
+            console.error("❌ Error generando backup:", err);
+            alert(`Error al generar el backup:\n\n${err.message}`);
+        } finally {
+            setIsLoadingBackup(false);
         }
     };
 
     return (
         <div
-            className="min-h-screen relative flex justify-end items-center p-8 md:p-12 bg-[url('/image_10.png')] bg-cover bg-center before:content-[''] before:absolute before:inset-0 before:bg-black/40 before:backdrop-blur-sm before:-z-10"
+            className="min-h-screen relative flex flex-col justify-center items-end p-8 md:p-12 bg-[url('/image_10.png')] bg-cover bg-center before:content-[''] before:absolute before:inset-0 before:bg-black/40 before:backdrop-blur-sm before:-z-10"
         >
             <div className="bg-white max-w-md w-full p-12 rounded-lg shadow-lg relative">
 
@@ -198,6 +236,30 @@ export default function LoginScreen() {
                         </div>
                     )}
                 </form>
+            </div>
+
+            {/* ─────────────────────────────────────────────────────────
+                ESCAPE HATCH: Rescate de datos locales sin autenticación
+            ───────────────────────────────────────────────────────── */}
+            <div className="max-w-md w-full mt-4 text-center">
+                <button
+                    type="button"
+                    onClick={handleDownloadBackup}
+                    disabled={isLoadingBackup}
+                    className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-transparent border-none cursor-pointer"
+                >
+                    {isLoadingBackup ? (
+                        <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Generando backup...
+                        </>
+                    ) : (
+                        <>
+                            <Download className="h-4 w-4" />
+                            ¿Necesitas rescatar tus datos locales? Descargar Backup CSV
+                        </>
+                    )}
+                </button>
             </div>
         </div>
     );

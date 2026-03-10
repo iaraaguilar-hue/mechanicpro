@@ -232,9 +232,11 @@ function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () =
                     <Button variant="outline" size="sm" className="h-9" onClick={(e) => { e.stopPropagation(); onClick(); }}>
                         <Pencil className="h-4 w-4 mr-2" /> Editar
                     </Button>
-                    <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-9 w-9 p-0" onClick={handleFinish} title="Finalizar Trabajo">
-                        <CheckCircle className="h-5 w-5" />
-                    </Button>
+                    {job.status !== 'ready' && job.status !== 'delivered' && (
+                        <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-9 w-9 p-0" onClick={handleFinish} title="Finalizar Trabajo">
+                            <CheckCircle className="h-5 w-5" />
+                        </Button>
+                    )}
                 </div>
             </TableCell>
         </TableRow>
@@ -306,8 +308,8 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
 
             // Mark as completed if not already
             const currentStatus = (service.estado || '').toLowerCase();
-            if (currentStatus !== 'completed' && currentStatus !== 'delivered') {
-                await updateServicio(job.service_id, { estado: 'Completed', fecha_entrega: new Date().toISOString() });
+            if (currentStatus !== 'ready' && currentStatus !== 'delivered') {
+                await updateServicio(job.service_id, { estado: 'ready', fecha_entrega: new Date().toISOString() });
             }
 
             onClose();
@@ -354,7 +356,7 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
     if (!service) return null;
 
     const currentStatus = (service.estado || '').toLowerCase();
-    const isCompleted = currentStatus === "completed" || currentStatus === "delivered";
+    const isCompleted = currentStatus === "ready" || currentStatus === "delivered";
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>

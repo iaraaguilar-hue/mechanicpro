@@ -63,7 +63,7 @@ export default function Workshop() {
 
     // Compute active jobs from store (replaces getDashboardJobs)
     const jobs = useMemo(() => {
-        const completedStatuses = ['completed', 'finalizado', 'entregado', 'old_completed'];
+        const completedStatuses = ['completed', 'finalizado', 'entregado', 'old_completed', 'ready', 'delivered'];
         const mapped = servicios
             .filter(s => !completedStatuses.includes((s.estado || '').toLowerCase()) && !s.deleted_at)
             .map(s => {

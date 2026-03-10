@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 interface AddServiceDialogProps {
     bike: SupabaseBike;
@@ -18,6 +19,7 @@ interface AddServiceDialogProps {
 export function AddServiceDialog({ bike, isOpen, onClose, onServiceCreated }: AddServiceDialogProps) {
     const [serviceType, setServiceType] = useState<ServiceType>(ServiceType.SPORT);
     const [notes, setNotes] = useState("");
+    const [fechaEntrega, setFechaEntrega] = useState("");
     const [isSaving, setIsSaving] = useState(false);
 
     const createServicio = useDataStore(s => s.createServicio);
@@ -31,11 +33,13 @@ export function AddServiceDialog({ bike, isOpen, onClose, onServiceCreated }: Ad
                 taller_id,
                 bicicleta_id: bike.id,
                 tipo_servicio: serviceType,
-                estado: "Intake",
+                estado: "in_progress",
                 notas_mecanico: notes,
                 fecha_ingreso: new Date().toISOString(),
+                fecha_entrega: fechaEntrega || null,
             });
             setNotes("");
+            setFechaEntrega("");
             onServiceCreated(created);
         } catch (e: any) {
             alert(`Error: ${e.message}`);
@@ -62,6 +66,15 @@ export function AddServiceDialog({ bike, isOpen, onClose, onServiceCreated }: Ad
                                 <SelectItem value={ServiceType.EXPERT}>Service Expert (Completo)</SelectItem>
                             </SelectContent>
                         </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Fecha Estimada de Entrega (Opcional)</Label>
+                        <Input
+                            type="date"
+                            className="w-full text-lg"
+                            value={fechaEntrega}
+                            onChange={(e) => setFechaEntrega(e.target.value)}
+                        />
                     </div>
                     <div className="space-y-2">
                         <Label>Observaciones de Ingreso</Label>

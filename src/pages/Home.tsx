@@ -55,6 +55,7 @@ export default function Home() {
             return {
                 clientId: client.id,
                 clientName: client.nombre,
+                numero_cliente: client.numero_cliente,
                 tier: client.tipo_ciclista || "Standard",
                 bikes: bikesWithDetails,
             };
@@ -139,7 +140,7 @@ export default function Home() {
                                 <div className="flex justify-between items-start mb-2">
                                     <div className="flex items-center gap-2">
                                         <span className="bg-orange-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                                            {index + 1}
+                                            {client.numero_cliente || index + 1}
                                         </span>
                                         <h3 className="text-base font-bold text-slate-900">{client.clientName}</h3>
                                     </div>

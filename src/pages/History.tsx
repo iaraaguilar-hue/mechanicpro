@@ -1,5 +1,6 @@
 import { useState, Fragment, useMemo } from 'react';
 import { useAuthStore } from '@/store/authStore';
+import { StatusBadge } from "@/components/StatusBadge";
 import { useDataStore } from '@/store/dataStore';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatOrdenNumber } from '@/lib/formatId';
@@ -20,10 +21,28 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
-import { FileText, Eye, ChevronUp, Pencil, Trash2, ClipboardList, Search, Calendar as CalendarIcon, FilterX, Wrench, Package, Info, Tag } from 'lucide-react';
+import { Search, FilterX, ChevronUp, FileText, Pencil, Trash2, Calendar, Eye, ClipboardList, Calendar as CalendarIcon, Wrench, Package, Info, Tag } from "lucide-react";
 import { printServiceReport } from '@/lib/printServiceBtn';
 import { ServiceModal } from '@/components/ServiceModal';
 import { es } from "date-fns/locale";
+
+// Utility function to safely format dates and avoid crashes with null/undefined values
+const safeFormatDate = (dateString?: string | null) => {
+    if (!dateString) return '-';
+    try {
+        // Blindaje contra errores de .split() on null/undefined u objetos
+        if (typeof dateString !== 'string') return '-';
+        const parts = dateString.split('T');
+        if (!parts || parts.length === 0) return '-';
+
+        const d = new Date(dateString);
+        if (isNaN(d.getTime())) return '-';
+
+        return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    } catch (e) {
+        return '-';
+    }
+};
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 type DateRange = {
@@ -157,15 +176,17 @@ export default function History() {
             .map(service => {
                 const bike = storeBicicletas.find(b => b.id === service.bicicleta_id);
                 const client = bike ? storeClientes.find(c => c.id === bike.cliente_id) : null;
-                const rawDate = service.fecha_entrega || service.fecha_ingreso || "2024-01-01T00:00:00";
-                let displayDate = "Sin fecha";
-                let dateObj = new Date();
-                try {
-                    const d = new Date(rawDate);
-                    dateObj = d;
-                    displayDate = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
-                    if (displayDate === "Invalid Date") displayDate = String(rawDate);
-                } catch { displayDate = String(rawDate); }
+                const rawDateIn = service.fecha_ingreso || "2024-01-01T00:00:00";
+                const rawDateOut = service.fecha_entrega;
+
+                const displayDateIn = safeFormatDate(rawDateIn);
+                const displayDateOut = safeFormatDate(rawDateOut);
+
+                // dateObj is used for filtering, so it needs to be a Date object
+                let dateObj = new Date(rawDateIn);
+                if (isNaN(dateObj.getTime())) {
+                    dateObj = new Date("2024-01-01T00:00:00"); // Fallback for invalid dates
+                }
 
                 const bikeBrand = (bike?.marca || "").trim();
                 const bikeModelFull = bike ? `${bike.marca} ${bike.modelo}` : "Bicicleta Desconocida";
@@ -175,8 +196,10 @@ export default function History() {
                     id: service.id,
                     numero_orden: service.numero_orden,
                     status: service.estado || "Unknown",
-                    displayDate,
-                    rawDate,
+                    displayDateIn,
+                    displayDateOut,
+                    rawDateOut,
+                    rawDate: rawDateIn,
                     dateObj,
                     clientName: client?.nombre || "Cliente Desconocido",
                     clientDni: client?.dni || "",
@@ -430,7 +453,8 @@ export default function History() {
                         <TableHeader className="bg-slate-50/80">
                             <TableRow className="hover:bg-transparent border-slate-100">
                                 <TableHead className="py-4 pl-6 w-[140px]">Estado</TableHead>
-                                <TableHead className="py-4">Fecha</TableHead>
+                                <TableHead className="py-4">Ingreso</TableHead>
+                                <TableHead className="py-4">Entrega</TableHead>
                                 <TableHead className="py-4">Cliente</TableHead>
                                 <TableHead className="py-4">Bicicleta</TableHead>
                                 <TableHead className="py-4">Tipo</TableHead>
@@ -440,7 +464,6 @@ export default function History() {
                         <TableBody>
                             {filteredJobs.map((job) => {
                                 const isExpanded = expandedIds.includes(job.id);
-                                const isCompleted = (job.status || '').toLowerCase().includes('complet') || (job.status || '').toLowerCase().includes('entregado');
 
                                 return (
                                     <Fragment key={job.uniqueId}>
@@ -451,20 +474,20 @@ export default function History() {
                                             onClick={() => toggleExpand(job.id)}
                                         >
                                             <TableCell className="pl-6 py-4">
-                                                <Badge className={cn(
-                                                    "rounded-md px-2.5 py-1 text-xs font-semibold shadow-none uppercase border-0",
-                                                    isCompleted
-                                                        ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                                                        : "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                                                )}>
-                                                    {job.status === "Completed" ? "LISTO" : job.status}
-                                                </Badge>
+                                                <StatusBadge status={job.status} />
                                             </TableCell>
-                                            <TableCell className="py-4">
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold text-slate-700">{job.displayDate}</span>
-                                                    <span className="text-[10px] text-slate-400 font-mono" title={job.id}>{formatOrdenNumber(job.numero_orden, job.id)}</span>
+                                            <TableCell className="py-4 w-28">
+                                                <div className="flex flex-col gap-1">
+                                                    <span className="font-bold text-slate-700">{job.displayDateIn}</span>
+                                                    <span className="text-[10px] text-primary font-bold mt-1" title={job.id}>{formatOrdenNumber(job.numero_orden, job.id)}</span>
                                                 </div>
+                                            </TableCell>
+                                            <TableCell className="py-4 w-28">
+                                                {job.rawDateOut ? (
+                                                    <span className="font-semibold text-slate-600">{job.displayDateOut}</span>
+                                                ) : (
+                                                    <span className="text-slate-400 italic text-sm">-</span>
+                                                )}
                                             </TableCell>
                                             <TableCell className="py-4">
                                                 <div className="font-medium text-slate-900">{job.clientName}</div>

@@ -8,6 +8,7 @@ export interface SupabaseClient {
     id: string;
     taller_id: string;
     nombre: string;
+    numero_cliente?: number;
     dni?: string;
     telefono?: string;
     email?: string;
@@ -38,7 +39,7 @@ export interface SupabaseService {
     precio_total?: number;
     precio_base?: number;
     notas_mecanico?: string;
-    fecha_entrega?: string;
+    fecha_entrega?: string | null;
     deleted_at?: string;
     checklist_data?: Record<string, boolean>;
     items_extra?: { id: string; descripcion: string; precio: number; categoria?: string }[];
@@ -117,7 +118,7 @@ export const useDataStore = create<DataState>((set, get) => ({
             const [resC, resB, resS, resR] = await Promise.all([
                 supabase.from('clientes').select('*').eq('taller_id', tallerId),
                 supabase.from('bicicletas').select('*').eq('taller_id', tallerId),
-                supabase.from('servicios').select('*').eq('taller_id', tallerId).is('deleted_at', null),
+                supabase.from('servicios').select('*, servicio_items(*)').eq('taller_id', tallerId).is('deleted_at', null),
                 supabase.from('recordatorios').select('*').eq('taller_id', tallerId),
             ]);
 
@@ -129,16 +130,22 @@ export const useDataStore = create<DataState>((set, get) => ({
             const errors = [resC, resB, resS, resR].filter(r => r.error).map(r => r.error!.message);
             if (errors.length > 0) throw new Error(`Errores Supabase: ${errors.join(' | ')}`);
 
+            // Map servicio_items (from Supabase JOIN) → items_extra (UI-expected field)
+            const serviciosMapeados: SupabaseService[] = (resS.data || []).map((s: any) => ({
+                ...s,
+                items_extra: s.servicio_items || [],
+            }));
+
             set({
                 clientes: (resC.data as SupabaseClient[]) ?? [],
                 bicicletas: (resB.data as SupabaseBike[]) ?? [],
-                servicios: (resS.data as SupabaseService[]) ?? [],
+                servicios: serviciosMapeados,
                 recordatorios: (resR.data as SupabaseReminder[]) ?? [],
                 isHydrating: false,
                 lastHydratedAt: Date.now(),
             });
 
-            console.log(`[DataStore] ✅ Hidratación completa: ${resC.data?.length} clientes, ${resB.data?.length} bicicletas, ${resS.data?.length} servicios, ${resR.data?.length} recordatorios`);
+            console.log(`[DataStore] ✅ Hidratación completa: ${resC.data?.length} clientes, ${resB.data?.length} bicicletas, ${serviciosMapeados.length} servicios (con items), ${resR.data?.length} recordatorios`);
         } catch (error: any) {
             console.error('[DataStore] ❌ Error en hidratación:', error.message);
             set({ isHydrating: false, hydrateError: error.message });
@@ -204,18 +211,76 @@ export const useDataStore = create<DataState>((set, get) => ({
     // CRUD: SERVICIOS
     // ═════════════════════════════════════════════════════════
     createServicio: async (data) => {
+        // Step 0: Separate items from service payload
+        const { items_extra, ...serviceData } = data as any;
+        // Also strip servicio_items (JOIN artifact) if present
+        delete (serviceData as any).servicio_items;
+
+        // Step 1: Insert the service
         const { data: row, error } = await supabase
-            .from('servicios').insert(data).select().single();
+            .from('servicios').insert(serviceData).select().single();
         if (error) throw new Error(`Error creando servicio: ${error.message}`);
-        set({ servicios: [...get().servicios, row as SupabaseService] });
-        return row as SupabaseService;
+
+        const createdService = row as SupabaseService;
+
+        // Step 2: Insert related items (if any)
+        const itemsArray = items_extra || [];
+        if (itemsArray.length > 0) {
+            const itemsToInsert = itemsArray.map((item: any) => ({
+                servicio_id: createdService.id,
+                taller_id: createdService.taller_id,
+                descripcion: item.descripcion,
+                precio: item.precio,
+                categoria: item.categoria || 'labor',
+            }));
+            const { error: itemsError } = await supabase.from('servicio_items').insert(itemsToInsert);
+            if (itemsError) console.error('Error insertando items:', itemsError.message);
+        }
+
+        // Update Zustand state with items attached
+        createdService.items_extra = itemsArray;
+        set({ servicios: [...get().servicios, createdService] });
+        return createdService;
     },
 
     updateServicio: async (id, data) => {
-        const { error } = await supabase.from('servicios').update(data).eq('id', id);
+        // Step 0: Separate items from service payload
+        const { items_extra, ...serviceData } = data as any;
+        // Also strip servicio_items (JOIN artifact) if present
+        delete (serviceData as any).servicio_items;
+
+        // Step 1: Update the service (only real columns)
+        const { error } = await supabase.from('servicios').update(serviceData).eq('id', id);
         if (error) throw new Error(`Error actualizando servicio: ${error.message}`);
+
+        // Step 2: If items were provided, replace them (delete old + insert new)
+        if (items_extra !== undefined) {
+            // Delete existing items for this service
+            await supabase.from('servicio_items').delete().eq('servicio_id', id);
+
+            // Insert new items
+            const itemsArray = items_extra || [];
+            if (itemsArray.length > 0) {
+                const existingService = get().servicios.find(s => s.id === id);
+                const tallerId = existingService?.taller_id || serviceData.taller_id;
+                const itemsToInsert = itemsArray.map((item: any) => ({
+                    servicio_id: id,
+                    taller_id: tallerId,
+                    descripcion: item.descripcion,
+                    precio: item.precio,
+                    categoria: item.categoria || 'labor',
+                }));
+                const { error: itemsError } = await supabase.from('servicio_items').insert(itemsToInsert);
+                if (itemsError) console.error('Error insertando items:', itemsError.message);
+            }
+        }
+
+        // Update Zustand state
         set({
-            servicios: get().servicios.map(s => s.id === id ? { ...s, ...data } : s),
+            servicios: get().servicios.map(s => s.id === id
+                ? { ...s, ...serviceData, ...(items_extra !== undefined ? { items_extra } : {}) }
+                : s
+            ),
         });
     },
 

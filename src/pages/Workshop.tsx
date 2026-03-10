@@ -4,6 +4,7 @@ import { useAuthStore } from "@/store/authStore";
 import { formatOrdenNumber } from "@/lib/formatId";
 import { printServiceReport } from "@/lib/printServiceBtn";
 import { ServiceModal } from "@/components/ServiceModal";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw } from "lucide-react";
@@ -13,6 +14,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
+
+// Utility function to safely format dates and avoid crashes with null/undefined values
+const safeFormatDate = (dateString?: string | null) => {
+    if (!dateString) return '-';
+    try {
+        // Blindaje contra errores de .split() u otros metodos de string on null
+        const parts = dateString.split('T');
+        if (!parts || parts.length === 0) return '-';
+
+        const d = new Date(dateString);
+        if (isNaN(d.getTime())) return '-';
+
+        return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+    } catch (e) {
+        return '-';
+    }
+};
 
 // ─────────────────────────────────────────────────────────────
 // Dashboard Job shape (computed from store data)
@@ -46,7 +64,7 @@ export default function Workshop() {
     // Compute active jobs from store (replaces getDashboardJobs)
     const jobs = useMemo(() => {
         const completedStatuses = ['completed', 'finalizado', 'entregado', 'old_completed'];
-        return servicios
+        const mapped = servicios
             .filter(s => !completedStatuses.includes((s.estado || '').toLowerCase()) && !s.deleted_at)
             .map(s => {
                 const bike = bicicletas.find(b => b.id === s.bicicleta_id);
@@ -60,11 +78,17 @@ export default function Workshop() {
                     bike_brand: bike?.marca || "Desconocida",
                     bike_model: bike?.modelo || "Desconocida",
                     client_name: client?.nombre || "Desconocido",
-                    date_out: s.fecha_entrega,
+                    date_out: s.fecha_entrega ?? undefined,
                     total_price: s.precio_total,
                     bicicleta_id: s.bicicleta_id,
                 };
             });
+
+        return mapped.sort((a: any, b: any) => {
+            if (!a.date_out) return 1;
+            if (!b.date_out) return -1;
+            return new Date(a.date_out).getTime() - new Date(b.date_out).getTime();
+        });
     }, [servicios, bicicletas, clientes]);
 
     const handleRefresh = async () => {
@@ -108,6 +132,7 @@ export default function Workshop() {
                         <TableRow className="bg-muted/50 hover:bg-muted/50">
                             <TableHead className="w-[100px]">Estado</TableHead>
                             <TableHead>Ingreso</TableHead>
+                            <TableHead>Entrega</TableHead>
                             <TableHead>Cliente</TableHead>
                             <TableHead>Bicicleta</TableHead>
                             <TableHead>Service</TableHead>
@@ -157,14 +182,7 @@ export default function Workshop() {
 function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () => void, onFinalize: () => void }) {
     const handleFinish = (e: React.MouseEvent) => { e.stopPropagation(); onFinalize(); };
 
-    let statusBadge;
-    if (job.status === "Intake" || job.status === "In Progress") {
-        statusBadge = <Badge className="bg-[#00adf7] hover:bg-[#0099da] text-white border-none">EN CURSO</Badge>;
-    } else if (job.status === "Completed") {
-        statusBadge = <Badge className="bg-green-600 text-white border-none">LISTO</Badge>;
-    } else {
-        statusBadge = <Badge variant="outline">{job.status}</Badge>;
-    }
+    const statusBadge = <StatusBadge status={job.status} />;
 
     let serviceBadge;
     switch (job.service_type) {
@@ -181,11 +199,18 @@ function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () =
     return (
         <TableRow className="hover:bg-muted/30 transition-colors cursor-pointer" onClick={onClick}>
             <TableCell>{statusBadge}</TableCell>
-            <TableCell className="font-medium text-muted-foreground">
-                <div className="flex flex-col">
-                    <span>{new Date(job.date_in).toLocaleDateString("es-AR", { day: '2-digit', month: '2-digit' })}</span>
-                    <span className="text-xs text-primary font-bold" title={job.service_id}>{formatOrdenNumber(job.numero_orden, job.service_id)}</span>
+            <TableCell className="font-medium text-muted-foreground w-28">
+                <div className="flex flex-col gap-1">
+                    <span className="text-slate-900 font-semibold">{safeFormatDate(job.date_in)}</span>
+                    <span className="text-[10px] text-primary font-bold mt-1" title={job.service_id}>{formatOrdenNumber(job.numero_orden, job.service_id)}</span>
                 </div>
+            </TableCell>
+            <TableCell className="font-medium p-0 m-0 align-top pt-4">
+                {job.date_out ? (
+                    <span className="text-slate-600 font-semibold text-sm whitespace-nowrap">{safeFormatDate(job.date_out)}</span>
+                ) : (
+                    <span className="text-slate-400 italic text-sm">-</span>
+                )}
             </TableCell>
             <TableCell>
                 <div className="flex flex-col">

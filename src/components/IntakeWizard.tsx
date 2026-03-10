@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDataStore, type SupabaseClient, type SupabaseBike } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
+import { formatOrdenNumber } from "@/lib/formatId";
+import { SuccessModal } from "@/components/SuccessModal";
 import { ServiceType } from "@/components/ServiceModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +42,17 @@ export function IntakeWizard({
     const [step, setStep] = useState<"SEARCH_CLIENT" | "SELECT_BIKE" | "DEFINE_SERVICE">("SEARCH_CLIENT");
     const [selectedClient, setSelectedClient] = useState<SupabaseClient | null>(null);
     const [selectedBike, setSelectedBike] = useState<SupabaseBike | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+    const navigate = useNavigate();
+
+    const handleCloseModal = () => {
+        setSuccessMessage(null);
+        setSelectedClient(null);
+        setSelectedBike(null);
+        setStep("SEARCH_CLIENT");
+        navigate("/workshop");
+    };
 
     useEffect(() => {
         if (open) {
@@ -63,6 +76,17 @@ export function IntakeWizard({
                 setSelectedBike(null);
             }, 300);
         }
+    }
+
+    if (successMessage) {
+        return (
+            <div className="w-full h-full flex items-center justify-center p-4">
+                <SuccessModal
+                    message={successMessage}
+                    onClose={handleCloseModal}
+                />
+            </div>
+        );
     }
 
     return (
@@ -108,7 +132,10 @@ export function IntakeWizard({
                         <ServiceDefinitionStep
                             bike={selectedBike}
                             clientName={selectedClient?.nombre || initialClient?.nombre || ""}
-                            onSuccess={() => setOpen(false)}
+                            onSuccess={(msg) => {
+                                setSuccessMessage(msg);
+                                setOpen(false); // Triggers background reset of state
+                            }}
                             onBack={() => setStep("SELECT_BIKE")}
                         />
                     )}
@@ -243,12 +270,12 @@ function BikeSelectionStep({ client, onBikeSelect, onBack }: { client: SupabaseC
     )
 }
 
-function ServiceDefinitionStep({ bike, clientName, onSuccess, onBack }: { bike: SupabaseBike, clientName: string, onSuccess: () => void, onBack: () => void }) {
+function ServiceDefinitionStep({ bike, clientName, onSuccess, onBack }: { bike: SupabaseBike, clientName: string, onSuccess: (msg: string) => void, onBack: () => void }) {
     const [serviceType, setServiceType] = useState<ServiceType>(ServiceType.SPORT);
     const [notes, setNotes] = useState("");
     const [isSaving, setIsSaving] = useState(false);
+    const [fechaEntrega, setFechaEntrega] = useState("");
 
-    const navigate = useNavigate();
     const createServicio = useDataStore(s => s.createServicio);
     const taller_id = useAuthStore(s => s.taller_id);
 
@@ -264,13 +291,16 @@ function ServiceDefinitionStep({ bike, clientName, onSuccess, onBack }: { bike: 
                 taller_id,
                 bicicleta_id: bike.id,
                 tipo_servicio: serviceType,
-                estado: "In Progress",
+                estado: "in_progress",
                 notas_mecanico: notes,
                 fecha_ingreso: new Date().toISOString(),
+                fecha_entrega: fechaEntrega || null,
             });
-            alert(`Service #${created.id.substring(0, 8)} creado!`);
-            onSuccess();
-            navigate("/workshop");
+            const msg = `Servicio ${formatOrdenNumber(created.numero_orden, created.id)} registrado correctamente.`;
+            setNotes("");
+            setFechaEntrega("");
+            setServiceType(ServiceType.SPORT);
+            onSuccess(msg);
         } catch (e: any) {
             alert(`Error: ${e.message}`);
         } finally {
@@ -279,42 +309,54 @@ function ServiceDefinitionStep({ bike, clientName, onSuccess, onBack }: { bike: 
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center bg-accent/20 p-3 rounded-lg border border-primary/20">
-                <div>
-                    <p className="text-sm text-muted-foreground">{clientName}</p>
-                    <p className="font-bold">{bike.marca} {bike.modelo}</p>
+        <>
+            <div className="space-y-6">
+                <div className="flex justify-between items-center bg-accent/20 p-3 rounded-lg border border-primary/20">
+                    <div>
+                        <p className="text-sm text-muted-foreground">{clientName}</p>
+                        <p className="font-bold">{bike.marca} {bike.modelo}</p>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={onBack}>Cambiar Bici</Button>
                 </div>
-                <Button variant="ghost" size="sm" onClick={onBack}>Cambiar Bici</Button>
-            </div>
 
-            <div className="grid gap-6">
-                <div className="space-y-3">
-                    <Label className="text-lg">Tipo de Service</Label>
-                    <div className="grid grid-cols-3 gap-3">
-                        <ServiceOption selected={serviceType === ServiceType.SPORT} onClick={() => handleTypeChange(ServiceType.SPORT)} title="SPORT" desc="Básico" />
-                        <ServiceOption selected={serviceType === ServiceType.EXPERT} onClick={() => handleTypeChange(ServiceType.EXPERT)} title="EXPERT" desc="Completo" />
-                        <ServiceOption selected={serviceType === ServiceType.OTHER} onClick={() => handleTypeChange(ServiceType.OTHER)} title="OTRO" desc="Reparación" />
+                <div className="grid gap-6">
+                    <div className="space-y-3">
+                        <Label className="text-lg">Tipo de Service</Label>
+                        <div className="grid grid-cols-3 gap-3">
+                            <ServiceOption selected={serviceType === ServiceType.SPORT} onClick={() => handleTypeChange(ServiceType.SPORT)} title="SPORT" desc="Básico" />
+                            <ServiceOption selected={serviceType === ServiceType.EXPERT} onClick={() => handleTypeChange(ServiceType.EXPERT)} title="EXPERT" desc="Completo" />
+                            <ServiceOption selected={serviceType === ServiceType.OTHER} onClick={() => handleTypeChange(ServiceType.OTHER)} title="OTRO" desc="Reparación" />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Fecha Estimada de Entrega (Opcional)</Label>
+                        <Input
+                            type="date"
+                            className="w-full text-lg"
+                            value={fechaEntrega}
+                            onChange={(e) => setFechaEntrega(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Observaciones / Detalle del Trabajo</Label>
+                        <Textarea
+                            placeholder={serviceType === ServiceType.OTHER ? "Describir reparación puntual..." : "Notas de ingreso..."}
+                            className="min-h-[120px] text-lg"
+                            value={notes}
+                            onChange={e => setNotes(e.target.value)}
+                        />
                     </div>
                 </div>
 
-                <div className="space-y-2">
-                    <Label>Observaciones / Detalle del Trabajo</Label>
-                    <Textarea
-                        placeholder={serviceType === ServiceType.OTHER ? "Describir reparación puntual..." : "Notas de ingreso..."}
-                        className="min-h-[120px] text-lg"
-                        value={notes}
-                        onChange={e => setNotes(e.target.value)}
-                    />
-                </div>
+                <DialogFooter className="mt-8">
+                    <Button size="lg" className="w-full text-lg h-12 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmit} disabled={isSaving}>
+                        {isSaving ? "Guardando..." : "CONFIRMAR INGRESO"}
+                    </Button>
+                </DialogFooter>
             </div>
-
-            <DialogFooter className="mt-8">
-                <Button size="lg" className="w-full text-lg h-12" onClick={handleSubmit} disabled={isSaving}>
-                    {isSaving ? "Procesando..." : "CONFIRMAR INGRESO"}
-                </Button>
-            </DialogFooter>
-        </div>
+        </>
     )
 }
 

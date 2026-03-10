@@ -112,7 +112,8 @@ export const printServiceReport = (
   });
 
   const grandTotal = basePrice + extraItems.reduce((acc: number, item: any) => acc + (Number(item.price) || 0), 0);
-  const dateStr = new Date().toLocaleDateString('es-AR');
+  const dateInStr = job.fecha_ingreso ? new Date(job.fecha_ingreso).toLocaleDateString('es-AR') : new Date().toLocaleDateString('es-AR');
+  const dateOutStr = job.fecha_entrega ? new Date(job.fecha_entrega).toLocaleDateString('es-AR') : null;
 
   // --- HTML TEMPLATE (Clean, White, No ID, No Signature) ---
   const element = document.createElement('div');
@@ -126,7 +127,8 @@ export const printServiceReport = (
         <div style="text-align: right;">
            <div style="font-size: 12px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Informe de Servicio</div>
            <div style="font-size: 16px; font-weight: 700;">Service ${formatOrdenNumber(job.numero_orden, job.id)}</div>
-           <div style="font-size: 14px; font-weight: 400; margin-top: 5px;">${dateStr}</div>
+           <div style="font-size: 14px; font-weight: 400; margin-top: 5px;">Ingreso: ${dateInStr}</div>
+           ${dateOutStr ? `<div style="font-size: 13px; font-weight: 600; color: #f97316; margin-top: 2px;">Entrega: ${dateOutStr}</div>` : ''}
         </div>
       </div>
 

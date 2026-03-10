@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useDataStore, type SupabaseClient, type SupabaseBike } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
+import { formatOrdenNumber } from "@/lib/formatId";
+import { SuccessModal } from "@/components/SuccessModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -76,6 +78,11 @@ export function ServiceModal({
                     bike={selectedBike || null}
                     serviceId={preSelectedServiceId}
                     clientName={selectedClient?.nombre || initialClientData?.nombre || ""}
+                    onReset={() => {
+                        setSelectedClient(null);
+                        setSelectedBike(null);
+                        setStep("SEARCH_CLIENT");
+                    }}
                     onSuccess={() => {
                         if (onSuccess) onSuccess();
                         onClose();
@@ -258,10 +265,11 @@ function BikeSelectionStep({ client, onBikeSelect, onBack }: { client: SupabaseC
 // ─────────────────────────────────────────────────────────────
 // Service Definition — create/update via store
 // ─────────────────────────────────────────────────────────────
-function ServiceDefinitionStep({ bike, serviceId, clientName, onSuccess, onBack }: {
+function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess, onBack }: {
     bike: SupabaseBike | null,
     serviceId?: string,
     clientName: string,
+    onReset?: () => void,
     onSuccess: () => void,
     onBack: () => void
 }) {
@@ -270,6 +278,8 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onSuccess, onBack 
     const [basePrice, setBasePrice] = useState(40000);
     const [extraItems, setExtraItems] = useState<{ id: string, description: string, price: number, category?: 'part' | 'labor' }[]>([]);
     const [isSaving, setIsSaving] = useState(false);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    const [fechaEntrega, setFechaEntrega] = useState("");
 
     const servicios = useDataStore(s => s.servicios);
     const createServicio = useDataStore(s => s.createServicio);
@@ -292,6 +302,13 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onSuccess, onBack 
                         category: i.categoria || i.category || 'part',
                     })) || []
                 );
+
+                if (existing.fecha_entrega && typeof existing.fecha_entrega === "string") {
+                    // Truncate timestamp to YYYY-MM-DD if needed
+                    setFechaEntrega(existing.fecha_entrega.split('T')[0]);
+                } else {
+                    setFechaEntrega("");
+                }
             }
         }
     }, [serviceId, servicios]);
@@ -339,30 +356,51 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onSuccess, onBack 
                     precio_base: basePrice,
                     items_extra: supabaseItems,
                     precio_total: totalPrice,
+                    fecha_entrega: fechaEntrega || null,
                 });
-                alert(`Service actualizado!`);
+                setSuccessMessage(`Servicio actualizado correctamente.`);
             } else {
                 // CREATE
                 const created = await createServicio({
                     taller_id,
                     bicicleta_id: bike?.id || "",
                     tipo_servicio: serviceType,
-                    estado: "In Progress",
+                    estado: "in_progress",
                     fecha_ingreso: new Date().toISOString(),
                     notas_mecanico: notes,
                     precio_base: basePrice,
                     items_extra: supabaseItems,
                     precio_total: totalPrice,
+                    fecha_entrega: fechaEntrega || null,
                 });
-                alert(`Service #${created.id.substring(0, 8)} creado!`);
+                setSuccessMessage(`Servicio ${formatOrdenNumber(created.numero_orden, created.id)} creado con éxito.`);
             }
-            onSuccess();
         } catch (e: any) {
             alert(`Error: ${e.message}`);
         } finally {
             setIsSaving(false);
         }
     };
+
+    if (successMessage) {
+        return (
+            <div className="w-full h-full flex items-center justify-center p-4">
+                <SuccessModal
+                    message={successMessage}
+                    onClose={() => {
+                        setSuccessMessage(null);
+                        setNotes("");
+                        setBasePrice(40000);
+                        setExtraItems([]);
+                        setServiceType(ServiceType.SPORT);
+                        setFechaEntrega("");
+                        if (onReset) onReset();
+                        onSuccess();
+                    }}
+                />
+            </div>
+        );
+    }
 
     return (
         <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
@@ -385,7 +423,6 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onSuccess, onBack 
 
             {/* Scrollable Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                {/* Service Type Cards */}
                 <div>
                     <Label className="text-lg font-semibold mb-3 block">Tipo de Service</Label>
                     <div className="grid grid-cols-3 gap-4">
@@ -464,22 +501,34 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onSuccess, onBack 
                     <span className="text-3xl font-black text-primary">$ {totalPrice.toLocaleString("es-AR")}</span>
                 </div>
 
-                <div className="space-y-2">
-                    <Label>Observaciones / Detalle del Trabajo</Label>
-                    <Textarea
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        rows={3}
-                        placeholder={serviceType === ServiceType.OTHER ? "Describir reparación puntual..." : "Notas de ingreso..."}
-                        className="text-lg"
-                    />
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <Label>Fecha Estimada de Entrega (Opcional)</Label>
+                        <Input
+                            type="date"
+                            className="w-full text-lg"
+                            value={fechaEntrega}
+                            onChange={(e) => setFechaEntrega(e.target.value)}
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Observaciones / Detalle del Trabajo</Label>
+                        <Textarea
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            rows={3}
+                            placeholder={serviceType === ServiceType.OTHER ? "Describir reparación puntual..." : "Notas de ingreso..."}
+                            className="text-lg"
+                        />
+                    </div>
                 </div>
             </div>
 
             {/* Footer */}
             <div className="p-6 border-t bg-muted/10 z-10">
-                <Button size="lg" className="w-full text-lg h-12" onClick={handleSubmit} disabled={isSaving}>
-                    {isSaving ? "PROCESANDO..." : (serviceId ? "GUARDAR CAMBIOS" : "CONFIRMAR INGRESO")}
+                <Button size="lg" className="w-full text-lg h-12 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmit} disabled={isSaving}>
+                    {isSaving ? "Guardando..." : (serviceId ? "GUARDAR CAMBIOS" : "CONFIRMAR INGRESO")}
                 </Button>
             </div>
         </DialogContent>

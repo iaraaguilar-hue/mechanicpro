@@ -151,6 +151,7 @@ export const printServiceReport = (
       <!-- SECTION 1: MANO DE OBRA (Standard) -->
       <div style="margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
         <span style="font-size: 12px; font-weight: 700; color: #f97316; text-transform: uppercase; letter-spacing: 1px;">MANO DE OBRA</span>
+        <span style="font-size: 11px; font-weight: 700; color: #f97316; margin-left: 6px; text-transform: uppercase;">(SOLO EFECTIVO O TRANSFERENCIA)</span>
       </div>
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
         <tbody>

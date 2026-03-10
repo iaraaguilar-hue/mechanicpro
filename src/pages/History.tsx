@@ -281,11 +281,24 @@ export default function History() {
             // 1. Search Query
             if (searchQuery) {
                 const query = searchQuery.toLowerCase();
+
+                const notesMatch = (job.rawJob.mechanic_notes || "").toLowerCase().includes(query);
+                const itemsMatch = (job.rawJob.extraItems || []).some((item: any) =>
+                    (item.description || "").toLowerCase().includes(query)
+                );
+                const checklistMatch = Object.entries(job.rawJob.checklist_data || {})
+                    .filter(([_, value]) => value === true)
+                    .some(([key, _]) => key.toLowerCase().includes(query));
+
                 const matchesSearch =
                     job.clientName.toLowerCase().includes(query) ||
                     job.bikeModel.toLowerCase().includes(query) ||
                     String(job.id).includes(query) ||
-                    job.serviceType.toLowerCase().includes(query);
+                    job.serviceType.toLowerCase().includes(query) ||
+                    notesMatch ||
+                    itemsMatch ||
+                    checklistMatch;
+
                 if (!matchesSearch) return false;
             }
 
@@ -443,7 +456,7 @@ export default function History() {
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                     <Input
                         type="search"
-                        placeholder="Buscar cliente, modelo o ID..."
+                        placeholder="Buscar cliente, modelo, ID o trabajo (ej: horquilla)..."
                         className="pl-9 h-10 bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-[#f25a30]/20 transition-all font-medium w-full"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
@@ -602,43 +615,52 @@ function ExpandedServiceDetail({ job }: { job: any }) {
                 </Button>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full">
                 {/* Left: Summary */}
-                <div className="flex-1 space-y-4">
+                <div className="md:col-span-1 space-y-4">
                     <h3 className="text-sky-500 flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
                         <Info className="w-4 h-4" /> Resumen del Trabajo
                     </h3>
                     <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div className="bg-sky-50 p-4 rounded-lg border border-sky-100">
+                        <div className="bg-sky-50 p-4 rounded-lg border border-sky-100 flex flex-col justify-center">
                             <span className="text-xs text-sky-600 font-medium block mb-1">Mano de Obra</span>
-                            <span className="text-xl font-mono font-bold text-slate-800">$ {totalLabor.toLocaleString("es-AR")}</span>
+                            <div className="flex flex-row items-baseline gap-1 whitespace-nowrap">
+                                <span className="text-lg font-mono font-bold text-slate-800">$</span>
+                                <span className="text-xl font-mono font-bold text-slate-800">{totalLabor.toLocaleString("es-AR")}</span>
+                            </div>
                         </div>
-                        <div className="bg-sky-50 p-4 rounded-lg border border-sky-100">
+                        <div className="bg-sky-50 p-4 rounded-lg border border-sky-100 flex flex-col justify-center">
                             <span className="text-xs text-sky-600 font-medium block mb-1">Repuestos</span>
-                            <span className="text-xl font-mono font-bold text-slate-800">$ {totalParts.toLocaleString("es-AR")}</span>
+                            <div className="flex flex-row items-baseline gap-1 whitespace-nowrap">
+                                <span className="text-lg font-mono font-bold text-slate-800">$</span>
+                                <span className="text-xl font-mono font-bold text-slate-800">{totalParts.toLocaleString("es-AR")}</span>
+                            </div>
                         </div>
                     </div>
-                    <div className="bg-orange-50 p-5 rounded-xl flex justify-between items-center shadow-sm border border-orange-200 mt-6">
-                        <span className="font-bold text-sm uppercase text-orange-800">Total Final</span>
-                        <span className="text-3xl font-bold text-orange-600">$ {service.totalPrice?.toLocaleString("es-AR") || 0}</span>
+                    <div className="bg-orange-50 p-4 rounded-xl flex justify-between items-center shadow-sm border border-orange-200 mt-6 whitespace-nowrap flex-wrap gap-2">
+                        <span className="font-bold text-sm uppercase text-orange-800 shrink-0">Total Final</span>
+                        <div className="flex flex-row items-baseline gap-1 shrink-0">
+                            <span className="text-2xl font-bold text-orange-600">$</span>
+                            <span className="text-3xl font-bold text-orange-600">{service.totalPrice?.toLocaleString("es-AR") || 0}</span>
+                        </div>
                     </div>
                 </div>
 
                 {/* Right: Detailed List */}
-                <div className="flex-[2] space-y-6 md:pl-8 md:border-l border-gray-100">
+                <div className="md:col-span-2 space-y-6 md:pl-8 md:border-l border-gray-100 w-full">
                     <div>
                         <h3 className="text-sky-500 flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
                             <Wrench className="w-4 h-4" /> Mano de Obra
                         </h3>
-                        <div className="space-y-2 bg-sky-50/50 p-4 rounded-lg border border-sky-100/50">
-                            <div className="flex justify-between items-center text-sm p-3 bg-white rounded-md shadow-sm border border-gray-100">
-                                <span className="text-slate-700 font-medium">Service Base ({service.service_type})</span>
-                                <span className="font-mono font-bold text-slate-700">$ {service.basePrice?.toLocaleString("es-AR") || 0}</span>
+                        <div className="space-y-2 bg-sky-50/50 p-4 rounded-lg border border-sky-100/50 w-full">
+                            <div className="flex justify-between items-center text-sm p-3 bg-white rounded-md shadow-sm border border-gray-100 gap-4">
+                                <span className="text-slate-700 font-medium break-words">Service Base ({service.service_type})</span>
+                                <span className="font-mono font-bold text-slate-700 whitespace-nowrap shrink-0">$ {service.basePrice?.toLocaleString("es-AR") || 0}</span>
                             </div>
                             {laborItems.map((item: any) => (
-                                <div key={item.id} className="flex justify-between items-center text-sm p-3 bg-white rounded-md shadow-sm border border-gray-100">
-                                    <span className="text-slate-700">{item.description}</span>
-                                    <span className="font-mono font-bold text-slate-700">$ {item.price?.toLocaleString("es-AR") || 0}</span>
+                                <div key={item.id} className="flex justify-between items-center text-sm p-3 bg-white rounded-md shadow-sm border border-gray-100 gap-4">
+                                    <span className="text-slate-700 break-words">{item.description}</span>
+                                    <span className="font-mono font-bold text-slate-700 whitespace-nowrap shrink-0">$ {item.price?.toLocaleString("es-AR") || 0}</span>
                                 </div>
                             ))}
                         </div>
@@ -649,11 +671,11 @@ function ExpandedServiceDetail({ job }: { job: any }) {
                             <h3 className="text-sky-500 flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
                                 <Package className="w-4 h-4" /> Repuestos
                             </h3>
-                            <div className="space-y-2 bg-sky-50/50 p-4 rounded-lg border border-sky-100/50">
+                            <div className="space-y-2 bg-sky-50/50 p-4 rounded-lg border border-sky-100/50 w-full">
                                 {partItems.map((item: any) => (
-                                    <div key={item.id} className="flex justify-between items-center text-sm p-3 bg-white rounded-md shadow-sm border border-gray-100">
-                                        <span className="text-slate-700">{item.description}</span>
-                                        <span className="font-mono font-bold text-slate-700">$ {item.price?.toLocaleString("es-AR") || 0}</span>
+                                    <div key={item.id} className="flex justify-between items-center text-sm p-3 bg-white rounded-md shadow-sm border border-gray-100 gap-4">
+                                        <span className="text-slate-700 break-words">{item.description}</span>
+                                        <span className="font-mono font-bold text-slate-700 whitespace-nowrap shrink-0">$ {item.price?.toLocaleString("es-AR") || 0}</span>
                                     </div>
                                 ))}
                             </div>

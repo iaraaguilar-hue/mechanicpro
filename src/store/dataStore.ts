@@ -40,6 +40,7 @@ export interface SupabaseService {
     precio_base?: number;
     notas_mecanico?: string;
     fecha_entrega?: string | null;
+    fecha_finalizacion?: string;
     deleted_at?: string;
     checklist_data?: Record<string, boolean>;
     items_extra?: { id: string; descripcion: string; precio: number; categoria?: string }[];
@@ -116,7 +117,7 @@ export const useDataStore = create<DataState>((set, get) => ({
 
         try {
             const [resC, resB, resS, resR] = await Promise.all([
-                supabase.from('clientes').select('*').eq('taller_id', tallerId),
+                supabase.from('clientes').select('*').eq('taller_id', tallerId).order('numero_cliente', { ascending: true }),
                 supabase.from('bicicletas').select('*').eq('taller_id', tallerId),
                 supabase.from('servicios').select('*, servicio_items(*)').eq('taller_id', tallerId).is('deleted_at', null),
                 supabase.from('recordatorios').select('*').eq('taller_id', tallerId),

@@ -25,8 +25,10 @@ export default function Home() {
     const clientList = useMemo(() => {
         const lowerSearch = searchTerm.toLowerCase();
 
-        // Filter active clients
-        const activeClients = clientes.filter(c => !c.isDeleted);
+        // Filter active clients and enforce fallback sort
+        const activeClients = clientes
+            .filter(c => !c.isDeleted)
+            .sort((a, b) => (a.numero_cliente || Infinity) - (b.numero_cliente || Infinity));
 
         // Group bikes per client
         const grouped = activeClients.map(client => {

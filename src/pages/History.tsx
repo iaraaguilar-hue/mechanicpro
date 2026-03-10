@@ -200,6 +200,7 @@ export default function History() {
                     displayDateOut,
                     rawDateOut,
                     rawDate: rawDateIn,
+                    rawFechaFinalizacion: service.fecha_finalizacion,
                     dateObj,
                     clientName: client?.nombre || "Cliente Desconocido",
                     clientDni: client?.dni || "",
@@ -224,7 +225,11 @@ export default function History() {
                     },
                 };
             })
-            .sort((a, b) => new Date(b.rawDate).getTime() - new Date(a.rawDate).getTime());
+            .sort((a, b) => {
+                const dateA = new Date(a.rawFechaFinalizacion || a.rawDate).getTime();
+                const dateB = new Date(b.rawFechaFinalizacion || b.rawDate).getTime();
+                return dateB - dateA; // Orden descendente
+            });
     }, [storeServicios, storeBicicletas, storeClientes]);
 
     const [expandedIds, setExpandedIds] = useState<string[]>([]);

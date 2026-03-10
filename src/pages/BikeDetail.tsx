@@ -5,6 +5,7 @@ import { printServiceReport } from "@/lib/printServiceBtn";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -80,9 +81,10 @@ export default function BikeDetail() {
 
     // Client total services (completed)
     const clientTotalServices = useMemo(() => {
+        const completedStatuses = ['completed', 'finalizado', 'entregado', 'ready', 'delivered'];
         const clientBikeIds = clientBikes.map(b => b.id);
         return storeServicios.filter(s =>
-            clientBikeIds.includes(s.bicicleta_id) && s.estado === "Completed" && !s.deleted_at
+            clientBikeIds.includes(s.bicicleta_id) && completedStatuses.includes((s.estado || '').toLowerCase()) && !s.deleted_at
         ).length;
     }, [storeServicios, clientBikes]);
 
@@ -173,7 +175,8 @@ export default function BikeDetail() {
     const isClientMode = !activeBikeId && clientBikes.length === 0;
     if (!client && !isHydrating) return <div className="p-8">Cliente no encontrado.</div>;
 
-    const totalServices = services.filter(s => s.estado === "Completed").length;
+    const completedStatuses = ['completed', 'finalizado', 'entregado', 'ready', 'delivered'];
+    const totalServices = services.filter(s => completedStatuses.includes((s.estado || '').toLowerCase())).length;
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 max-w-5xl mx-auto">
@@ -369,11 +372,7 @@ export default function BikeDetail() {
                                                                 <span className="font-semibold text-slate-800">
                                                                     {new Date(service.fecha_ingreso || "").toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                                                                 </span>
-                                                                {service.estado !== "Completed" && (
-                                                                    <Badge variant="outline" className="w-fit text-xs text-blue-600 border-blue-200 bg-blue-50">
-                                                                        {service.estado}
-                                                                    </Badge>
-                                                                )}
+                                                                <StatusBadge status={service.estado || ''} />
                                                             </div>
                                                         </div>
                                                     </AccordionTrigger>

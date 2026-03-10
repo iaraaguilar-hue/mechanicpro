@@ -309,7 +309,7 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
             // Mark as completed if not already
             const currentStatus = (service.estado || '').toLowerCase();
             if (currentStatus !== 'ready' && currentStatus !== 'delivered') {
-                await updateServicio(job.service_id, { estado: 'ready', fecha_entrega: new Date().toISOString() });
+                await updateServicio(job.service_id, { estado: 'ready', fecha_finalizacion: new Date().toISOString() });
             }
 
             onClose();

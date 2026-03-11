@@ -12,7 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, User, Bike as BikeIcon, Plus, CheckCircle, Wrench, Pencil } from "lucide-react";
+import { Search, User, Bike as BikeIcon, Plus, CheckCircle, Wrench, Pencil, ArrowLeft } from "lucide-react";
 import { AddClientDialog } from "@/components/AddClientDialog";
 import { AddBikeDialog } from "@/components/AddBikeDialog";
 import { EditBikeDialog } from "@/components/EditBikeDialog";
@@ -99,8 +99,17 @@ export function IntakeWizard({
                 </DialogTrigger>
             )}
             <DialogContent className="max-w-3xl min-h-[500px] flex flex-col">
+                {step !== "SEARCH_CLIENT" && (
+                    <button
+                        onClick={() => setStep(step === "SELECT_BIKE" ? "SEARCH_CLIENT" : "SELECT_BIKE")}
+                        className="absolute left-4 top-4 p-2 text-slate-400 hover:text-slate-600 transition-colors z-10"
+                        aria-label="Volver al paso anterior"
+                    >
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+                )}
                 <DialogHeader>
-                    <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+                    <DialogTitle className={`text-2xl font-bold flex items-center gap-2 ${step !== "SEARCH_CLIENT" ? "ml-8" : ""}`}>
                         {step === "SEARCH_CLIENT" && <><User /> Identificar Cliente</>}
                         {step === "SELECT_BIKE" && <><BikeIcon /> Seleccionar Bicicleta</>}
                         {step === "DEFINE_SERVICE" && <><Wrench /> Detalles del Service</>}

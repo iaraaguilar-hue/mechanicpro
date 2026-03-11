@@ -111,7 +111,9 @@ export const printServiceReport = (
     }
   });
 
-  const grandTotal = basePrice + extraItems.reduce((acc: number, item: any) => acc + (Number(item.price) || 0), 0);
+  const totalLabor = basePrice + extraLaborRows.reduce((acc: number, row: any) => acc + (Number(row.price) || 0), 0);
+  const totalProducts = productRows.reduce((acc: number, row: any) => acc + (Number(row.price) || 0), 0);
+  const grandTotal = totalLabor + totalProducts;
   const dateInStr = job.fecha_ingreso ? new Date(job.fecha_ingreso).toLocaleDateString('es-AR') : new Date().toLocaleDateString('es-AR');
   const dateOutStr = job.fecha_entrega ? new Date(job.fecha_entrega).toLocaleDateString('es-AR') : null;
 
@@ -151,7 +153,6 @@ export const printServiceReport = (
       <!-- SECTION 1: MANO DE OBRA (Standard) -->
       <div style="margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
         <span style="font-size: 12px; font-weight: 700; color: #f97316; text-transform: uppercase; letter-spacing: 1px;">MANO DE OBRA</span>
-        <span style="font-size: 11px; font-weight: 700; color: #f97316; margin-left: 6px; text-transform: uppercase;">(SOLO EFECTIVO O TRANSFERENCIA)</span>
       </div>
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
         <tbody>
@@ -210,8 +211,21 @@ export const printServiceReport = (
         </table>
       ` : ''}
 
-      <div style="text-align: right; margin-top: 20px; padding-top: 15px; border-top: 2px solid #333;">
-         <div style="font-size: 30px; font-weight: 900; color: #333;">$ ${grandTotal.toLocaleString('es-AR')}</div>
+      <div style="margin-top: 30px; padding-top: 15px; border-top: 2px solid #333;">
+         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="font-size: 14px; font-weight: 700; color: #333;">
+              TOTAL MANO DE OBRA 
+              <span style="color: #333; text-transform: uppercase; font-weight: 700; font-size: 11px; margin-left: 8px;">(SOLO EFECTIVO O TRANSFERENCIA)</span>
+            </div>
+            <div style="font-size: 16px; font-weight: 700; color: #333; font-family: monospace;">$ ${totalLabor.toLocaleString('es-AR')}</div>
+         </div>
+         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <div style="font-size: 14px; font-weight: 700; color: #333;">TOTAL REPUESTOS</div>
+            <div style="font-size: 16px; font-weight: 700; color: #333; font-family: monospace;">$ ${totalProducts.toLocaleString('es-AR')}</div>
+         </div>
+         <div style="text-align: right; padding-top: 15px; border-top: 2px solid #333;">
+            <div style="font-size: 30px; font-weight: 900; color: #333;">$ ${grandTotal.toLocaleString('es-AR')}</div>
+         </div>
       </div>
 
       ${(job.notes || job.mechanic_notes) ? `

@@ -10,7 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, User, Bike as BikeIcon, Plus, CheckCircle, Wrench, Pencil, Trash2 } from "lucide-react";
+import { Search, User, Bike as BikeIcon, Plus, CheckCircle, Wrench, Pencil, Trash2, ArrowLeft, Flag, Calendar, ChevronDown } from "lucide-react";
 import { AddClientDialog } from "@/components/AddClientDialog";
 import { AddBikeDialog } from "@/components/AddBikeDialog";
 import { EditBikeDialog } from "@/components/EditBikeDialog";
@@ -92,10 +92,21 @@ export function ServiceModal({
             ) : (
                 <DialogContent className="max-w-3xl min-h-[500px] flex flex-col">
                     <DialogHeader>
-                        <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-                            {step === "SEARCH_CLIENT" && <><User /> Identificar Cliente</>}
-                            {step === "SELECT_BIKE" && <><BikeIcon /> Seleccionar Bicicleta</>}
-                        </DialogTitle>
+                        <div className="flex items-center gap-3">
+                            {step === "SELECT_BIKE" && (
+                                <button
+                                    onClick={() => setStep("SEARCH_CLIENT")}
+                                    className="p-1 text-slate-400 hover:text-slate-800 transition-colors"
+                                    aria-label="Volver al paso anterior"
+                                >
+                                    <ArrowLeft className="w-5 h-5" />
+                                </button>
+                            )}
+                            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+                                {step === "SEARCH_CLIENT" && <><User /> Identificar Cliente</>}
+                                {step === "SELECT_BIKE" && <><BikeIcon /> Seleccionar Bicicleta</>}
+                            </DialogTitle>
+                        </div>
                     </DialogHeader>
 
                     <div className="flex-1 py-4">
@@ -280,6 +291,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
     const [isSaving, setIsSaving] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [fechaEntrega, setFechaEntrega] = useState("");
+    const [selectedCarreraId, setSelectedCarreraId] = useState<string | null>(null);
 
     const servicios = useDataStore(s => s.servicios);
     const createServicio = useDataStore(s => s.createServicio);
@@ -309,6 +321,8 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                 } else {
                     setFechaEntrega("");
                 }
+
+                setSelectedCarreraId(existing.carrera_id || null);
             }
         }
     }, [serviceId, servicios]);
@@ -357,6 +371,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                     items_extra: supabaseItems,
                     precio_total: totalPrice,
                     fecha_entrega: fechaEntrega || null,
+                    carrera_id: selectedCarreraId || null,
                 });
                 setSuccessMessage(`Servicio actualizado correctamente.`);
             } else {
@@ -372,6 +387,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                     items_extra: supabaseItems,
                     precio_total: totalPrice,
                     fecha_entrega: fechaEntrega || null,
+                    carrera_id: selectedCarreraId || null,
                 });
                 setSuccessMessage(`Servicio ${formatOrdenNumber(created.numero_orden, created.id)} creado con éxito.`);
             }
@@ -394,6 +410,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                         setExtraItems([]);
                         setServiceType(ServiceType.SPORT);
                         setFechaEntrega("");
+                        setSelectedCarreraId(null);
                         if (onReset) onReset();
                         onSuccess();
                     }}
@@ -407,10 +424,21 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
             {/* Header */}
             <div className="p-6 border-b z-10 bg-background">
                 <DialogHeader>
-                    <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-                        <Wrench className="w-6 h-6 text-primary" />
-                        Detalles del Service
-                    </DialogTitle>
+                    <div className="flex items-center gap-3">
+                        {!serviceId && (
+                            <button
+                                onClick={onBack}
+                                className="p-1 text-slate-400 hover:text-slate-800 transition-colors"
+                                aria-label="Volver al paso anterior"
+                            >
+                                <ArrowLeft className="w-5 h-5" />
+                            </button>
+                        )}
+                        <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+                            <Wrench className="w-6 h-6 text-primary" />
+                            Detalles del Service
+                        </DialogTitle>
+                    </div>
                 </DialogHeader>
                 <div className="mt-4 p-4 bg-orange-50 rounded-lg border border-orange-100 flex justify-between items-center text-orange-900">
                     <div>
@@ -522,6 +550,11 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                             className="text-lg"
                         />
                     </div>
+
+                    <CarreraSelector 
+                        selectedId={selectedCarreraId} 
+                        onSelect={setSelectedCarreraId} 
+                    />
                 </div>
             </div>
 
@@ -544,6 +577,184 @@ function ServiceOption({ selected, onClick, title, desc }: { selected: boolean, 
             <div className={`font-black text-xl mb-1 ${selected ? "text-primary" : "text-foreground"}`}>{title}</div>
             <div className="text-xs text-muted-foreground uppercase tracking-wider">{desc}</div>
             {selected && <div className="mt-2 flex justify-center text-primary"><CheckCircle size={16} fill="currentColor" className="text-white" /></div>}
+        </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Carrera Selector Component
+// ─────────────────────────────────────────────────────────────
+function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, onSelect: (id: string | null) => void }) {
+    const carreras = useDataStore(s => s.carreras);
+    const createCarrera = useDataStore(s => s.createCarrera);
+    const taller_id = useAuthStore(s => s.taller_id);
+    
+    const [isOpen, setIsOpen] = useState(false);
+    const [search, setSearch] = useState("");
+    const [isCreating, setIsCreating] = useState(false);
+    const [newDate, setNewDate] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
+
+    const selectedCarrera = carreras.find(c => c.id === selectedId);
+    
+    const filteredCarreras = useMemo(() => {
+        if (!search) return carreras.slice(0, 5);
+        return carreras.filter(c => c.nombre.toLowerCase().includes(search.toLowerCase())).slice(0, 5);
+    }, [search, carreras]);
+
+    const exactMatch = carreras.some(c => c.nombre.toLowerCase() === search.toLowerCase());
+
+    const handleSelect = (id: string) => {
+        if (selectedId === id) onSelect(null);
+        else onSelect(id);
+        setIsOpen(false);
+        setSearch("");
+    };
+
+    const handleCreate = async () => {
+        if (!taller_id || !search) return;
+        setIsSaving(true);
+        try {
+            const created = await createCarrera({
+                nombre: search,
+                fecha_evento: newDate || null
+            });
+            onSelect(created.id);
+            setIsOpen(false);
+            setSearch("");
+            setIsCreating(false);
+            setNewDate("");
+        } catch (e: any) {
+            alert(`Error creando carrera: ${e.message}`);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="space-y-2 relative border-t border-dashed pt-4 mt-4">
+            <Label className="flex items-center gap-2 text-indigo-700 font-semibold mb-2">
+                <Flag className="w-4 h-4" />
+                🏁 ¿Se prepara para una carrera o evento? (Opcional)
+            </Label>
+            
+            {/* Trigger Button */}
+            <div 
+                className="flex items-center justify-between border rounded-md p-3 cursor-pointer hover:bg-slate-50 transition-colors bg-white"
+                onClick={() => setIsOpen(!isOpen)}
+            >
+                <div className="flex flex-col">
+                    {selectedCarrera ? (
+                        <>
+                            <span className="font-semibold">{selectedCarrera.nombre}</span>
+                            {selectedCarrera.fecha_evento && (
+                                <span className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                                    <Calendar className="w-3 h-3" /> 
+                                    {selectedCarrera.fecha_evento.split('-').reverse().join('/')}
+                                </span>
+                            )}
+                        </>
+                    ) : (
+                        <span className="text-muted-foreground italic">Seleccionar o crear evento...</span>
+                    )}
+                </div>
+                {selectedCarrera && (
+                    <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={(e) => { e.stopPropagation(); onSelect(null); }}
+                        className="h-6 w-6 p-0 text-red-500 rounded-full hover:bg-red-100"
+                    >
+                        &times;
+                    </Button>
+                )}
+                {!selectedCarrera && <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+            </div>
+
+            {/* Dropdown Content */}
+            {isOpen && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white border shadow-xl rounded-md z-50 overflow-hidden">
+                    <div className="p-2 border-b">
+                        <Input 
+                            value={search} 
+                            onChange={(e) => { setSearch(e.target.value); setIsCreating(false); }} 
+                            placeholder="Buscar evento (ej. Pinto, Río Tinto)..." 
+                            className="h-10 border-indigo-200 focus-visible:ring-indigo-500"
+                            autoFocus
+                        />
+                    </div>
+                    
+                    {!isCreating ? (
+                        <div className="max-h-60 overflow-y-auto">
+                            {filteredCarreras.length > 0 ? (
+                                <div className="p-1">
+                                    {filteredCarreras.map(c => (
+                                        <div 
+                                            key={c.id} 
+                                            onClick={() => handleSelect(c.id)}
+                                            className={`p-2 rounded-md cursor-pointer flex items-center justify-between ${selectedId === c.id ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-100'}`}
+                                        >
+                                            <span className="font-medium">{c.nombre}</span>
+                                            {selectedId === c.id && <CheckCircle className="w-4 h-4" />}
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                search && (
+                                    <div className="p-4 text-center text-muted-foreground text-sm">
+                                        No se encontraron carreras similares.
+                                    </div>
+                                )
+                            )}
+
+                            {search && !exactMatch && (
+                                <div className="p-2 border-t bg-slate-50">
+                                    <Button 
+                                        variant="outline" 
+                                        className="w-full justify-start text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                                        onClick={() => setIsCreating(true)}
+                                    >
+                                        <Plus className="w-4 h-4 mr-2" />
+                                        Añadir nueva carrera: <span className="font-bold ml-1">{search}</span>
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="p-4 bg-indigo-50/50 space-y-4">
+                            <p className="text-sm font-medium text-indigo-900">
+                                Creando nueva carrera: <span className="font-bold">{search}</span>
+                            </p>
+                            <div className="space-y-2">
+                                <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fecha del Evento (Opcional)</Label>
+                                <Input 
+                                    type="date" 
+                                    value={newDate} 
+                                    onChange={e => setNewDate(e.target.value)}
+                                    className="bg-white"
+                                />
+                            </div>
+                            <div className="flex gap-2">
+                                <Button 
+                                    variant="outline" 
+                                    onClick={() => setIsCreating(false)}
+                                    className="flex-1"
+                                    disabled={isSaving}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button 
+                                    onClick={handleCreate}
+                                    className="flex-1 bg-indigo-600 hover:bg-indigo-700"
+                                    disabled={isSaving}
+                                >
+                                    {isSaving ? "Guardando..." : "Crear y Seleccionar"}
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

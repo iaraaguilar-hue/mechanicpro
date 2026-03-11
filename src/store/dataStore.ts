@@ -43,7 +43,15 @@ export interface SupabaseService {
     fecha_finalizacion?: string;
     deleted_at?: string;
     checklist_data?: Record<string, boolean>;
+    carrera_id?: string | null;
+    alertas_ocultas?: string[];
     items_extra?: { id: string; descripcion: string; precio: number; categoria?: string }[];
+}
+
+export interface SupabaseCarrera {
+    id: string;
+    nombre: string;
+    fecha_evento?: string | null;
 }
 
 export interface SupabaseReminder {
@@ -64,6 +72,7 @@ interface DataState {
     bicicletas: SupabaseBike[];
     servicios: SupabaseService[];
     recordatorios: SupabaseReminder[];
+    carreras: SupabaseCarrera[];
     isHydrating: boolean;
     hydrateError: string | null;
     lastHydratedAt: number | null;
@@ -86,10 +95,14 @@ interface DataState {
     createServicio: (data: Omit<SupabaseService, 'id'>) => Promise<SupabaseService>;
     updateServicio: (id: string, data: Partial<SupabaseService>) => Promise<void>;
     deleteServicio: (id: string) => Promise<void>;
+    dismissAlert: (servicioId: string, alertId: string) => Promise<void>;
 
     // ── CRUD: Recordatorios ──
     createRecordatorio: (data: Omit<SupabaseReminder, 'id'>) => Promise<SupabaseReminder>;
     upsertRecordatorios: (items: Omit<SupabaseReminder, 'id'>[]) => Promise<void>;
+
+    // ── CRUD: Carreras ──
+    createCarrera: (data: Omit<SupabaseCarrera, 'id'>) => Promise<SupabaseCarrera>;
 }
 
 export const useDataStore = create<DataState>((set, get) => ({
@@ -98,6 +111,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     bicicletas: [],
     servicios: [],
     recordatorios: [],
+    carreras: [],
     isHydrating: false,
     hydrateError: null,
     lastHydratedAt: null,
@@ -116,6 +130,17 @@ export const useDataStore = create<DataState>((set, get) => ({
         console.log(`[DataStore] 🔄 Hidratando datos para taller: ${tallerId}`);
 
         try {
+            // Fetch carreras independently with graceful degradation
+            let resCar: any = { data: [], error: null };
+            try {
+                resCar = await supabase.from('carreras').select('*');
+            } catch (err) {
+                resCar.error = err;
+            }
+            if (resCar.error) {
+                console.error('[DataStore] ⚠️ Error al obtener carreras:', resCar.error);
+            }
+
             const [resC, resB, resS, resR] = await Promise.all([
                 supabase.from('clientes').select('*').eq('taller_id', tallerId).order('numero_cliente', { ascending: true }),
                 supabase.from('bicicletas').select('*').eq('taller_id', tallerId),
@@ -127,6 +152,7 @@ export const useDataStore = create<DataState>((set, get) => ({
             console.log('[DataStore] Respuesta Bicicletas:', resB.data?.length, resB.error);
             console.log('[DataStore] Respuesta Servicios:', resS.data?.length, resS.error);
             console.log('[DataStore] Respuesta Recordatorios:', resR.data?.length, resR.error);
+            console.log('[DataStore] Respuesta Carreras (Global):', resCar.data?.length, resCar.error);
 
             const errors = [resC, resB, resS, resR].filter(r => r.error).map(r => r.error!.message);
             if (errors.length > 0) throw new Error(`Errores Supabase: ${errors.join(' | ')}`);
@@ -142,11 +168,12 @@ export const useDataStore = create<DataState>((set, get) => ({
                 bicicletas: (resB.data as SupabaseBike[]) ?? [],
                 servicios: serviciosMapeados,
                 recordatorios: (resR.data as SupabaseReminder[]) ?? [],
+                carreras: (resCar.data as SupabaseCarrera[]) ?? [],
                 isHydrating: false,
                 lastHydratedAt: Date.now(),
             });
 
-            console.log(`[DataStore] ✅ Hidratación completa: ${resC.data?.length} clientes, ${resB.data?.length} bicicletas, ${serviciosMapeados.length} servicios (con items), ${resR.data?.length} recordatorios`);
+            console.log(`[DataStore] ✅ Hidratación completa: ${resC.data?.length} clientes, ${resB.data?.length} bicicletas, ${serviciosMapeados.length} servicios, ${resR.data?.length} recordatorios, ${resCar.data?.length} carreras`);
         } catch (error: any) {
             console.error('[DataStore] ❌ Error en hidratación:', error.message);
             set({ isHydrating: false, hydrateError: error.message });
@@ -154,7 +181,7 @@ export const useDataStore = create<DataState>((set, get) => ({
     },
 
     invalidate: () => set({
-        clientes: [], bicicletas: [], servicios: [], recordatorios: [],
+        clientes: [], bicicletas: [], servicios: [], recordatorios: [], carreras: [],
         isHydrating: false, hydrateError: null, lastHydratedAt: null,
     }),
 
@@ -293,6 +320,32 @@ export const useDataStore = create<DataState>((set, get) => ({
         set({ servicios: get().servicios.filter(s => s.id !== id) });
     },
 
+    dismissAlert: async (servicioId, alertId) => {
+        const servicio = get().servicios.find(s => s.id === servicioId);
+        if (!servicio) return;
+
+        const currentAlerts = servicio.alertas_ocultas || [];
+        if (currentAlerts.includes(alertId)) return; // Already dismissed
+
+        const newAlerts = [...currentAlerts, alertId];
+
+        // Optimistic UI update
+        set({
+            servicios: get().servicios.map(s => s.id === servicioId ? { ...s, alertas_ocultas: newAlerts } : s)
+        });
+
+        // Supabase update
+        const { error } = await supabase.from('servicios').update({ alertas_ocultas: newAlerts }).eq('id', servicioId);
+        if (error) {
+            console.error('Error dismissing alert:', error.message);
+            // Rollback optimistic update
+            set({
+                servicios: get().servicios.map(s => s.id === servicioId ? { ...s, alertas_ocultas: currentAlerts } : s)
+            });
+            throw new Error(`Error ocultando alerta: ${error.message}`);
+        }
+    },
+
     // ═════════════════════════════════════════════════════════
     // CRUD: RECORDATORIOS
     // ═════════════════════════════════════════════════════════
@@ -328,5 +381,16 @@ export const useDataStore = create<DataState>((set, get) => ({
                 if (row) set({ recordatorios: [...get().recordatorios, row as SupabaseReminder] });
             }
         }
+    },
+
+    // ═════════════════════════════════════════════════════════
+    // CRUD: CARRERAS
+    // ═════════════════════════════════════════════════════════
+    createCarrera: async (data) => {
+        const { data: row, error } = await supabase
+            .from('carreras').insert(data).select().single();
+        if (error) throw new Error(`Error creando carrera: ${error.message}`);
+        set({ carreras: [...get().carreras, row as SupabaseCarrera] });
+        return row as SupabaseCarrera;
     },
 }));

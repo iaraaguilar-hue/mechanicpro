@@ -18,24 +18,26 @@ interface AddClientDialogProps {
     isOpen?: boolean;
     onOpenChange?: (open: boolean) => void;
     isRapidIntake?: boolean;
+    initialData?: SupabaseClient | null;
 }
 
-export function AddClientDialog({ onClientCreated, variant = "default", trigger, isOpen, onOpenChange, isRapidIntake = false }: AddClientDialogProps) {
+export function AddClientDialog({ onClientCreated, variant = "default", trigger, isOpen, onOpenChange, isRapidIntake = false, initialData }: AddClientDialogProps) {
     const [internalOpen, setInternalOpen] = useState(false);
     const isControlled = isOpen !== undefined;
     const open = isControlled ? isOpen : internalOpen;
     const setOpen = isControlled ? (onOpenChange || (() => { })) : setInternalOpen;
 
     const [formData, setFormData] = useState({
-        nombre: "",
-        dni: "",
-        telefono: "",
-        tipo_ciclista: "Casual",
+        nombre: initialData?.nombre || "",
+        dni: initialData?.dni || "",
+        telefono: initialData?.telefono || "",
+        tipo_ciclista: initialData?.tipo_ciclista || "Casual",
     });
     const [isSaving, setIsSaving] = useState(false);
 
     const navigate = useNavigate();
     const createCliente = useDataStore(s => s.createCliente);
+    const updateCliente = useDataStore(s => s.updateCliente);
     const taller_id = useAuthStore(s => s.taller_id);
 
     const handleSubmit = async () => {
@@ -43,17 +45,29 @@ export function AddClientDialog({ onClientCreated, variant = "default", trigger,
         if (!taller_id) return alert("Error: no taller_id");
         setIsSaving(true);
         try {
-            const created = await createCliente({
-                taller_id,
-                nombre: formData.nombre,
-                dni: formData.dni || undefined,
-                telefono: formData.telefono,
-                tipo_ciclista: formData.tipo_ciclista,
-            });
+            let created: SupabaseClient;
+            if (initialData?.id) {
+                await updateCliente(initialData.id, {
+                    nombre: formData.nombre,
+                    dni: formData.dni || undefined,
+                    telefono: formData.telefono,
+                    tipo_ciclista: formData.tipo_ciclista,
+                });
+                created = { ...initialData, ...formData } as SupabaseClient;
+            } else {
+                created = await createCliente({
+                    taller_id,
+                    nombre: formData.nombre,
+                    dni: formData.dni || undefined,
+                    telefono: formData.telefono,
+                    tipo_ciclista: formData.tipo_ciclista,
+                });
+            }
+            
             setOpen(false);
-            setFormData({ nombre: "", dni: "", telefono: "", tipo_ciclista: "Casual" });
+            if (!initialData) setFormData({ nombre: "", dni: "", telefono: "", tipo_ciclista: "Casual" });
             onClientCreated(created);
-            if (!isRapidIntake) {
+            if (!isRapidIntake && !initialData?.id) {
                 navigate(`/clients/${created.id}`);
             }
         } catch (e: any) {

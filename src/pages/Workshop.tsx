@@ -7,7 +7,7 @@ import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw } from "lucide-react";
+import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -15,21 +15,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
 
-// Utility function to safely format dates and avoid crashes with null/undefined values
-const safeFormatDate = (dateString?: string | null) => {
+export const formatSafeDate = (dateString: string | null | undefined): string => {
     if (!dateString) return '-';
-    try {
-        // Blindaje contra errores de .split() u otros metodos de string on null
-        const parts = dateString.split('T');
-        if (!parts || parts.length === 0) return '-';
+    // Extraer solo la parte de la fecha, ignorando timestamps si los hay
+    const justDate = dateString.split('T')[0];
+    // Cortar el string YYYY-MM-DD
+    const [year, month, day] = justDate.split('-');
+    
+    // Fallback if split fails
+    if (!year || !month || !day) return '-';
 
-        const d = new Date(dateString);
-        if (isNaN(d.getTime())) return '-';
-
-        return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
-    } catch (e) {
-        return '-';
-    }
+    // Devolver literal sin pasar por new Date()
+    return `${day}/${month}/${year.slice(-2)}`; // Formato DD/MM/YY
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -44,6 +41,7 @@ interface DashboardJob {
     bike_brand: string;
     bike_model: string;
     client_name: string;
+    client_phone?: string;
     date_out?: string;
     total_price?: number;
     bicicleta_id: string;
@@ -78,6 +76,7 @@ export default function Workshop() {
                     bike_brand: bike?.marca || "Desconocida",
                     bike_model: bike?.modelo || "Desconocida",
                     client_name: client?.nombre || "Desconocido",
+                    client_phone: client?.telefono || "",
                     date_out: s.fecha_entrega ?? undefined,
                     total_price: s.precio_total,
                     bicicleta_id: s.bicicleta_id,
@@ -201,13 +200,13 @@ function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () =
             <TableCell>{statusBadge}</TableCell>
             <TableCell className="font-medium text-muted-foreground w-28">
                 <div className="flex flex-col gap-1">
-                    <span className="text-slate-900 font-semibold">{safeFormatDate(job.date_in)}</span>
+                    <span className="text-slate-900 font-semibold">{formatSafeDate(job.date_in)}</span>
                     <span className="text-[10px] text-primary font-bold mt-1" title={job.service_id}>{formatOrdenNumber(job.numero_orden, job.service_id)}</span>
                 </div>
             </TableCell>
             <TableCell className="font-medium p-0 m-0 align-top pt-4">
                 {job.date_out ? (
-                    <span className="text-slate-600 font-semibold text-sm whitespace-nowrap">{safeFormatDate(job.date_out)}</span>
+                    <span className="text-slate-600 font-semibold text-sm whitespace-nowrap">{formatSafeDate(job.date_out)}</span>
                 ) : (
                     <span className="text-slate-400 italic text-sm">-</span>
                 )}
@@ -229,6 +228,26 @@ function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () =
             <TableCell>{serviceBadge}</TableCell>
             <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
+                    {job.client_phone && (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            className="bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 border-green-200 h-9 px-2"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                let cleanedPhone = job.client_phone!.replace(/\D/g, '');
+                                if (!cleanedPhone) return;
+                                if (!cleanedPhone.startsWith('54')) {
+                                    // Anteponer 549 para celulares de Argentina si no tiene el código de país
+                                    cleanedPhone = '549' + cleanedPhone; 
+                                }
+                                window.open('https://wa.me/' + cleanedPhone, '_blank');
+                            }}
+                            title="Contactar por WhatsApp"
+                        >
+                            <MessageCircle className="h-5 w-5" />
+                        </Button>
+                    )}
                     <Button variant="outline" size="sm" className="h-9" onClick={(e) => { e.stopPropagation(); onClick(); }}>
                         <Pencil className="h-4 w-4 mr-2" /> Editar
                     </Button>

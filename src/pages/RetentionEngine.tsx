@@ -1,24 +1,32 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useDataStore } from "@/store/dataStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing } from "lucide-react";
+import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing, Flag, Copy } from "lucide-react";
 
 export default function RetentionEngine() {
     const recordatorios = useDataStore(s => s.recordatorios);
     const bicicletas = useDataStore(s => s.bicicletas);
     const clientes = useDataStore(s => s.clientes);
+    const servicios = useDataStore(s => s.servicios);
+    const carreras = useDataStore(s => s.carreras);
     const isHydrating = useDataStore(s => s.isHydrating);
 
     // Build alerts from store (replaces getAllRemindersWithDetails)
     const alerts = useMemo(() => {
-        return recordatorios
+        const baseAlerts = recordatorios
             .filter(r => {
                 const bike = bicicletas.find(b => b.id === r.bicicleta_id);
                 const client = bike ? clientes.find(c => c.id === bike.cliente_id) : null;
-                return !client?.isDeleted;
+                
+                // Get all dismissed alerts for this bike across all its services
+                const dismissedAlerts = bike 
+                    ? servicios.filter(s => s.bicicleta_id === bike.id).flatMap(s => s.alertas_ocultas || [])
+                    : [];
+
+                return !client?.isDeleted && !dismissedAlerts.includes(r.componente || '');
             })
             .map(r => {
                 const bike = bicicletas.find(b => b.id === r.bicicleta_id);
@@ -29,17 +37,93 @@ export default function RetentionEngine() {
                 const diffTime = due.getTime() - today.getTime();
                 const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
+                // Find most recent service to attach the dismissal if needed
+                const mostRecentService = servicios
+                    .filter(s => s.bicicleta_id === r.bicicleta_id)
+                    .sort((a, b) => new Date(b.fecha_ingreso || 0).getTime() - new Date(a.fecha_ingreso || 0).getTime())[0];
+
                 return {
                     id: r.id,
+                    servicioId: mostRecentService?.id,
+                    alertIdentity: r.componente,
                     clientName: client?.nombre || "Desconocido",
                     clientPhone: client?.telefono || "",
                     bikeModel: bike?.modelo || "Desconocida",
                     component: r.componente || "Sin componente",
                     dueDate: r.fecha_vencimiento || "",
                     daysRemaining,
+                    isPostCarrera: false,
+                    isPreCarrera: false,
+                    carreraName: "",
                 };
             });
-    }, [recordatorios, bicicletas, clientes]);
+
+        const postCarreraAlerts = servicios
+            .filter(s => s.carrera_id != null)
+            .map(s => {
+                const carrera = carreras.find(c => c.id === s.carrera_id);
+                const bike = bicicletas.find(b => b.id === s.bicicleta_id);
+                const client = bike ? clientes.find(c => c.id === bike.cliente_id) : null;
+                
+                if (!carrera || !carrera.fecha_evento || !client || client.isDeleted) return null;
+
+                const dismissedAlerts = s.alertas_ocultas || [];
+                const carreraAlertIdentity = `carrera-${carrera.id}`;
+                if (dismissedAlerts.includes(carreraAlertIdentity)) return null;
+
+                // Strip timezone issues by matching YYYY-MM-DD
+                const eventDateArr = carrera.fecha_evento.split('-');
+                if (eventDateArr.length !== 3) return null;
+
+                const eventTime = new Date(Number(eventDateArr[0]), Number(eventDateArr[1]) - 1, Number(eventDateArr[2])).getTime();
+                const today = new Date();
+                const todayTime = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+                
+                const diffTime = todayTime - eventTime;
+                const daysSinceEvent = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+                if (daysSinceEvent >= 1 && daysSinceEvent <= 2) {
+                    return {
+                        id: `carrera-urgent-${s.id}`,
+                        servicioId: s.id,
+                        alertIdentity: carreraAlertIdentity,
+                        clientName: client.nombre,
+                        clientPhone: client.telefono || "",
+                        bikeModel: bike?.modelo || "Desconocida",
+                        component: `¿Cómo le fue en ${carrera.nombre}?`,
+                        dueDate: carrera.fecha_evento,
+                        daysRemaining: -daysSinceEvent, // Negative to put it in urgent
+                        isPostCarrera: true,
+                        isPreCarrera: false,
+                        carreraName: carrera.nombre,
+                    };
+                }
+                
+                // PRE-CARRERA (Event is in the future)
+                // daysSinceEvent < 0 means it hasn't happened yet
+                if (daysSinceEvent < 0) {
+                    return {
+                        id: `pre-carrera-${s.id}`,
+                        servicioId: s.id,
+                        alertIdentity: carreraAlertIdentity,
+                        clientName: client.nombre,
+                        clientPhone: client.telefono || "",
+                        bikeModel: bike?.modelo || "Desconocida",
+                        component: `🏁 Carrera: ${carrera.nombre}`,
+                        dueDate: carrera.fecha_evento,
+                        daysRemaining: -daysSinceEvent, // Positive days remaining until event
+                        isPostCarrera: false,
+                        isPreCarrera: true,
+                        carreraName: carrera.nombre,
+                    };
+                }
+                
+                return null;
+            })
+            .filter(Boolean) as any[];
+
+        return [...baseAlerts, ...postCarreraAlerts];
+    }, [recordatorios, bicicletas, clientes, servicios, carreras]);
 
     if (isHydrating) return <div className="p-8 text-center text-muted-foreground">Cargando motor de retención...</div>;
 
@@ -72,27 +156,7 @@ export default function RetentionEngine() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {urgentAlerts.map((alert) => (
-                            <Card key={alert.id} className="border-l-4 border-l-red-500 shadow-sm hover:shadow-md transition-shadow bg-red-50/50">
-                                <CardHeader className="pb-2">
-                                    <div className="flex justify-between items-start">
-                                        <CardTitle className="text-lg font-bold text-slate-800">{alert.clientName}</CardTitle>
-                                        <Badge variant="destructive" className="uppercase text-[10px]">Vencido</Badge>
-                                    </div>
-                                    <p className="text-sm font-medium text-slate-600">{alert.bikeModel}</p>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="bg-white/60 p-2 rounded-md border border-red-100">
-                                        <span className="text-xs text-muted-foreground uppercase font-bold block mb-1">Componente a Revisar</span>
-                                        <div className="font-semibold text-red-700">{alert.component}</div>
-                                        <div className="text-xs text-red-500 mt-1">Venció el {new Date(alert.dueDate).toLocaleDateString()}</div>
-                                    </div>
-                                    <Button className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold" asChild>
-                                        <a href={`https://wa.me/${alert.clientPhone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer">
-                                            <Phone className="mr-2 h-4 w-4" /> Contactar por WhatsApp
-                                        </a>
-                                    </Button>
-                                </CardContent>
-                            </Card>
+                            <AlertCard key={alert.id} alert={alert} />
                         ))}
                     </div>
                 </div>
@@ -119,16 +183,31 @@ export default function RetentionEngine() {
                             <TableBody>
                                 {upcomingAlerts.map((alert) => (
                                     <TableRow key={alert.id}>
-                                        <TableCell className="font-medium">{new Date(alert.dueDate).toLocaleDateString()}</TableCell>
+                                        <TableCell className="font-medium">
+                                            {alert.isPreCarrera 
+                                                ? alert.dueDate.split('-').reverse().join('/') 
+                                                : new Date(alert.dueDate).toLocaleDateString()
+                                            }
+                                        </TableCell>
                                         <TableCell>
-                                            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">{alert.daysRemaining} días</Badge>
+                                            <Badge variant="outline" className={`border ${alert.isPreCarrera ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                                {alert.daysRemaining} días
+                                            </Badge>
                                         </TableCell>
                                         <TableCell className="font-semibold">{alert.component}</TableCell>
                                         <TableCell>{alert.clientName}</TableCell>
                                         <TableCell className="text-muted-foreground">{alert.bikeModel}</TableCell>
                                         <TableCell className="text-right">
                                             <Button variant="ghost" size="sm" asChild className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50">
-                                                <a href={`https://wa.me/${alert.clientPhone.replace(/[^0-9]/g, '')}`} target="_blank" rel="noreferrer">
+                                                <a 
+                                                    href={`https://wa.me/${alert.clientPhone.replace(/[^0-9]/g, '')}?text=${
+                                                        alert.isPreCarrera 
+                                                            ? encodeURIComponent(`¡Hola ${alert.clientName}! Vi que se acerca el ${alert.carreraName}, ¿querés que le demos una revisada a la ${alert.bikeModel} antes de viajar?`)
+                                                            : ""
+                                                    }`} 
+                                                    target="_blank" 
+                                                    rel="noreferrer"
+                                                >
                                                     <Phone className="h-4 w-4" />
                                                 </a>
                                             </Button>
@@ -141,5 +220,104 @@ export default function RetentionEngine() {
                 </div>
             )}
         </div>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Componente de Tarjeta de Alerta (UrgentCard)
+// ─────────────────────────────────────────────────────────────
+function AlertCard({ alert }: { alert: any }) {
+    const [isCopied, setIsCopied] = useState(false);
+    const [isDismissing, setIsDismissing] = useState(false);
+    const dismissAlert = useDataStore(s => s.dismissAlert);
+
+    // Dynamic message template based on alert type
+    const messageText = alert.isPostCarrera 
+        ? `¡Hola ${alert.clientName}! ¿Cómo te fue en el ${alert.carreraName}? Contanos cómo se portó la bici.`
+        : `¡Hola ${alert.clientName}! Te escribo del taller para recordarte que toca revisar: ${alert.component} en tu ${alert.bikeModel}. ¿Querés que coordinemos un turno?`;
+
+    const handleCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(messageText);
+            setIsCopied(true);
+            setTimeout(() => setIsCopied(false), 2000);
+        } catch (e) {
+            console.error("Error al copiar al portapapeles", e);
+        }
+    };
+
+    const handleDismiss = async () => {
+        if (!alert.servicioId || !alert.alertIdentity) {
+            console.warn("No se puede descartar: falta servicioId o alertIdentity");
+            return;
+        }
+        setIsDismissing(true);
+        try {
+            await dismissAlert(alert.servicioId, alert.alertIdentity);
+        } catch (e: any) {
+            alert("Error al ocultar alerta: " + e.message);
+            setIsDismissing(false);
+        }
+    };
+
+    if (isDismissing) return null; // Optimistic hide at component level to ensure unmount
+
+    return (
+        <Card className={`border-l-4 shadow-sm hover:shadow-md transition-shadow ${alert.isPostCarrera ? 'border-l-violet-500 bg-violet-50/50' : 'border-l-red-500 bg-red-50/50'}`}>
+            <CardHeader className="pb-2">
+                <div className="flex justify-between items-start">
+                    <CardTitle className="text-lg font-bold text-slate-800">{alert.clientName}</CardTitle>
+                    <Badge variant={alert.isPostCarrera ? 'default' : 'destructive'} className={`uppercase text-[10px] ${alert.isPostCarrera ? 'bg-violet-600' : ''}`}>
+                        {alert.isPostCarrera ? 'Post-Carrera' : 'Vencido'}
+                    </Badge>
+                </div>
+                <p className="text-sm font-medium text-slate-600">{alert.bikeModel}</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className={`bg-white/60 p-2 rounded-md border ${alert.isPostCarrera ? 'border-violet-100' : 'border-red-100'}`}>
+                    <span className="text-xs text-muted-foreground uppercase font-bold flex items-center gap-1 mb-1">
+                        {alert.isPostCarrera ? <Flag className="w-3 h-3 text-violet-600" /> : null}
+                        {alert.isPostCarrera ? 'Seguimiento Evento' : 'Componente a Revisar'}
+                    </span>
+                    <div className={`font-semibold ${alert.isPostCarrera ? 'text-violet-700' : 'text-red-700'}`}>{alert.component}</div>
+                    <div className={`text-xs mt-1 ${alert.isPostCarrera ? 'text-violet-500' : 'text-red-500'}`}>
+                        {alert.isPostCarrera 
+                            ? `Fue el ${alert.dueDate.split('-').reverse().join('/')}` 
+                            : `Venció el ${new Date(alert.dueDate).toLocaleDateString()}`
+                        }
+                    </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                    <Button className={`w-full font-semibold ${alert.isPostCarrera ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`} asChild>
+                        <a 
+                            href={`https://wa.me/${alert.clientPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(messageText)}`} 
+                            target="_blank" 
+                            rel="noreferrer"
+                        >
+                            <Phone className="mr-2 h-4 w-4" /> Contactar por WhatsApp
+                        </a>
+                    </Button>
+                    <Button 
+                        variant="outline" 
+                        className={`w-full font-semibold transition-colors ${isCopied ? 'border-green-500 text-green-600 bg-green-50' : 'border-slate-300 text-slate-700'}`}
+                        onClick={handleCopy}
+                    >
+                        {isCopied ? <CheckCircle2 className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+                        {isCopied ? "¡Copiado!" : "Copiar Mensaje"}
+                    </Button>
+                    <Button 
+                        variant="ghost" 
+                        size="sm"
+                        disabled={!alert.servicioId}
+                        title={!alert.servicioId ? "No hay servicio asociado para guardar descarte." : ""}
+                        className="w-full text-slate-400 hover:text-slate-600 hover:bg-slate-100/50 mt-1"
+                        onClick={handleDismiss}
+                    >
+                        <CheckCircle2 className="w-4 h-4 mr-2 opacity-70" />
+                        Ocultar aviso
+                    </Button>
+                </div>
+            </CardContent>
+        </Card>
     );
 }

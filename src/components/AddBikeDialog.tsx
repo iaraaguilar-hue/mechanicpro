@@ -4,6 +4,7 @@ import { useAuthStore } from "@/store/authStore";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { ArrowLeft } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -14,9 +15,10 @@ interface AddBikeDialogProps {
     onClose: () => void;
     onBikeCreated: (bike: SupabaseBike) => void;
     isRapidIntake?: boolean;
+    onBack?: () => void;
 }
 
-export function AddBikeDialog({ clientId, clientName, isOpen, onClose, onBikeCreated, isRapidIntake = false }: AddBikeDialogProps) {
+export function AddBikeDialog({ clientId, clientName, isOpen, onClose, onBikeCreated, isRapidIntake = false, onBack }: AddBikeDialogProps) {
     const [formData, setFormData] = useState({
         marca: "",
         modelo: "",
@@ -54,7 +56,14 @@ export function AddBikeDialog({ clientId, clientName, isOpen, onClose, onBikeCre
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Nueva Bici para {clientName}</DialogTitle>
+                    <div className="flex items-center gap-3">
+                        {isRapidIntake && onBack && (
+                            <button onClick={onBack} className="p-1 text-slate-400 hover:text-slate-800 transition-colors">
+                                <ArrowLeft className="w-5 h-5" />
+                            </button>
+                        )}
+                        <DialogTitle>Nueva Bici para {clientName}</DialogTitle>
+                    </div>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="space-y-2">

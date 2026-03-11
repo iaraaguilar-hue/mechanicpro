@@ -26,22 +26,18 @@ import { printServiceReport } from '@/lib/printServiceBtn';
 import { ServiceModal } from '@/components/ServiceModal';
 import { es } from "date-fns/locale";
 
-// Utility function to safely format dates and avoid crashes with null/undefined values
-const safeFormatDate = (dateString?: string | null) => {
+export const formatSafeDate = (dateString: string | null | undefined): string => {
     if (!dateString) return '-';
-    try {
-        // Blindaje contra errores de .split() on null/undefined u objetos
-        if (typeof dateString !== 'string') return '-';
-        const parts = dateString.split('T');
-        if (!parts || parts.length === 0) return '-';
+    // Extraer solo la parte de la fecha, ignorando timestamps si los hay
+    const justDate = dateString.split('T')[0];
+    if (!justDate) return '-';
+    // Cortar el string YYYY-MM-DD
+    const [year, month, day] = justDate.split('-');
+    
+    if (!year || !month || !day) return '-';
 
-        const d = new Date(dateString);
-        if (isNaN(d.getTime())) return '-';
-
-        return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
-    } catch (e) {
-        return '-';
-    }
+    // Devolver literal sin pasar por new Date()
+    return `${day}/${month}/${year.slice(-2)}`; // Formato DD/MM/YY
 };
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -179,11 +175,12 @@ export default function History() {
                 const rawDateIn = service.fecha_ingreso || "2024-01-01T00:00:00";
                 const rawDateOut = service.fecha_entrega;
 
-                const displayDateIn = safeFormatDate(rawDateIn);
-                const displayDateOut = safeFormatDate(rawDateOut);
+                const displayDateIn = formatSafeDate(rawDateIn);
+                const displayDateOut = formatSafeDate(rawDateOut);
 
                 // dateObj is used for filtering, so it needs to be a Date object
-                let dateObj = new Date(rawDateIn);
+                const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(rawDateIn);
+                let dateObj = isDateOnly ? new Date(`${rawDateIn}T12:00:00`) : new Date(rawDateIn);
                 if (isNaN(dateObj.getTime())) {
                     dateObj = new Date("2024-01-01T00:00:00"); // Fallback for invalid dates
                 }

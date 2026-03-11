@@ -67,6 +67,7 @@ export function RapidIntakeWizard({ onComplete, trigger }: RapidIntakeWizardProp
                     onOpenChange={(open) => !open && handleClose()}
                     onClientCreated={handleClientCreated}
                     isRapidIntake={true}
+                    initialData={newClient}
                 />
             )}
 
@@ -79,6 +80,7 @@ export function RapidIntakeWizard({ onComplete, trigger }: RapidIntakeWizardProp
                     clientName={newClient.nombre}
                     onBikeCreated={handleBikeCreated}
                     isRapidIntake={true}
+                    onBack={() => setStep("CLIENT")}
                 />
             )}
 

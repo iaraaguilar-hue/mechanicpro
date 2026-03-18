@@ -4,6 +4,9 @@
 
 @layer base {
   :root {
+    --theme-primary: 13 89% 57%;
+    --theme-secondary: 197 97% 47%;
+
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
 
@@ -13,12 +16,10 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    /* Shimano Blue #00adf7 -> 198 100% 48% */
-    --primary: 198 100% 48%;
+    --primary: var(--theme-primary);
     --primary-foreground: 210 40% 98%;
 
-    /* Probikes Orange #f25a30 -> 13 89% 57% */
-    --secondary: 13 89% 57%;
+    --secondary: var(--theme-secondary);
     --secondary-foreground: 210 40% 98%;
 
     --muted: 210 40% 96.1%;

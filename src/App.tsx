@@ -13,6 +13,7 @@ import LoginScreen from "./pages/LoginScreen";
 import UpdatePasswordScreen from "./pages/UpdatePasswordScreen";
 import DeletedServices from "./pages/DeletedServices";
 import Metrics from "./pages/Metrics";
+import SuperAdmin from "./pages/SuperAdmin";
 import { Button } from "@/components/ui/button";
 import { Home, ClipboardList, Settings, Wrench, History, Bell, LogOut, BarChart3, Trash2 } from "lucide-react";
 
@@ -21,18 +22,35 @@ import { Home, ClipboardList, Settings, Wrench, History, Bell, LogOut, BarChart3
 import { useAuthStore } from "@/store/authStore";
 import { useDataStore } from "@/store/dataStore";
 import { supabase } from "@/lib/supabase";
+import { hexToHslSpaceSeparated } from "@/lib/utils";
 
 function AppContent() {
   const session = useAuthStore((state) => state.session);
   const nombre = useAuthStore((state) => state.nombre);
   const logout = useAuthStore((state) => state.logout);
   const rol = useAuthStore((state) => state.rol);
+  const taller = useAuthStore((state) => state.taller);
   const setAuth = useAuthStore((state) => state.setAuth);
   const fetchDashboardData = useDataStore((state) => state.fetchDashboardData);
   const invalidateData = useDataStore((state) => state.invalidate);
   const navigate = useNavigate();
 
   // (localStorage migrations removed — data now comes from Supabase)
+
+  // Inyección de Theme de Marca Blanca
+  useEffect(() => {
+    if (taller) {
+      if (taller.color_primario) {
+        document.documentElement.style.setProperty('--theme-primary', hexToHslSpaceSeparated(taller.color_primario));
+      }
+      if (taller.color_secundario) {
+        document.documentElement.style.setProperty('--theme-secondary', hexToHslSpaceSeparated(taller.color_secundario));
+      }
+    } else {
+      document.documentElement.style.removeProperty('--theme-primary');
+      document.documentElement.style.removeProperty('--theme-secondary');
+    }
+  }, [taller]);
 
   // Global Auth Listener and Session Restoration (Hydration)
   useEffect(() => {
@@ -52,10 +70,15 @@ function AppContent() {
             .single();
 
           if (userData && isMounted) {
-            setAuth(currentSession, userData.taller_id, userData.rol, userData.nombre);
+            let tallerData = null;
+            if (userData.taller_id) {
+              const { data: td } = await supabase.from('talleres').select('*').eq('id', userData.taller_id).single();
+              tallerData = td;
+            }
+            setAuth(currentSession, userData.taller_id, userData.rol, userData.nombre, tallerData);
             // ── HIDRATACIÓN: dispara el fetch a Supabase con el taller_id confirmado ──
             console.log('[App] ✅ Auth confirmado. Disparando hidratación de datos...');
-            fetchDashboardData(userData.taller_id);
+            if (userData.taller_id) fetchDashboardData(userData.taller_id);
           }
         }
       } catch (error) {
@@ -66,7 +89,7 @@ function AppContent() {
     inicializarApp();
 
     // 3. Dejamos el escuchador activo
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event) => {
       if (event === 'PASSWORD_RECOVERY') {
         navigate("/update-password");
       }
@@ -115,7 +138,11 @@ function AppContent() {
       <nav className="w-full md:w-28 border-r border-border bg-card flex md:flex-col items-center py-4 space-x-4 md:space-x-0 md:space-y-4 sticky top-0 z-10 h-16 md:h-screen justify-center md:justify-start overflow-x-auto md:overflow-y-auto">
         <div className="hidden md:block mb-6 text-center w-full px-2 shrink-0">
           <div className="flex flex-col items-center justify-center mb-2 mt-2">
-            <Wrench className="h-8 w-8 text-orange-500 mb-2" />
+            {taller?.logo_url ? (
+              <img src={taller.logo_url} alt="Logo Taller" className="h-10 w-auto object-contain mb-2 rounded-md" />
+            ) : (
+              <Wrench className="h-8 w-8 text-primary mb-2" />
+            )}
             <span className="font-bold text-gray-900 text-sm tracking-wide">Mechanic Pro</span>
           </div>
           {displayName && <div className="text-[10px] text-muted-foreground mt-1 font-mono uppercase tracking-widest break-all px-1">{displayName}</div>}
@@ -146,6 +173,11 @@ function AppContent() {
           {rol?.toLowerCase()?.trim() === 'admin' && (
             <Link to="/auditoria">
               <NavButton icon={<Trash2 />} label="Auditoría (Admin)" />
+            </Link>
+          )}
+          {rol?.toLowerCase()?.trim() === 'super_admin' && (
+            <Link to="/superadmin">
+              <NavButton icon={<Settings />} label="Super Admin" />
             </Link>
           )}
         </div>
@@ -179,6 +211,7 @@ function AppContent() {
           <Route path="/metrics" element={<Metrics />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/auditoria" element={<DeletedServices />} />
+          <Route path="/superadmin" element={<SuperAdmin />} />
         </Routes>
       </main>
     </div>

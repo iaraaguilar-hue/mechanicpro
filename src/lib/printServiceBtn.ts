@@ -1,6 +1,7 @@
 import html2pdf from 'html2pdf.js';
 import { formatOrdenNumber } from '@/lib/formatId';
 import { cleanItemName } from '@/lib/utils';
+import { useAuthStore } from '@/store/authStore';
 
 const TASKS_SPORT = [
   "• Lavado de bicicleta y todos sus componentes",
@@ -55,6 +56,10 @@ export const printServiceReport = (
   clientPhone: string = ''
 ) => {
   if (!job) return;
+
+  const taller = useAuthStore.getState().taller;
+  const logoUrl = taller?.logo_url || `${window.location.origin}/img/logo_full.png`;
+  const primaryColor = taller?.color_primario || '#f25a30';
 
   // --- Logic ---
   const serviceTypeRaw = job.service_type || job.serviceType || "General";
@@ -125,9 +130,9 @@ export const printServiceReport = (
   element.innerHTML = `
     <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; max-width: 800px; margin: 0 auto; background: white; padding: 40px;">
       
-      <div style="border-bottom: 2px solid #f97316; padding-bottom: 20px; margin-bottom: 40px; display: flex; justify-content: space-between; align-items: flex-end;">
+      <div style="border-bottom: 2px solid ${primaryColor}; padding-bottom: 20px; margin-bottom: 40px; display: flex; justify-content: space-between; align-items: flex-end;">
         <div>
-           <img src="${window.location.origin}/img/logo_full.png" alt="ProBikes" style="height: 85px;" />
+           <img src="${logoUrl}" alt="Mecánico" style="max-height: 85px; max-width: 250px; object-fit: contain;" crossorigin="anonymous" />
         </div>
         <div style="text-align: right;">
            <div style="font-size: 12px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Informe de Servicio</div>

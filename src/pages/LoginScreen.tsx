@@ -23,6 +23,8 @@ export default function LoginScreen() {
     const navigate = useNavigate();
     const setAuth = useAuthStore((state) => state.setAuth);
 
+    const taller = useAuthStore((state) => state.taller);
+
     // Allow standard Supabase Auth persistence by default
     useEffect(() => {
         // Any extra mount logic can go here
@@ -59,8 +61,14 @@ export default function LoginScreen() {
             console.log("PASO 4: Datos del usuario obtenidos:", userData);
             console.log("PASO 5: Actualizando estado global (Zustand)...");
 
+            let tallerData = null;
+            if (userData.taller_id) {
+                const { data: td } = await supabase.from('talleres').select('*').eq('id', userData.taller_id).single();
+                tallerData = td;
+            }
+
             // Setear estado global y navegar
-            setAuth(authData.session, userData.taller_id, userData.rol, userData.nombre);
+            setAuth(authData.session, userData.taller_id, userData.rol, userData.nombre, tallerData);
 
             console.log("PASO 6: Navegando al Dashboard...");
             navigate('/');
@@ -121,7 +129,11 @@ export default function LoginScreen() {
                 {/* Encabezado y Textos */}
                 <div className="text-center mb-8">
                     <div className="text-2xl font-bold text-gray-900 flex items-center justify-center gap-2">
-                        <Wrench className="h-6 w-6 text-orange-500" />
+                        {taller?.logo_url ? (
+                            <img src={taller.logo_url} alt="Logo" className="h-8 w-auto object-contain rounded-md" />
+                        ) : (
+                            <Wrench className="h-6 w-6 text-primary" />
+                        )}
                         Mechanic Pro
                     </div>
                     <h2 className="text-2xl font-semibold text-gray-900 mt-4 tracking-tight">

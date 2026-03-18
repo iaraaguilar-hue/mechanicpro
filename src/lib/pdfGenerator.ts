@@ -1,13 +1,32 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { ServiceRecord, Bike, Client } from "./api";
+import { useAuthStore } from '@/store/authStore';
 
 export const generateServiceReport = (service: ServiceRecord, bike: Bike, client: Client) => {
     const doc = new jsPDF();
+    const taller = useAuthStore.getState().taller;
+
+    const hexToRgb = (hex: string) => {
+        let r = 0, g = 173, b = 247; // Default #00adf7 Map
+        if (hex) {
+            if (hex.length === 4) {
+                r = parseInt(hex[1] + hex[1], 16);
+                g = parseInt(hex[2] + hex[2], 16);
+                b = parseInt(hex[3] + hex[3], 16);
+            } else if (hex.length === 7) {
+                r = parseInt(hex.slice(1, 3), 16);
+                g = parseInt(hex.slice(3, 5), 16);
+                b = parseInt(hex.slice(5, 7), 16);
+            }
+        }
+        return [r, g, b];
+    };
+
+    const [r, g, b] = hexToRgb(taller?.color_secundario || '#03adef');
 
     // --- Header ---
-    // Shimano Blue Header
-    doc.setFillColor(0, 173, 247); // #00adf7
+    doc.setFillColor(r, g, b);
     doc.rect(0, 0, 210, 30, "F");
 
     // Title

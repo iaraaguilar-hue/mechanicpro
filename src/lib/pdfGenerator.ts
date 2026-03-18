@@ -1,11 +1,15 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { ServiceRecord, Bike, Client } from "./api";
-import { useAuthStore } from '@/store/authStore';
 
-export const generateServiceReport = (service: ServiceRecord, bike: Bike, client: Client) => {
+export const generateServiceReport = (
+    service: any,
+    bike: any,
+    client: any,
+    logoUrl?: string,
+    colorPrimario?: string,
+    colorSecundario?: string
+) => {
     const doc = new jsPDF();
-    const taller = useAuthStore.getState().taller;
 
     const hexToRgb = (hex: string) => {
         let r = 0, g = 173, b = 247; // Default #00adf7 Map
@@ -23,7 +27,7 @@ export const generateServiceReport = (service: ServiceRecord, bike: Bike, client
         return [r, g, b];
     };
 
-    const [r, g, b] = hexToRgb(taller?.color_secundario || '#03adef');
+    const [r, g, b] = hexToRgb(colorSecundario || '#03adef');
 
     // --- Header ---
     doc.setFillColor(r, g, b);

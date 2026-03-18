@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, Wrench, Download } from "lucide-react";
+import { Loader2, Wrench, Download, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/authStore";
 import { exportBackupToZip } from "@/lib/exportBackup";
@@ -14,6 +14,7 @@ export default function LoginScreen() {
     // Feature States
     const [isResetting, setIsResetting] = useState(false);
     const [rememberMe, setRememberMe] = useState(true);
+    const [showPassword, setShowPassword] = useState(false);
     const [resetSuccess, setResetSuccess] = useState(false);
 
     // Escape hatch: backup para usuarios no autenticados
@@ -159,9 +160,9 @@ export default function LoginScreen() {
                         {!isResetting && (
                             <div className="relative">
                                 <input
-                                    type="password"
+                                    type={showPassword ? "text" : "password"}
                                     placeholder="Contraseña"
-                                    className={`w-full bg-transparent border-0 border-b-2 ${error ? 'border-red-500' : 'border-gray-200'} focus:ring-0 focus:border-orange-500 px-1 py-2 text-gray-900 placeholder-gray-400 focus:outline-none transition-colors`}
+                                    className={`w-full bg-transparent border-0 border-b-2 ${error ? 'border-red-500' : 'border-gray-200'} focus:ring-0 focus:border-orange-500 px-1 py-2 pr-10 text-gray-900 placeholder-gray-400 focus:outline-none transition-colors`}
                                     value={password}
                                     onChange={(e) => {
                                         setPassword(e.target.value);
@@ -169,6 +170,14 @@ export default function LoginScreen() {
                                     }}
                                     required
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors bg-transparent border-none p-0 cursor-pointer focus:outline-none"
+                                    title={showPassword ? "Ocultar Contraseña" : "Mostrar Contraseña"}
+                                >
+                                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                                </button>
                             </div>
                         )}
                     </div>

@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
+import { isExternalItem } from "@/lib/utils";
 
 export const formatSafeDate = (dateString: string | null | undefined): string => {
     if (!dateString) return '-';
@@ -21,7 +22,7 @@ export const formatSafeDate = (dateString: string | null | undefined): string =>
     const justDate = dateString.split('T')[0];
     // Cortar el string YYYY-MM-DD
     const [year, month, day] = justDate.split('-');
-    
+
     // Fallback if split fails
     if (!year || !month || !day) return '-';
 
@@ -239,7 +240,7 @@ function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () =
                                 if (!cleanedPhone) return;
                                 if (!cleanedPhone.startsWith('54')) {
                                     // Anteponer 549 para celulares de Argentina si no tiene el código de país
-                                    cleanedPhone = '549' + cleanedPhone; 
+                                    cleanedPhone = '549' + cleanedPhone;
                                 }
                                 window.open('https://wa.me/' + cleanedPhone, '_blank');
                             }}
@@ -304,15 +305,18 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
 
             // Webhook logic
             const soldProducts = service.items_extra?.filter((i: any) => i.categoria === 'part') || [];
+            const itemsParaFacturar = soldProducts.filter((p: any) => !isExternalItem(p.descripcion));
+
             if (soldProducts.length > 0 && client) {
                 try {
                     const payload = {
                         dni_cliente: client.dni || "Sin DNI",
                         nombre_cliente: client.nombre || "Cliente",
                         fecha_finalizacion: new Date().toISOString(),
-                        nombre_producto: soldProducts.map((p: any) => p.descripcion).join(", "),
-                        productos: soldProducts.map((p: any) => ({ descripcion: p.descripcion, precio: Number(p.precio) || 0 })),
-                        total_service: Number(service.precio_total) || 0
+                        nombre_producto: itemsParaFacturar.map((p: any) => p.descripcion).join(", "),
+                        productos: itemsParaFacturar.map((p: any) => ({ descripcion: p.descripcion, precio: Number(p.precio) || 0 })),
+                        total_service: Number(service.precio_total) || 0,
+                        numero_orden: service.numero_orden || service.id
                     };
                     fetch("https://hook.us2.make.com/u9guskrdv639r6vfitag4x4cqllhrokr", {
                         method: "POST",

@@ -1,5 +1,6 @@
 import html2pdf from 'html2pdf.js';
 import { formatOrdenNumber } from '@/lib/formatId';
+import { cleanItemName } from '@/lib/utils';
 
 const TASKS_SPORT = [
   "• Lavado de bicicleta y todos sus componentes",
@@ -79,7 +80,9 @@ export const printServiceReport = (
 
   // --- 1. LABOR (Mano de Obra) ---
   // Header Row
-  laborRows.push({ description: `SERVICE ${serviceType}`, price: basePrice, isHeader: true });
+  if (serviceType !== 'OTRO' && serviceType !== 'OTHER') {
+    laborRows.push({ description: `SERVICE ${serviceType}`, price: basePrice, isHeader: true });
+  }
 
   // Task Rows (Breakdown)
   serviceTasks.forEach(task => {
@@ -185,7 +188,7 @@ export const printServiceReport = (
             ${extraLaborRows.map(row => {
     const price = row.price > 0 ? `$ ${row.price.toLocaleString('es-AR')}` : '';
     return `<tr>
-                    <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-size: 12px; color: #000; font-weight: 700; text-transform: uppercase;">${row.description}</td>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-size: 12px; color: #000; font-weight: 700; text-transform: uppercase;">${cleanItemName(row.description)}</td>
                     <td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; font-family: monospace; font-size: 13px; font-weight: 700; color: #000;">${price}</td>
                 </tr>`;
   }).join('')}
@@ -203,7 +206,7 @@ export const printServiceReport = (
             ${productRows.map(row => {
     const price = row.price > 0 ? `$ ${row.price.toLocaleString('es-AR')}` : '';
     return `<tr>
-                    <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-size: 12px; color: #444;">${row.description}</td>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-size: 12px; color: #444;">${cleanItemName(row.description)}</td>
                     <td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; font-family: monospace; font-size: 12px;">${price}</td>
                 </tr>`;
   }).join('')}

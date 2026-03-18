@@ -21,7 +21,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
-import { Search, FilterX, ChevronUp, FileText, Pencil, Trash2, Calendar, Eye, ClipboardList, Calendar as CalendarIcon, Wrench, Package, Info, Tag } from "lucide-react";
+import { Search, FilterX, ChevronUp, FileText, Pencil, Trash2, Calendar, Eye, ClipboardList, Calendar as CalendarIcon, Wrench, Package, Info, Tag, MessageCircle } from "lucide-react";
 import { printServiceReport } from '@/lib/printServiceBtn';
 import { ServiceModal } from '@/components/ServiceModal';
 import { es } from "date-fns/locale";
@@ -33,7 +33,7 @@ export const formatSafeDate = (dateString: string | null | undefined): string =>
     if (!justDate) return '-';
     // Cortar el string YYYY-MM-DD
     const [year, month, day] = justDate.split('-');
-    
+
     if (!year || !month || !day) return '-';
 
     // Devolver literal sin pasar por new Date()
@@ -519,6 +519,25 @@ export default function History() {
                                             </TableCell>
                                             <TableCell className="text-right pr-6 py-4">
                                                 <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                                                    {job.clientPhone && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-slate-400 hover:text-green-600 hover:bg-green-50"
+                                                            title="WhatsApp"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                let cleanedPhone = job.clientPhone.replace(/\D/g, '');
+                                                                if (!cleanedPhone) return;
+                                                                if (!cleanedPhone.startsWith('54')) {
+                                                                    cleanedPhone = '549' + cleanedPhone;
+                                                                }
+                                                                window.open('https://wa.me/' + cleanedPhone, '_blank');
+                                                            }}
+                                                        >
+                                                            <MessageCircle className="w-4 h-4" />
+                                                        </Button>
+                                                    )}
                                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-[#f25a30] hover:bg-orange-50" title="Imprimir" onClick={() => printServiceReport(job.rawJob, job.clientName, job.bikeModel, job.clientDni, job.clientPhone)}>
                                                         <FileText className="w-4 h-4" />
                                                     </Button>

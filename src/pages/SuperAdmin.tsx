@@ -28,23 +28,30 @@ export default function SuperAdmin() {
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        if (rol === 'super_admin') {
-            fetchTalleres();
-        }
-    }, [rol]);
+        const fetchTalleres = async () => {
+            try {
+                setLoading(true);
+                const { data, error } = await supabase.from('talleres').select('*');
 
-    const fetchTalleres = async () => {
-        try {
-            setLoading(true);
-            const { data, error } = await supabase.from('talleres').select('*').order('created_at', { ascending: false });
-            if (error) throw error;
-            setTalleres(data || []);
-        } catch (error: any) {
-            console.error("Error cargando talleres:", error.message);
-        } finally {
-            setLoading(false);
-        }
-    };
+                if (error) {
+                    console.error("Error al buscar talleres:", error);
+                    setLoading(false);
+                    return;
+                }
+
+                if (data) {
+                    console.log("Talleres encontrados:", data);
+                    setTalleres(data);
+                }
+            } catch (err) {
+                console.error("Excepción en fetchTalleres:", err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchTalleres();
+    }, []);
 
     const handleEditClick = (taller: Taller) => {
         setEditingTaller({ ...taller });

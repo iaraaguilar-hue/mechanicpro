@@ -130,7 +130,9 @@ export default function LoginScreen() {
                 <div className="text-center mb-8">
                     <div className="text-2xl font-bold text-gray-900 flex items-center justify-center gap-2">
                         {taller?.logo_url ? (
-                            <img src={taller.logo_url} alt="Logo" className="h-8 w-auto object-contain rounded-md" />
+                            <div className="h-24 w-full flex justify-center items-center">
+                                <img src={taller.logo_url} alt="Logo" className="max-h-full max-w-full object-contain" />
+                            </div>
                         ) : (
                             <Wrench className="h-6 w-6 text-primary" />
                         )}

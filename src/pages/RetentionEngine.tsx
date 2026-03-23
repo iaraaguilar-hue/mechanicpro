@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing, Flag, Copy } from "lucide-react";
+import { calculateDaysRemaining } from "@/lib/utils";
 
 export default function RetentionEngine() {
     const recordatorios = useDataStore(s => s.recordatorios);
@@ -20,9 +21,9 @@ export default function RetentionEngine() {
             .filter(r => {
                 const bike = bicicletas.find(b => b.id === r.bicicleta_id);
                 const client = bike ? clientes.find(c => c.id === bike.cliente_id) : null;
-                
+
                 // Get all dismissed alerts for this bike across all its services
-                const dismissedAlerts = bike 
+                const dismissedAlerts = bike
                     ? servicios.filter(s => s.bicicleta_id === bike.id).flatMap(s => s.alertas_ocultas || [])
                     : [];
 
@@ -32,10 +33,7 @@ export default function RetentionEngine() {
                 const bike = bicicletas.find(b => b.id === r.bicicleta_id);
                 const client = bike ? clientes.find(c => c.id === bike.cliente_id) : null;
 
-                const due = new Date(r.fecha_vencimiento || 0);
-                const today = new Date();
-                const diffTime = due.getTime() - today.getTime();
-                const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                const daysRemaining = calculateDaysRemaining(r.fecha_vencimiento || "");
 
                 // Find most recent service to attach the dismissal if needed
                 const mostRecentService = servicios
@@ -64,23 +62,16 @@ export default function RetentionEngine() {
                 const carrera = carreras.find(c => c.id === s.carrera_id);
                 const bike = bicicletas.find(b => b.id === s.bicicleta_id);
                 const client = bike ? clientes.find(c => c.id === bike.cliente_id) : null;
-                
+
                 if (!carrera || !carrera.fecha_evento || !client || client.isDeleted) return null;
 
                 const dismissedAlerts = s.alertas_ocultas || [];
                 const carreraAlertIdentity = `carrera-${carrera.id}`;
                 if (dismissedAlerts.includes(carreraAlertIdentity)) return null;
 
-                // Strip timezone issues by matching YYYY-MM-DD
-                const eventDateArr = carrera.fecha_evento.split('-');
-                if (eventDateArr.length !== 3) return null;
-
-                const eventTime = new Date(Number(eventDateArr[0]), Number(eventDateArr[1]) - 1, Number(eventDateArr[2])).getTime();
-                const today = new Date();
-                const todayTime = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-                
-                const diffTime = todayTime - eventTime;
-                const daysSinceEvent = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+                if (!carrera.fecha_evento) return null;
+                const daysUntilEvent = calculateDaysRemaining(carrera.fecha_evento);
+                const daysSinceEvent = -daysUntilEvent;
 
                 if (daysSinceEvent >= 1 && daysSinceEvent <= 2) {
                     return {
@@ -98,7 +89,7 @@ export default function RetentionEngine() {
                         carreraName: carrera.nombre,
                     };
                 }
-                
+
                 // PRE-CARRERA (Event is in the future)
                 // daysSinceEvent < 0 means it hasn't happened yet
                 if (daysSinceEvent < 0) {
@@ -117,7 +108,7 @@ export default function RetentionEngine() {
                         carreraName: carrera.nombre,
                     };
                 }
-                
+
                 return null;
             })
             .filter(Boolean) as any[];
@@ -184,8 +175,8 @@ export default function RetentionEngine() {
                                 {upcomingAlerts.map((alert) => (
                                     <TableRow key={alert.id}>
                                         <TableCell className="font-medium">
-                                            {alert.isPreCarrera 
-                                                ? alert.dueDate.split('-').reverse().join('/') 
+                                            {alert.isPreCarrera
+                                                ? alert.dueDate.split('-').reverse().join('/')
                                                 : new Date(alert.dueDate).toLocaleDateString()
                                             }
                                         </TableCell>
@@ -199,13 +190,12 @@ export default function RetentionEngine() {
                                         <TableCell className="text-muted-foreground">{alert.bikeModel}</TableCell>
                                         <TableCell className="text-right">
                                             <Button variant="ghost" size="sm" asChild className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50">
-                                                <a 
-                                                    href={`https://wa.me/${alert.clientPhone.replace(/[^0-9]/g, '')}?text=${
-                                                        alert.isPreCarrera 
+                                                <a
+                                                    href={`https://wa.me/${alert.clientPhone.replace(/[^0-9]/g, '')}?text=${alert.isPreCarrera
                                                             ? encodeURIComponent(`¡Hola ${alert.clientName}! Vi que se acerca el ${alert.carreraName}, ¿querés que le demos una revisada a la ${alert.bikeModel} antes de viajar?`)
                                                             : ""
-                                                    }`} 
-                                                    target="_blank" 
+                                                        }`}
+                                                    target="_blank"
                                                     rel="noreferrer"
                                                 >
                                                     <Phone className="h-4 w-4" />
@@ -232,7 +222,7 @@ function AlertCard({ alert }: { alert: any }) {
     const dismissAlert = useDataStore(s => s.dismissAlert);
 
     // Dynamic message template based on alert type
-    const messageText = alert.isPostCarrera 
+    const messageText = alert.isPostCarrera
         ? `¡Hola ${alert.clientName}! ¿Cómo te fue en el ${alert.carreraName}? Contanos cómo se portó la bici.`
         : `¡Hola ${alert.clientName}! Te escribo del taller para recordarte que toca revisar: ${alert.component} en tu ${alert.bikeModel}. ¿Querés que coordinemos un turno?`;
 
@@ -281,32 +271,32 @@ function AlertCard({ alert }: { alert: any }) {
                     </span>
                     <div className={`font-semibold ${alert.isPostCarrera ? 'text-violet-700' : 'text-red-700'}`}>{alert.component}</div>
                     <div className={`text-xs mt-1 ${alert.isPostCarrera ? 'text-violet-500' : 'text-red-500'}`}>
-                        {alert.isPostCarrera 
-                            ? `Fue el ${alert.dueDate.split('-').reverse().join('/')}` 
+                        {alert.isPostCarrera
+                            ? `Fue el ${alert.dueDate.split('-').reverse().join('/')}`
                             : `Venció el ${new Date(alert.dueDate).toLocaleDateString()}`
                         }
                     </div>
                 </div>
                 <div className="flex flex-col gap-2">
                     <Button className={`w-full font-semibold ${alert.isPostCarrera ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`} asChild>
-                        <a 
-                            href={`https://wa.me/${alert.clientPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(messageText)}`} 
-                            target="_blank" 
+                        <a
+                            href={`https://wa.me/${alert.clientPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(messageText)}`}
+                            target="_blank"
                             rel="noreferrer"
                         >
                             <Phone className="mr-2 h-4 w-4" /> Contactar por WhatsApp
                         </a>
                     </Button>
-                    <Button 
-                        variant="outline" 
+                    <Button
+                        variant="outline"
                         className={`w-full font-semibold transition-colors ${isCopied ? 'border-green-500 text-green-600 bg-green-50' : 'border-slate-300 text-slate-700'}`}
                         onClick={handleCopy}
                     >
                         {isCopied ? <CheckCircle2 className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
                         {isCopied ? "¡Copiado!" : "Copiar Mensaje"}
                     </Button>
-                    <Button 
-                        variant="ghost" 
+                    <Button
+                        variant="ghost"
                         size="sm"
                         disabled={!alert.servicioId}
                         title={!alert.servicioId ? "No hay servicio asociado para guardar descarte." : ""}

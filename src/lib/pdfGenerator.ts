@@ -1,14 +1,28 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
-export const generateServiceReport = (
-    service: any,
-    bike: any,
-    client: any,
-    logoUrl?: string,
-    colorPrimario?: string,
-    colorSecundario?: string
+export const getBase64ImageFromUrl = async (imageUrl: string): Promise<string> => {
+    if (!imageUrl) return "";
+    try {
+        const response = await fetch(imageUrl);
+        const blob = await response.blob();
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    } catch (e) {
+        console.error("Error converting image to base64", e);
+        return "";
+    }
+};
+
+export const generatePDF = async (
+    serviceData: { service: any, bike: any, client: any },
+    brandingData: { logoUrl: string, primaryColor: string }
 ) => {
+    const { service, bike, client } = serviceData;
     const doc = new jsPDF();
 
     const hexToRgb = (hex: string) => {
@@ -18,7 +32,7 @@ export const generateServiceReport = (
                 r = parseInt(hex[1] + hex[1], 16);
                 g = parseInt(hex[2] + hex[2], 16);
                 b = parseInt(hex[3] + hex[3], 16);
-            } else if (hex.length === 7) {
+            } else if (hex.length >= 7) {
                 r = parseInt(hex.slice(1, 3), 16);
                 g = parseInt(hex.slice(3, 5), 16);
                 b = parseInt(hex.slice(5, 7), 16);
@@ -27,11 +41,24 @@ export const generateServiceReport = (
         return [r, g, b];
     };
 
-    const [r, g, b] = hexToRgb(colorSecundario || '#03adef');
+    const [r, g, b] = hexToRgb(brandingData.primaryColor || '#00adf7');
 
     // --- Header ---
     doc.setFillColor(r, g, b);
     doc.rect(0, 0, 210, 30, "F");
+    
+    // Inject Logo if exists
+    if (brandingData.logoUrl) {
+        const base64Logo = await getBase64ImageFromUrl(brandingData.logoUrl);
+        if (base64Logo) {
+            try {
+                // Approximate 20h image size centered in y
+                doc.addImage(base64Logo, 'PNG', 14, 5, 40, 20, '', 'FAST');
+            } catch(e) {
+                console.error("No se pudo inyectar el logo en jsPDF", e);
+            }
+        }
+    }
 
     // Title
     doc.setTextColor(255, 255, 255);
@@ -62,15 +89,15 @@ export const generateServiceReport = (
     doc.setFont("helvetica", "bold");
     doc.text("CLIENTE", margin, yPos);
     doc.setFont("helvetica", "normal");
-    doc.text(client.name, margin, yPos + 5);
-    doc.text(client.phone, margin, yPos + 10);
+    doc.text(client.name || "", margin, yPos + 5);
+    doc.text(client.phone || "", margin, yPos + 10);
 
     // Col 2: Bike
     const col2X = pageWidth / 2 + 10;
     doc.setFont("helvetica", "bold");
     doc.text("BICICLETA", col2X, yPos);
     doc.setFont("helvetica", "normal");
-    doc.text(`${bike.brand} ${bike.model}`, col2X, yPos + 5);
+    doc.text(`${bike.brand || ""} ${bike.model || ""}`, col2X, yPos + 5);
     doc.text(`Transmisión: ${bike.transmission || "N/A"}`, col2X, yPos + 10);
 
     yPos += 20;
@@ -80,7 +107,7 @@ export const generateServiceReport = (
     doc.setFillColor(240, 240, 240);
     doc.roundedRect(margin, yPos, 60, 10, 2, 2, "FD");
     doc.setFont("helvetica", "bold");
-    doc.text(`SERVICIO: ${service.service_type.toUpperCase()}`, margin + 5, yPos + 6.5);
+    doc.text(`SERVICIO: ${service.service_type?.toUpperCase() || ""}`, margin + 5, yPos + 6.5);
 
     yPos += 20;
 
@@ -151,7 +178,7 @@ export const generateServiceReport = (
     doc.setFontSize(8);
     doc.setTextColor(100, 100, 100);
     doc.text("Gracias por confiar en nosotros.", margin, footerY);
-    doc.text("GENERADO CON MECHANIC PRO", pageWidth - margin, footerY, { align: "right" });
+    doc.text(service.taller_nombre ? `GENERADO CON ${service.taller_nombre.toUpperCase()}` : "GENERADO CON MECHANIC PRO", pageWidth - margin, footerY, { align: "right" });
 
-    doc.save(`Service_${service.id}_${client.name}.pdf`);
+    doc.save(`Service_${service.id || "Report"}.pdf`);
 };

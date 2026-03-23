@@ -2,6 +2,7 @@ import html2pdf from 'html2pdf.js';
 import { formatOrdenNumber } from '@/lib/formatId';
 import { cleanItemName } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
+import { getBase64ImageFromUrl } from '@/lib/pdfGenerator';
 
 const TASKS_SPORT = [
   "• Lavado de bicicleta y todos sus componentes",
@@ -48,7 +49,7 @@ const TASKS_EXPERT = [
   "- Engrase general de rodamientos"
 ];
 
-export const printServiceReport = (
+export const printServiceReport = async (
   job: any,
   clientName: string = 'Cliente',
   bikeModel: string = 'Bicicleta',
@@ -58,8 +59,15 @@ export const printServiceReport = (
   if (!job) return;
 
   const taller = useAuthStore.getState().taller;
-  const logoUrl = taller?.logo_url || `${window.location.origin}/img/logo_full.png`;
+  const logoUrlRaw = taller?.logo_url || `${window.location.origin}/img/logo_full.png`;
   const primaryColor = taller?.color_primario || '#f25a30';
+
+  // Transform to base64 to avoid html2canvas taint / CORS issues with Supabase Storage
+  let logoBase64 = logoUrlRaw;
+  if (logoUrlRaw.startsWith('http')) {
+    const b64 = await getBase64ImageFromUrl(logoUrlRaw);
+    if (b64) logoBase64 = b64;
+  }
 
   // --- Logic ---
   const serviceTypeRaw = job.service_type || job.serviceType || "General";
@@ -132,13 +140,13 @@ export const printServiceReport = (
       
       <div style="border-bottom: 2px solid ${primaryColor}; padding-bottom: 20px; margin-bottom: 40px; display: flex; justify-content: space-between; align-items: flex-end;">
         <div>
-           <img src="${logoUrl}" alt="Mecánico" style="max-height: 85px; max-width: 250px; object-fit: contain;" crossorigin="anonymous" />
+           <img src="${logoBase64}" alt="Mecánico" style="max-height: 85px; max-width: 250px; object-fit: contain;" crossorigin="anonymous" />
         </div>
         <div style="text-align: right;">
            <div style="font-size: 12px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Informe de Servicio</div>
            <div style="font-size: 16px; font-weight: 700;">Service ${formatOrdenNumber(job.numero_orden, job.id)}</div>
            <div style="font-size: 14px; font-weight: 400; margin-top: 5px;">Ingreso: ${dateInStr}</div>
-           ${dateOutStr ? `<div style="font-size: 13px; font-weight: 600; color: #f97316; margin-top: 2px;">Entrega: ${dateOutStr}</div>` : ''}
+           ${dateOutStr ? `<div style="font-size: 13px; font-weight: 600; color: ${primaryColor}; margin-top: 2px;">Entrega: ${dateOutStr}</div>` : ''}
         </div>
       </div>
 

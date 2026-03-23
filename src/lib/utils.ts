@@ -35,3 +35,24 @@ export function hexToHslSpaceSeparated(hex: string): string {
     }
     return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
+
+export const calculateDaysRemaining = (targetDateString: string): number => {
+    if (!targetDateString) return 0;
+
+    // 1. Extraer la fecha cruda YYYY-MM-DD ignorando timestamps de Supabase
+    const rawDate = targetDateString.split('T')[0];
+    const [year, month, day] = rawDate.split('-');
+
+    if (!year || !month || !day) return 0;
+
+    // 2. Crear fecha objetivo a las 00:00:00 hora local
+    const targetDate = new Date(Number(year), Number(month) - 1, Number(day));
+
+    // 3. Crear fecha de HOY a las 00:00:00 hora local
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    // 4. Calcular diferencia pura en días
+    const diffTime = targetDate.getTime() - today.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+};

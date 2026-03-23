@@ -137,9 +137,11 @@ function AppContent() {
       {/* Sidebar / Navigation */}
       <nav className="w-full md:w-28 border-r border-border bg-card flex md:flex-col items-center py-4 space-x-4 md:space-x-0 md:space-y-4 sticky top-0 z-10 h-16 md:h-screen justify-center md:justify-start overflow-x-auto md:overflow-y-auto">
         <div className="hidden md:block mb-6 text-center w-full px-2 shrink-0">
-          <div className="flex flex-col items-center justify-center mb-2 mt-2">
+          <div className="flex flex-col items-center justify-center mb-2 mt-2 w-full">
             {taller?.logo_url ? (
-              <img src={taller.logo_url} alt="Logo Taller" className="h-10 w-auto object-contain mb-2 rounded-md" />
+              <div className="h-16 w-full flex justify-center items-center mb-2 px-2">
+                <img src={taller.logo_url} alt="Logo Taller" className="max-h-full max-w-full object-contain" />
+              </div>
             ) : (
               <Wrench className="h-8 w-8 text-primary mb-2" />
             )}

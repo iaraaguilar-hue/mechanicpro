@@ -168,7 +168,7 @@ export default function History() {
     // Build joined jobs from store data (replaces readDataFromStorage)
     const allJobs = useMemo(() => {
         return storeServicios
-            .filter(s => !s.deleted_at)
+            .filter(s => !s.eliminado_en)
             .map(service => {
                 const bike = storeBicicletas.find(b => b.id === service.bicicleta_id);
                 const client = bike ? storeClientes.find(c => c.id === bike.cliente_id) : null;

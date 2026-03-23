@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Trash2, AlertCircle, CalendarIcon, ServerCrash, Clock, UserX } from 'lucide-react';
+import { Trash2, AlertCircle, CalendarIcon, ServerCrash, Clock, UserX, RefreshCcw, Loader2 } from 'lucide-react';
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { supabase } from '@/lib/supabase';
@@ -18,6 +18,7 @@ export default function DeletedServices() {
     const [deletedJobs, setDeletedJobs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [restoringId, setRestoringId] = useState<string | null>(null);
 
     // Protected Route Verification
     useEffect(() => {
@@ -26,49 +27,62 @@ export default function DeletedServices() {
         }
     }, [session, rol, navigate]);
 
-    useEffect(() => {
-        if (rol !== 'admin') return;
+    const fetchDeletedServices = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            // EXPLICIT BACKEND CALL: Fetch soft-deleted records directly from Supabase DB
+            const { data, error: supaError } = await supabase
+                .from('servicios')
+                .select('*, bicicletas(id, marca, modelo, clientes(id, nombre, dni))')
+                .not('eliminado_en', 'is', null)
+                .order('eliminado_en', { ascending: false });
 
-        const fetchDeletedServices = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                // EXPLICIT BACKEND CALL: Fetch soft-deleted records directly from Supabase DB
-                const { data, error: supaError } = await supabase
-                    .from('servicios')
-                    .select('*, bicicletas(id, marca, modelo, clientes(id, nombre, dni))')
-                    .not('deleted_at', 'is', null)
-                    .order('deleted_at', { ascending: false });
-
-                if (supaError) {
-                    throw new Error(supaError.message);
-                }
-
-                if (data) {
-                    const mappedData = data.map((item: any) => ({
-                        id: item.id,
-                        deletedAt: item.deleted_at,
-                        dateIn: item.fecha_ingreso || item.created_at,
-                        serviceType: item.tipo_servicio || 'General',
-                        status: item.estado,
-                        totalPrice: item.precio_total || 0,
-                        bikeBrand: item.bicicletas?.marca || 'Desconocida',
-                        bikeModel: item.bicicletas?.modelo || 'Desconocido',
-                        clientName: item.bicicletas?.clientes?.nombre || 'Desconocido',
-                        clientDni: item.bicicletas?.clientes?.dni || '-',
-                    }));
-                    setDeletedJobs(mappedData);
-                }
-            } catch (err: any) {
-                console.error("Error fetching deleted services:", err.message);
-                setError(err.message || 'Error de conexión');
-            } finally {
-                setLoading(false);
+            if (supaError) {
+                throw new Error(supaError.message);
             }
-        };
 
-        fetchDeletedServices();
+            if (data) {
+                const mappedData = data.map((item: any) => ({
+                    id: item.id,
+                    deletedAt: item.eliminado_en,
+                    dateIn: item.fecha_ingreso || item.created_at,
+                    serviceType: item.tipo_servicio || 'General',
+                    status: item.estado,
+                    totalPrice: item.precio_total || 0,
+                    bikeBrand: item.bicicletas?.marca || 'Desconocida',
+                    bikeModel: item.bicicletas?.modelo || 'Desconocido',
+                    clientName: item.bicicletas?.clientes?.nombre || 'Desconocido',
+                    clientDni: item.bicicletas?.clientes?.dni || '-',
+                }));
+                setDeletedJobs(mappedData);
+            }
+        } catch (err: any) {
+            console.error("Error fetching deleted services:", err.message);
+            setError(err.message || 'Error de conexión');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (rol === 'admin') {
+            fetchDeletedServices();
+        }
     }, [rol]);
+
+    const handleRestore = async (id: string) => {
+        try {
+            setRestoringId(id);
+            const { error } = await supabase.from('servicios').update({ eliminado_en: null }).eq('id', id);
+            if (error) throw error;
+            await fetchDeletedServices();
+        } catch (err: any) {
+            alert("Error al restaurar: " + err.message);
+        } finally {
+            setRestoringId(null);
+        }
+    };
 
     if (rol !== 'admin') {
         return <div className="p-8 text-center text-red-500 font-bold">Acceso Denegado</div>;
@@ -105,7 +119,7 @@ export default function DeletedServices() {
                                 <TableHead className="py-4 text-slate-600">Cliente</TableHead>
                                 <TableHead className="py-4 text-slate-600">Bicicleta</TableHead>
                                 <TableHead className="py-4 text-slate-600">Monto Original</TableHead>
-                                <TableHead className="py-4 pr-6 text-right text-red-800">Estado Final</TableHead>
+                                <TableHead className="py-4 pr-6 text-right text-red-800">Acciones</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -170,10 +184,20 @@ export default function DeletedServices() {
                                                     $ {job.totalPrice?.toLocaleString("es-AR")}
                                                 </span>
                                             </TableCell>
-                                            <TableCell className="text-right pr-6 py-4">
-                                                <Badge variant="outline" className="text-slate-400 bg-transparent border-red-200 uppercase font-normal text-[10px] tracking-wider">
+                                            <TableCell className="text-right pr-6 py-4 flex justify-end items-center gap-2">
+                                                <Badge variant="outline" className="text-slate-400 bg-transparent border-red-200 uppercase font-normal text-[10px] tracking-wider hidden md:inline-flex">
                                                     Anulado
                                                 </Badge>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                                                    onClick={() => handleRestore(job.id)}
+                                                    disabled={restoringId === job.id}
+                                                >
+                                                    {restoringId === job.id ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCcw className="w-4 h-4 mr-1" />}
+                                                    Restaurar
+                                                </Button>
                                             </TableCell>
                                         </TableRow>
                                     );

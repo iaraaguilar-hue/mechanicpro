@@ -41,7 +41,7 @@ export interface SupabaseService {
     notas_mecanico?: string;
     fecha_entrega?: string | null;
     fecha_finalizacion?: string;
-    deleted_at?: string;
+    eliminado_en?: string | null;
     checklist_data?: Record<string, boolean>;
     carrera_id?: string | null;
     alertas_ocultas?: string[];
@@ -144,7 +144,7 @@ export const useDataStore = create<DataState>((set, get) => ({
             const [resC, resB, resS, resR] = await Promise.all([
                 supabase.from('clientes').select('*').eq('taller_id', tallerId).order('numero_cliente', { ascending: true }),
                 supabase.from('bicicletas').select('*').eq('taller_id', tallerId),
-                supabase.from('servicios').select('*, servicio_items(*)').eq('taller_id', tallerId).is('deleted_at', null),
+                supabase.from('servicios').select('*, servicio_items(*)').eq('taller_id', tallerId).is('eliminado_en', null),
                 supabase.from('recordatorios').select('*').eq('taller_id', tallerId),
             ]);
 
@@ -314,8 +314,8 @@ export const useDataStore = create<DataState>((set, get) => ({
 
     deleteServicio: async (id) => {
         // Soft delete
-        const deleted_at = new Date().toISOString();
-        const { error } = await supabase.from('servicios').update({ deleted_at }).eq('id', id);
+        const eliminado_en = new Date().toISOString();
+        const { error } = await supabase.from('servicios').update({ eliminado_en }).eq('id', id);
         if (error) throw new Error(`Error eliminando servicio: ${error.message}`);
         set({ servicios: get().servicios.filter(s => s.id !== id) });
     },

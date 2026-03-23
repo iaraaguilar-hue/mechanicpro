@@ -4,7 +4,7 @@ import { useDataStore, type SupabaseClient, type SupabaseBike } from "@/store/da
 import { useAuthStore } from "@/store/authStore";
 import { formatOrdenNumber } from "@/lib/formatId";
 import { SuccessModal } from "@/components/SuccessModal";
-import { ServiceType } from "@/components/ServiceModal";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -280,7 +280,8 @@ function BikeSelectionStep({ client, onBikeSelect, onBack }: { client: SupabaseC
 }
 
 function ServiceDefinitionStep({ bike, clientName, onSuccess, onBack }: { bike: SupabaseBike, clientName: string, onSuccess: (msg: string) => void, onBack: () => void }) {
-    const [serviceType, setServiceType] = useState<ServiceType>(ServiceType.SPORT);
+    const [catalogoServicios, setCatalogoServicios] = useState<any[]>([]);
+    const [serviceType, setServiceType] = useState<string>("");
     const [notes, setNotes] = useState("");
     const [isSaving, setIsSaving] = useState(false);
     const [fechaEntrega, setFechaEntrega] = useState("");
@@ -288,7 +289,21 @@ function ServiceDefinitionStep({ bike, clientName, onSuccess, onBack }: { bike: 
     const createServicio = useDataStore(s => s.createServicio);
     const taller_id = useAuthStore(s => s.taller_id);
 
-    const handleTypeChange = (type: ServiceType) => {
+    useEffect(() => {
+        const fetchCatalogo = async () => {
+            if (!taller_id) return;
+            const { data } = await supabase.from('catalogo_servicios').select('*').eq('taller_id', taller_id);
+            if (data) {
+                setCatalogoServicios(data);
+                if (data.length > 0) {
+                    setServiceType(data[0].nombre);
+                }
+            }
+        };
+        fetchCatalogo();
+    }, [taller_id]);
+
+    const handleTypeChange = (type: string) => {
         setServiceType(type);
     };
 
@@ -308,7 +323,7 @@ function ServiceDefinitionStep({ bike, clientName, onSuccess, onBack }: { bike: 
             const msg = `Servicio ${formatOrdenNumber(created.numero_orden, created.id)} registrado correctamente.`;
             setNotes("");
             setFechaEntrega("");
-            setServiceType(ServiceType.SPORT);
+            if (catalogoServicios.length > 0) setServiceType(catalogoServicios[0].nombre);
             onSuccess(msg);
         } catch (e: any) {
             alert(`Error: ${e.message}`);
@@ -331,10 +346,20 @@ function ServiceDefinitionStep({ bike, clientName, onSuccess, onBack }: { bike: 
                 <div className="grid gap-6">
                     <div className="space-y-3">
                         <Label className="text-lg">Tipo de Service</Label>
-                        <div className="grid grid-cols-3 gap-3">
-                            <ServiceOption selected={serviceType === ServiceType.SPORT} onClick={() => handleTypeChange(ServiceType.SPORT)} title="SPORT" desc="Básico" />
-                            <ServiceOption selected={serviceType === ServiceType.EXPERT} onClick={() => handleTypeChange(ServiceType.EXPERT)} title="EXPERT" desc="Completo" />
-                            <ServiceOption selected={serviceType === ServiceType.OTHER} onClick={() => handleTypeChange(ServiceType.OTHER)} title="OTRO" desc="Reparación" />
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            {catalogoServicios.length > 0 ? (
+                                catalogoServicios.map(cat => (
+                                    <ServiceOption
+                                        key={cat.id}
+                                        selected={serviceType === cat.nombre}
+                                        onClick={() => handleTypeChange(cat.nombre)}
+                                        title={cat.nombre}
+                                        desc={`$ ${cat.precio?.toLocaleString('es-AR')}`}
+                                    />
+                                ))
+                            ) : (
+                                <p className="text-sm text-muted-foreground italic col-span-3">No hay servicios configurados en el catálogo.</p>
+                            )}
                         </div>
                     </div>
 
@@ -351,7 +376,7 @@ function ServiceDefinitionStep({ bike, clientName, onSuccess, onBack }: { bike: 
                     <div className="space-y-2">
                         <Label>Observaciones / Detalle del Trabajo</Label>
                         <Textarea
-                            placeholder={serviceType === ServiceType.OTHER ? "Describir reparación puntual..." : "Notas de ingreso..."}
+                            placeholder="Notas de ingreso..."
                             className="min-h-[120px] text-lg"
                             value={notes}
                             onChange={e => setNotes(e.target.value)}

@@ -168,7 +168,7 @@ export async function exportBackupToZip(tallerId?: string | null): Promise<Expor
     const extraItemsRows: any[][] = [];
 
     servicesArray.forEach((s: any) => {
-        if (s.isDeleted || s.deleted_at) return;
+        if (s.isDeleted || s.eliminado_en) return;
 
         const localBikeId = String(s.bikeId || s.bike_id || s.bicicleta_id || '');
         const bId = bikeMap[localBikeId];

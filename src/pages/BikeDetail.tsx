@@ -70,7 +70,7 @@ export default function BikeDetail() {
 
     // Services and reminders for active bike
     const services = useMemo(() =>
-        storeServicios.filter(s => s.bicicleta_id === activeBikeId && !s.deleted_at),
+        storeServicios.filter(s => s.bicicleta_id === activeBikeId && !s.eliminado_en),
         [storeServicios, activeBikeId]
     );
 
@@ -84,7 +84,7 @@ export default function BikeDetail() {
         const completedStatuses = ['completed', 'finalizado', 'entregado', 'ready', 'delivered'];
         const clientBikeIds = clientBikes.map(b => b.id);
         return storeServicios.filter(s =>
-            clientBikeIds.includes(s.bicicleta_id) && completedStatuses.includes((s.estado || '').toLowerCase()) && !s.deleted_at
+            clientBikeIds.includes(s.bicicleta_id) && completedStatuses.includes((s.estado || '').toLowerCase()) && !s.eliminado_en
         ).length;
     }, [storeServicios, clientBikes]);
 

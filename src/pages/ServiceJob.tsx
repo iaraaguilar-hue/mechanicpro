@@ -9,7 +9,7 @@ import { printServiceReport } from '@/lib/printServiceBtn';
 import { isExternalItem } from '@/lib/utils';
 
 // URL DEL WEBHOOK (Verificada)
-const MAKE_WEBHOOK_URL = "https://hook.us2.make.com/u9guskrdv639r6vfitag4x4cqllhrokr";
+const MAKE_WEBHOOK_URL = "https://nonlepidopterous-memphis-palaeological.ngrok-free.dev/webhook/generar-orden";
 
 export default function ServiceJob() {
     const { id } = useParams();

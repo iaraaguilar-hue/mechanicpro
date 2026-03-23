@@ -64,7 +64,7 @@ export default function Workshop() {
     const jobs = useMemo(() => {
         const completedStatuses = ['completed', 'finalizado', 'entregado', 'old_completed', 'ready', 'delivered'];
         const mapped = servicios
-            .filter(s => !completedStatuses.includes((s.estado || '').toLowerCase()) && !s.deleted_at)
+            .filter(s => !completedStatuses.includes((s.estado || '').toLowerCase()) && !s.eliminado_en)
             .map(s => {
                 const bike = bicicletas.find(b => b.id === s.bicicleta_id);
                 const client = bike ? clientes.find(c => c.id === bike.cliente_id) : null;
@@ -318,7 +318,7 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
                         total_service: Number(service.precio_total) || 0,
                         numero_orden: service.numero_orden || service.id
                     };
-                    fetch("https://hook.us2.make.com/u9guskrdv639r6vfitag4x4cqllhrokr", {
+                    fetch("https://nonlepidopterous-memphis-palaeological.ngrok-free.dev/webhook/generar-orden", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify(payload),

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useDataStore } from '@/store/dataStore';
+import { useAuthStore } from '@/store/authStore';
 import {
     BarChart3,
     TrendingUp,
@@ -21,6 +22,7 @@ export default function Metrics() {
     const servicios = useDataStore(s => s.servicios);
     const bicicletas = useDataStore(s => s.bicicletas);
     const isHydrating = useDataStore(s => s.isHydrating);
+    const tallerId = useAuthStore(s => s.taller_id);
 
     const [dateStart, setDateStart] = useState<string>(new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]);
     const [dateEnd, setDateEnd] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -33,6 +35,8 @@ export default function Metrics() {
         // Only completed/finalized services
         const completedStatuses = ['completed', 'finalizado', 'entregado'];
         const filtered = servicios.filter(s => {
+            if (s.taller_id !== tallerId) return false;
+            if (s.eliminado_en) return false;
             if (!completedStatuses.includes((s.estado || '').toLowerCase())) return false;
             const date = new Date(s.fecha_entrega || s.fecha_ingreso || 0).getTime();
             return date >= start && date <= end;

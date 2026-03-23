@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useDataStore, type SupabaseClient, type SupabaseBike } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
+import { supabase } from "@/lib/supabase";
 import { formatOrdenNumber } from "@/lib/formatId";
 import { SuccessModal } from "@/components/SuccessModal";
 import { Button } from "@/components/ui/button";
@@ -16,12 +17,12 @@ import { AddBikeDialog } from "@/components/AddBikeDialog";
 import { EditBikeDialog } from "@/components/EditBikeDialog";
 
 // Service types (const object pattern for erasableSyntaxOnly compatibility)
-export const ServiceType = {
-    SPORT: "Sport",
-    EXPERT: "Expert",
-    OTHER: "Otro"
-} as const;
-export type ServiceType = (typeof ServiceType)[keyof typeof ServiceType];
+// export const ServiceType = {
+//     SPORT: "Sport",
+//     EXPERT: "Expert",
+//     OTHER: "Otro"
+// } as const;
+// export type ServiceType = string;
 
 interface ServiceModalProps {
     isOpen: boolean;
@@ -284,7 +285,8 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
     onSuccess: () => void,
     onBack: () => void
 }) {
-    const [serviceType, setServiceType] = useState<ServiceType>(ServiceType.SPORT);
+    const [catalogoServicios, setCatalogoServicios] = useState<any[]>([]);
+    const [serviceType, setServiceType] = useState<string>("");
     const [notes, setNotes] = useState("");
     const [basePrice, setBasePrice] = useState(40000);
     const [extraItems, setExtraItems] = useState<{ id: string, description: string, price: number, category?: 'part' | 'labor' }[]>([]);
@@ -298,14 +300,25 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
     const updateServicio = useDataStore(s => s.updateServicio);
     const taller_id = useAuthStore(s => s.taller_id);
 
-    // Load existing data if editing
+    // Fetch config and existing services
+    useEffect(() => {
+        const fetchCatalogo = async () => {
+            if (!taller_id) return;
+            const { data } = await supabase.from('catalogo_servicios').select('*').eq('taller_id', taller_id);
+            if (data) {
+                setCatalogoServicios(data);
+            }
+        };
+        fetchCatalogo();
+    }, [taller_id]);
+
     useEffect(() => {
         if (serviceId) {
             const existing = servicios.find(s => s.id === serviceId);
             if (existing) {
-                setServiceType((existing.tipo_servicio as ServiceType) || ServiceType.SPORT);
+                setServiceType(existing.tipo_servicio || "");
                 setNotes(existing.notas_mecanico || "");
-                setBasePrice(existing.precio_base || (existing.tipo_servicio === "Sport" ? 40000 : existing.tipo_servicio === "Expert" ? 70000 : 0));
+                setBasePrice(existing.precio_base || 0);
                 setExtraItems(
                     existing.items_extra?.map((i: any) => ({
                         id: i.id || crypto.randomUUID(),
@@ -323,17 +336,20 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                 }
 
                 setSelectedCarreraId(existing.carrera_id || null);
+                // Set default if creating
+                if (catalogoServicios.length > 0) {
+                    setServiceType(catalogoServicios[0].nombre);
+                    setBasePrice(catalogoServicios[0].precio);
+                }
             }
         }
-    }, [serviceId, servicios]);
+    }, [serviceId, servicios, catalogoServicios]);
 
     const totalPrice = basePrice + extraItems.reduce((acc, item) => acc + item.price, 0);
 
-    const handleTypeChange = (type: ServiceType) => {
+    const handleTypeChange = (type: string, price: number) => {
         setServiceType(type);
-        if (type === ServiceType.SPORT) setBasePrice(40000);
-        else if (type === ServiceType.EXPERT) setBasePrice(70000);
-        else setBasePrice(0);
+        setBasePrice(price);
     };
 
     const addItem = () => {
@@ -406,9 +422,9 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                     onClose={() => {
                         setSuccessMessage(null);
                         setNotes("");
-                        setBasePrice(40000);
+                        setBasePrice(0);
                         setExtraItems([]);
-                        setServiceType(ServiceType.SPORT);
+                        setServiceType("");
                         setFechaEntrega("");
                         setSelectedCarreraId(null);
                         if (onReset) onReset();
@@ -453,10 +469,20 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
                 <div>
                     <Label className="text-lg font-semibold mb-3 block">Tipo de Service</Label>
-                    <div className="grid grid-cols-3 gap-4">
-                        <ServiceOption selected={serviceType === ServiceType.SPORT} onClick={() => handleTypeChange(ServiceType.SPORT)} title="SPORT" desc="$ 40.000" />
-                        <ServiceOption selected={serviceType === ServiceType.EXPERT} onClick={() => handleTypeChange(ServiceType.EXPERT)} title="EXPERT" desc="$ 70.000" />
-                        <ServiceOption selected={serviceType === ServiceType.OTHER} onClick={() => handleTypeChange(ServiceType.OTHER)} title="OTRO" desc="A Medida" />
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {catalogoServicios.length > 0 ? (
+                            catalogoServicios.map(cat => (
+                                <ServiceOption
+                                    key={cat.id}
+                                    selected={serviceType === cat.nombre}
+                                    onClick={() => handleTypeChange(cat.nombre, cat.precio)}
+                                    title={cat.nombre}
+                                    desc={`$ ${cat.precio?.toLocaleString('es-AR')}`}
+                                />
+                            ))
+                        ) : (
+                            <p className="text-sm text-muted-foreground italic col-span-3">No hay servicios configurados en el catálogo.</p>
+                        )}
                     </div>
                 </div>
 
@@ -546,14 +572,14 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             rows={3}
-                            placeholder={serviceType === ServiceType.OTHER ? "Describir reparación puntual..." : "Notas de ingreso..."}
+                            placeholder="Notas de ingreso..."
                             className="text-lg"
                         />
                     </div>
 
-                    <CarreraSelector 
-                        selectedId={selectedCarreraId} 
-                        onSelect={setSelectedCarreraId} 
+                    <CarreraSelector
+                        selectedId={selectedCarreraId}
+                        onSelect={setSelectedCarreraId}
                     />
                 </div>
             </div>
@@ -588,7 +614,7 @@ function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, 
     const carreras = useDataStore(s => s.carreras);
     const createCarrera = useDataStore(s => s.createCarrera);
     const taller_id = useAuthStore(s => s.taller_id);
-    
+
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState("");
     const [isCreating, setIsCreating] = useState(false);
@@ -596,7 +622,7 @@ function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, 
     const [isSaving, setIsSaving] = useState(false);
 
     const selectedCarrera = carreras.find(c => c.id === selectedId);
-    
+
     const filteredCarreras = useMemo(() => {
         if (!search) return carreras.slice(0, 5);
         return carreras.filter(c => c.nombre.toLowerCase().includes(search.toLowerCase())).slice(0, 5);
@@ -637,9 +663,9 @@ function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, 
                 <Flag className="w-4 h-4" />
                 🏁 ¿Se prepara para una carrera o evento? (Opcional)
             </Label>
-            
+
             {/* Trigger Button */}
-            <div 
+            <div
                 className="flex items-center justify-between border rounded-md p-3 cursor-pointer hover:bg-slate-50 transition-colors bg-white"
                 onClick={() => setIsOpen(!isOpen)}
             >
@@ -649,7 +675,7 @@ function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, 
                             <span className="font-semibold">{selectedCarrera.nombre}</span>
                             {selectedCarrera.fecha_evento && (
                                 <span className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                                    <Calendar className="w-3 h-3" /> 
+                                    <Calendar className="w-3 h-3" />
                                     {selectedCarrera.fecha_evento.split('-').reverse().join('/')}
                                 </span>
                             )}
@@ -659,9 +685,9 @@ function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, 
                     )}
                 </div>
                 {selectedCarrera && (
-                    <Button 
-                        variant="ghost" 
-                        size="sm" 
+                    <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={(e) => { e.stopPropagation(); onSelect(null); }}
                         className="h-6 w-6 p-0 text-red-500 rounded-full hover:bg-red-100"
                     >
@@ -675,22 +701,22 @@ function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, 
             {isOpen && (
                 <div className="absolute top-full left-0 right-0 mt-2 bg-white border shadow-xl rounded-md z-50 overflow-hidden">
                     <div className="p-2 border-b">
-                        <Input 
-                            value={search} 
-                            onChange={(e) => { setSearch(e.target.value); setIsCreating(false); }} 
-                            placeholder="Buscar evento (ej. Pinto, Río Tinto)..." 
+                        <Input
+                            value={search}
+                            onChange={(e) => { setSearch(e.target.value); setIsCreating(false); }}
+                            placeholder="Buscar evento (ej. Pinto, Río Tinto)..."
                             className="h-10 border-indigo-200 focus-visible:ring-indigo-500"
                             autoFocus
                         />
                     </div>
-                    
+
                     {!isCreating ? (
                         <div className="max-h-60 overflow-y-auto">
                             {filteredCarreras.length > 0 ? (
                                 <div className="p-1">
                                     {filteredCarreras.map(c => (
-                                        <div 
-                                            key={c.id} 
+                                        <div
+                                            key={c.id}
                                             onClick={() => handleSelect(c.id)}
                                             className={`p-2 rounded-md cursor-pointer flex items-center justify-between ${selectedId === c.id ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-100'}`}
                                         >
@@ -709,8 +735,8 @@ function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, 
 
                             {search && !exactMatch && (
                                 <div className="p-2 border-t bg-slate-50">
-                                    <Button 
-                                        variant="outline" 
+                                    <Button
+                                        variant="outline"
                                         className="w-full justify-start text-indigo-600 border-indigo-200 hover:bg-indigo-50"
                                         onClick={() => setIsCreating(true)}
                                     >
@@ -727,23 +753,23 @@ function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, 
                             </p>
                             <div className="space-y-2">
                                 <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fecha del Evento (Opcional)</Label>
-                                <Input 
-                                    type="date" 
-                                    value={newDate} 
+                                <Input
+                                    type="date"
+                                    value={newDate}
                                     onChange={e => setNewDate(e.target.value)}
                                     className="bg-white"
                                 />
                             </div>
                             <div className="flex gap-2">
-                                <Button 
-                                    variant="outline" 
+                                <Button
+                                    variant="outline"
                                     onClick={() => setIsCreating(false)}
                                     className="flex-1"
                                     disabled={isSaving}
                                 >
                                     Cancelar
                                 </Button>
-                                <Button 
+                                <Button
                                     onClick={handleCreate}
                                     className="flex-1 bg-indigo-600 hover:bg-indigo-700"
                                     disabled={isSaving}

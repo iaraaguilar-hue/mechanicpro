@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Pencil, Loader2, Save, UploadCloud, Plus, Trash2 } from 'lucide-react';
+import { Pencil, Loader2, Save, UploadCloud, Plus, Trash2, Edit2, Check, X } from 'lucide-react';
 
 interface Taller {
     id: string;
@@ -44,6 +44,8 @@ export default function SuperAdmin() {
     const [servicios, setServicios] = useState<ServicioCatalogo[]>([]);
     const [loadingServicios, setLoadingServicios] = useState(false);
     const [nuevoServicio, setNuevoServicio] = useState({ nombre: '', descripcion: '', precio: '' });
+    const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+    const [editForm, setEditForm] = useState({ nombre: '', descripcion: '', precio: '' });
 
     useEffect(() => {
         const fetchTalleres = async () => {
@@ -225,6 +227,31 @@ export default function SuperAdmin() {
         } catch (error: any) {
             console.error("Error deleting service:", error.message);
             alert("Error al eliminar servicio: " + error.message);
+        } finally {
+            setLoadingServicios(false);
+        }
+    };
+
+    const handleUpdateService = async (id: string) => {
+        try {
+            setLoadingServicios(true);
+            const { error } = await supabase
+                .from('catalogo_servicios')
+                .update({
+                    nombre: editForm.nombre,
+                    descripcion: editForm.descripcion,
+                    precio: parseFloat(editForm.precio) || 0
+                })
+                .eq('id', id);
+
+            if (error) throw error;
+            setEditingServiceId(null);
+            if (editingTaller) {
+                await fetchServicios(editingTaller.id);
+            }
+        } catch (error: any) {
+            console.error("Error updating service:", error.message);
+            alert("Error al actualizar servicio: " + error.message);
         } finally {
             setLoadingServicios(false);
         }
@@ -491,20 +518,75 @@ export default function SuperAdmin() {
                                             ) : (
                                                 servicios.map((servicio) => (
                                                     <TableRow key={servicio.id}>
-                                                        <TableCell className="font-medium">{servicio.nombre}</TableCell>
-                                                        <TableCell className="text-muted-foreground text-sm">{servicio.descripcion || '-'}</TableCell>
-                                                        <TableCell className="text-right font-mono">${Number(servicio.precio).toFixed(2)}</TableCell>
-                                                        <TableCell>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                                                onClick={() => handleDeleteServicio(servicio.id)}
-                                                                disabled={loadingServicios}
-                                                            >
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        </TableCell>
+                                                        {editingServiceId === servicio.id ? (
+                                                            <>
+                                                                <TableCell>
+                                                                    <Input
+                                                                        value={editForm.nombre}
+                                                                        onChange={(e) => setEditForm({ ...editForm, nombre: e.target.value })}
+                                                                        className="h-8 shadow-none"
+                                                                    />
+                                                                </TableCell>
+                                                                <TableCell>
+                                                                    <Input
+                                                                        value={editForm.descripcion}
+                                                                        onChange={(e) => setEditForm({ ...editForm, descripcion: e.target.value })}
+                                                                        className="h-8 shadow-none"
+                                                                    />
+                                                                </TableCell>
+                                                                <TableCell>
+                                                                    <Input
+                                                                        type="number"
+                                                                        value={editForm.precio}
+                                                                        onChange={(e) => setEditForm({ ...editForm, precio: e.target.value })}
+                                                                        className="h-8 text-right font-mono shadow-none"
+                                                                    />
+                                                                </TableCell>
+                                                                <TableCell className="whitespace-nowrap flex items-center justify-end gap-1">
+                                                                    <Button
+                                                                        variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:bg-green-50"
+                                                                        onClick={() => handleUpdateService(servicio.id)}
+                                                                        disabled={loadingServicios}
+                                                                    >
+                                                                        <Check size={16} />
+                                                                    </Button>
+                                                                    <Button
+                                                                        variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:bg-slate-50"
+                                                                        onClick={() => setEditingServiceId(null)}
+                                                                        disabled={loadingServicios}
+                                                                    >
+                                                                        <X size={16} />
+                                                                    </Button>
+                                                                </TableCell>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <TableCell className="font-medium">{servicio.nombre}</TableCell>
+                                                                <TableCell className="text-muted-foreground text-sm">{servicio.descripcion || '-'}</TableCell>
+                                                                <TableCell className="text-right font-mono">${Number(servicio.precio).toFixed(2)}</TableCell>
+                                                                <TableCell className="whitespace-nowrap flex items-center justify-end gap-1">
+                                                                    <Button
+                                                                        variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-500 hover:bg-blue-50"
+                                                                        onClick={() => {
+                                                                            setEditingServiceId(servicio.id);
+                                                                            setEditForm({ nombre: servicio.nombre, descripcion: servicio.descripcion || '', precio: servicio.precio.toString() });
+                                                                        }}
+                                                                        disabled={loadingServicios}
+                                                                    >
+                                                                        <Edit2 size={16} />
+                                                                    </Button>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                                        onClick={() => handleDeleteServicio(servicio.id)}
+                                                                        disabled={loadingServicios}
+                                                                    >
+                                                                        <Trash2 size={16} />
+                                                                    </Button>
+                                                                </TableCell>
+                                                            </>
+                                                        )}
                                                     </TableRow>
                                                 ))
                                             )}

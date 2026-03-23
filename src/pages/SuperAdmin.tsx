@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Pencil, Loader2, Save } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Pencil, Loader2, Save, UploadCloud, Plus, Trash2 } from 'lucide-react';
 
 interface Taller {
     id: string;
@@ -20,12 +21,29 @@ interface Taller {
     created_at?: string;
 }
 
+interface ServicioCatalogo {
+    id: string;
+    taller_id: string;
+    nombre: string;
+    descripcion: string;
+    precio: number;
+}
+
 export default function SuperAdmin() {
     const rol = useAuthStore((state) => state.rol);
     const [talleres, setTalleres] = useState<Taller[]>([]);
     const [loading, setLoading] = useState(true);
     const [editingTaller, setEditingTaller] = useState<Taller | null>(null);
     const [saving, setSaving] = useState(false);
+
+    // Tab and Upload States
+    const [activeTab, setActiveTab] = useState('general');
+    const [isUploading, setIsUploading] = useState(false);
+
+    // Services States
+    const [servicios, setServicios] = useState<ServicioCatalogo[]>([]);
+    const [loadingServicios, setLoadingServicios] = useState(false);
+    const [nuevoServicio, setNuevoServicio] = useState({ nombre: '', descripcion: '', precio: '' });
 
     useEffect(() => {
         const fetchTalleres = async () => {
@@ -40,7 +58,6 @@ export default function SuperAdmin() {
                 }
 
                 if (data) {
-                    console.log("Talleres encontrados:", data);
                     setTalleres(data);
                 }
             } catch (err) {
@@ -53,8 +70,33 @@ export default function SuperAdmin() {
         fetchTalleres();
     }, []);
 
+    const fetchServicios = async (tallerId: string) => {
+        try {
+            setLoadingServicios(true);
+            const { data, error } = await supabase
+                .from('catalogo_servicios')
+                .select('*')
+                .eq('taller_id', tallerId)
+                .order('nombre', { ascending: true });
+
+            if (error) throw error;
+            setServicios(data || []);
+        } catch (error: any) {
+            console.error("Error fetching services:", error.message);
+        } finally {
+            setLoadingServicios(false);
+        }
+    };
+
+    useEffect(() => {
+        if (editingTaller && activeTab === 'servicios') {
+            fetchServicios(editingTaller.id);
+        }
+    }, [editingTaller?.id, activeTab]);
+
     const handleEditClick = (taller: Taller) => {
         setEditingTaller({ ...taller });
+        setActiveTab('general');
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -63,6 +105,57 @@ export default function SuperAdmin() {
             ...editingTaller,
             [e.target.name]: e.target.value,
         });
+    };
+
+    const handleFileUpload = async (file: File) => {
+        if (!editingTaller) return;
+        try {
+            setIsUploading(true);
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${editingTaller.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('logos_talleres')
+                .upload(fileName, file, { upsert: true });
+
+            if (uploadError) throw uploadError;
+
+            const { data: publicUrlData } = supabase.storage
+                .from('logos_talleres')
+                .getPublicUrl(fileName);
+
+            const newLogoUrl = publicUrlData.publicUrl;
+
+            // Actualizar en base de datos inmediatamente
+            const { error: updateError } = await supabase
+                .from('talleres')
+                .update({ logo_url: newLogoUrl })
+                .eq('id', editingTaller.id);
+
+            if (updateError) throw updateError;
+
+            // Update local state
+            setEditingTaller({ ...editingTaller, logo_url: newLogoUrl });
+            setTalleres(talleres.map(t => t.id === editingTaller.id ? { ...t, logo_url: newLogoUrl } : t));
+        } catch (error: any) {
+            console.error("Error uploading file:", error.message);
+            alert("Error al subir imagen: " + error.message);
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            handleFileUpload(e.dataTransfer.files[0]);
+        }
+    };
+
+    const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            handleFileUpload(e.target.files[0]);
+        }
     };
 
     const handleSave = async () => {
@@ -81,7 +174,6 @@ export default function SuperAdmin() {
 
             if (error) throw error;
 
-            // Update local state
             setTalleres(talleres.map(t => t.id === editingTaller.id ? editingTaller : t));
             setEditingTaller(null);
         } catch (error: any) {
@@ -89,6 +181,52 @@ export default function SuperAdmin() {
             alert("Error guardando taller: " + error.message);
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleAddServicio = async () => {
+        if (!editingTaller || !nuevoServicio.nombre || !nuevoServicio.precio) return;
+        try {
+            setLoadingServicios(true);
+            const { data, error } = await supabase
+                .from('catalogo_servicios')
+                .insert([{
+                    taller_id: editingTaller.id,
+                    nombre: nuevoServicio.nombre,
+                    descripcion: nuevoServicio.descripcion,
+                    precio: parseFloat(nuevoServicio.precio)
+                }])
+                .select();
+
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+                setServicios([...servicios, data[0]]);
+                setNuevoServicio({ nombre: '', descripcion: '', precio: '' });
+            }
+        } catch (error: any) {
+            console.error("Error adding service:", error.message);
+            alert("Error al agregar servicio: " + error.message);
+        } finally {
+            setLoadingServicios(false);
+        }
+    };
+
+    const handleDeleteServicio = async (id: string) => {
+        try {
+            setLoadingServicios(true);
+            const { error } = await supabase
+                .from('catalogo_servicios')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            setServicios(servicios.filter(s => s.id !== id));
+        } catch (error: any) {
+            console.error("Error deleting service:", error.message);
+            alert("Error al eliminar servicio: " + error.message);
+        } finally {
+            setLoadingServicios(false);
         }
     };
 
@@ -172,84 +310,224 @@ export default function SuperAdmin() {
             </Card>
 
             <Dialog open={!!editingTaller} onOpenChange={(open) => !open && setEditingTaller(null)}>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
                     <DialogHeader>
                         <DialogTitle>Editar Taller: {editingTaller?.nombre_taller}</DialogTitle>
                     </DialogHeader>
                     {editingTaller && (
-                        <div className="space-y-4 py-4">
-                            <div className="space-y-2">
-                                <Label>Logo URL</Label>
-                                <Input
-                                    name="logo_url"
-                                    value={editingTaller.logo_url || ''}
-                                    onChange={handleChange}
-                                    placeholder="https://ejemplo.com/logo.png"
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Color Primario (Hex)</Label>
-                                    <div className="flex gap-2">
-                                        <Input
-                                            type="color"
-                                            name="color_primario"
-                                            className="w-12 h-10 p-1"
-                                            value={editingTaller.color_primario || '#000000'}
-                                            onChange={handleChange}
-                                        />
-                                        <Input
-                                            name="color_primario"
-                                            value={editingTaller.color_primario || ''}
-                                            onChange={handleChange}
-                                            placeholder="#f25a30"
-                                            className="font-mono text-sm uppercase"
+                        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col mt-4">
+                            <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="general">Configuración General</TabsTrigger>
+                                <TabsTrigger value="servicios">Catálogo de Servicios</TabsTrigger>
+                            </TabsList>
+
+                            <TabsContent value="general" className="flex-1 overflow-y-auto pr-2 space-y-4 mt-4">
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label>Logo del Taller</Label>
+                                        <div
+                                            className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-colors ${isUploading ? 'border-primary/50 bg-primary/5' : 'border-muted-foreground/25 hover:bg-muted/50'}`}
+                                            onDragOver={(e) => e.preventDefault()}
+                                            onDrop={onDrop}
+                                            onClick={() => document.getElementById('logo-upload')?.click()}
+                                        >
+                                            <input
+                                                id="logo-upload"
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={onFileChange}
+                                                disabled={isUploading}
+                                            />
+                                            {isUploading ? (
+                                                <div className="flex flex-col items-center">
+                                                    <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+                                                    <p className="text-sm font-medium text-primary">Subiendo imagen...</p>
+                                                </div>
+                                            ) : editingTaller.logo_url ? (
+                                                <div className="flex flex-col items-center w-full">
+                                                    <img src={editingTaller.logo_url} alt="Logo Preview" className="h-20 object-contain mb-4 rounded bg-white p-1 shadow-sm border" crossOrigin="anonymous" />
+                                                    <p className="text-sm font-medium">Click o arrastra para cambiar el logo</p>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center">
+                                                    <UploadCloud className="h-8 w-8 text-muted-foreground mb-2" />
+                                                    <p className="text-sm font-medium">Click para subir o arrastra una imagen</p>
+                                                    <p className="text-xs text-muted-foreground mt-1">Soporta PNG y JPG</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>Color Primario (Hex)</Label>
+                                            <div className="flex gap-2">
+                                                <Input
+                                                    type="color"
+                                                    name="color_primario"
+                                                    className="w-12 h-10 p-1"
+                                                    value={editingTaller.color_primario || '#000000'}
+                                                    onChange={handleChange}
+                                                />
+                                                <Input
+                                                    name="color_primario"
+                                                    value={editingTaller.color_primario || ''}
+                                                    onChange={handleChange}
+                                                    placeholder="#f25a30"
+                                                    className="font-mono text-sm uppercase"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Color Secundario (Hex)</Label>
+                                            <div className="flex gap-2">
+                                                <Input
+                                                    type="color"
+                                                    name="color_secundario"
+                                                    className="w-12 h-10 p-1"
+                                                    value={editingTaller.color_secundario || '#000000'}
+                                                    onChange={handleChange}
+                                                />
+                                                <Input
+                                                    name="color_secundario"
+                                                    value={editingTaller.color_secundario || ''}
+                                                    onChange={handleChange}
+                                                    placeholder="#03adef"
+                                                    className="font-mono text-sm uppercase"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Mensaje Informe (PDF)</Label>
+                                        <textarea
+                                            name="mensaje_informe"
+                                            className="w-full min-h-[80px] p-2 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                            value={editingTaller.mensaje_informe || ''}
+                                            onChange={handleChange as any}
+                                            placeholder="Gracias por confiar en nosotros."
                                         />
                                     </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <Label>Color Secundario (Hex)</Label>
-                                    <div className="flex gap-2">
-                                        <Input
-                                            type="color"
-                                            name="color_secundario"
-                                            className="w-12 h-10 p-1"
-                                            value={editingTaller.color_secundario || '#000000'}
-                                            onChange={handleChange}
-                                        />
-                                        <Input
-                                            name="color_secundario"
-                                            value={editingTaller.color_secundario || ''}
-                                            onChange={handleChange}
-                                            placeholder="#03adef"
-                                            className="font-mono text-sm uppercase"
-                                        />
-                                    </div>
+                            </TabsContent>
+
+                            <TabsContent value="servicios" className="flex-1 flex flex-col overflow-hidden mt-4 space-y-4">
+                                <Card className="shrink-0 border-dashed bg-muted/20">
+                                    <CardHeader className="py-3 px-4">
+                                        <CardTitle className="text-sm">Agregar Nuevo Servicio</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="px-4 pb-4">
+                                        <div className="flex gap-2 items-end">
+                                            <div className="flex-1 space-y-1">
+                                                <Label className="text-xs">Nombre</Label>
+                                                <Input
+                                                    className="h-8 text-sm"
+                                                    value={nuevoServicio.nombre}
+                                                    onChange={e => setNuevoServicio({ ...nuevoServicio, nombre: e.target.value })}
+                                                    placeholder="Ej: Cambio de Aceite"
+                                                />
+                                            </div>
+                                            <div className="flex-1 space-y-1">
+                                                <Label className="text-xs">Descripción</Label>
+                                                <Input
+                                                    className="h-8 text-sm"
+                                                    value={nuevoServicio.descripcion}
+                                                    onChange={e => setNuevoServicio({ ...nuevoServicio, descripcion: e.target.value })}
+                                                    placeholder="Ej: Incluye filtro y mano de obra"
+                                                />
+                                            </div>
+                                            <div className="w-28 space-y-1">
+                                                <Label className="text-xs">Precio ($)</Label>
+                                                <Input
+                                                    className="h-8 text-sm font-mono"
+                                                    type="number"
+                                                    value={nuevoServicio.precio}
+                                                    onChange={e => setNuevoServicio({ ...nuevoServicio, precio: e.target.value })}
+                                                    placeholder="0.00"
+                                                    min="0"
+                                                    step="0.01"
+                                                />
+                                            </div>
+                                            <Button
+                                                size="sm"
+                                                className="h-8 px-3"
+                                                onClick={handleAddServicio}
+                                                disabled={loadingServicios || !nuevoServicio.nombre || !nuevoServicio.precio}
+                                            >
+                                                <Plus className="h-4 w-4 mr-1" /> Add
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                <div className="flex-1 overflow-y-auto border rounded-md">
+                                    <Table>
+                                        <TableHeader className="bg-muted/50 sticky top-0 z-10 hidden sm:table-header-group">
+                                            <TableRow>
+                                                <TableHead>Servicio</TableHead>
+                                                <TableHead>Descripción</TableHead>
+                                                <TableHead className="text-right">Precio</TableHead>
+                                                <TableHead className="w-12"></TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {loadingServicios ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={4} className="h-32 text-center">
+                                                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mx-auto mb-2" />
+                                                        <span className="text-sm text-muted-foreground">Cargando servicios...</span>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : servicios.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={4} className="h-32 text-center text-muted-foreground">
+                                                        <div className="flex flex-col items-center">
+                                                            <Loader2 className="h-8 w-8 text-muted-foreground/30 mb-2" />
+                                                            <span>No hay servicios catalogados para este taller.</span>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : (
+                                                servicios.map((servicio) => (
+                                                    <TableRow key={servicio.id}>
+                                                        <TableCell className="font-medium">{servicio.nombre}</TableCell>
+                                                        <TableCell className="text-muted-foreground text-sm">{servicio.descripcion || '-'}</TableCell>
+                                                        <TableCell className="text-right font-mono">${Number(servicio.precio).toFixed(2)}</TableCell>
+                                                        <TableCell>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                                                onClick={() => handleDeleteServicio(servicio.id)}
+                                                                disabled={loadingServicios}
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))
+                                            )}
+                                        </TableBody>
+                                    </Table>
                                 </div>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Mensaje Informe (PDF)</Label>
-                                <textarea
-                                    name="mensaje_informe"
-                                    className="w-full min-h-[80px] p-2 rounded-md border text-sm"
-                                    value={editingTaller.mensaje_informe || ''}
-                                    onChange={handleChange as any}
-                                    placeholder="Gracias por confiar en nosotros."
-                                />
-                            </div>
-                        </div>
+                            </TabsContent>
+                        </Tabs>
                     )}
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setEditingTaller(null)} disabled={saving}>
-                            Cancelar
+                    <DialogFooter className="mt-4 shrink-0 border-t pt-4">
+                        <Button variant="outline" onClick={() => setEditingTaller(null)} disabled={saving || isUploading}>
+                            Cerrar
                         </Button>
-                        <Button onClick={handleSave} disabled={saving}>
-                            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                            Guardar Cambios
-                        </Button>
+                        {activeTab === 'general' && (
+                            <Button onClick={handleSave} disabled={saving || isUploading}>
+                                {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                                Guardar Cambios
+                            </Button>
+                        )}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>
     );
 }
+

@@ -42,8 +42,12 @@ export default function Metrics() {
                 if (bData) setBicicletas(bData);
 
                 // 2. Fetch completed/charged services matching date range, excluding soft deletes
-                const startStr = `${dateStart}T00:00:00.000Z`;
-                const endStr = `${dateEnd}T23:59:59.999Z`;
+                const startDate = new Date(`${dateStart}T00:00:00`);
+                const endDate = new Date(`${dateEnd}T23:59:59.999`);
+                const isoStart = startDate.toISOString();
+                const isoEnd = endDate.toISOString();
+
+                console.log('Filtros enviados a Supabase:', { tallerId, fechaInicio: isoStart, fechaFin: isoEnd });
 
                 const { data: sData, error: sError } = await supabase
                     .from('servicios')
@@ -51,8 +55,10 @@ export default function Metrics() {
                     .eq('taller_id', tallerId)
                     .is('eliminado_en', null)
                     .in('estado', ['Completed', 'completed', 'finalizado', 'entregado'])
-                    .gte('fecha_entrega', startStr)
-                    .lte('fecha_entrega', endStr);
+                    .gte('fecha_entrega', isoStart)
+                    .lte('fecha_entrega', isoEnd);
+
+                console.log('Data cruda de Supabase:', sData);
 
                 if (sError) {
                     console.error("Error fetching services:", sError);
@@ -101,7 +107,11 @@ export default function Metrics() {
         const brandCounts: Record<string, number> = {};
 
         filtered.forEach(s => {
-            totalRevenue += s.precio_total || 0;
+            const precioTotal = Number(s.precio_total) || 0;
+            const precioBase = Number(s.precio_base) || 0;
+
+            totalRevenue += precioTotal > 0 ? precioTotal : precioBase;
+            totalLabor += precioBase;
             uniqueBikes.add(s.bicicleta_id);
 
             // Analyze Service Types
@@ -114,7 +124,7 @@ export default function Metrics() {
             // Analyze Brands (Dynamic from modelo)
             const bike = bicicletas.find(b => b.id === s.bicicleta_id);
             let brandName = "Desconocida";
-            if (bike && bike.modelo && bike.modelo.trim()) {
+            if (bike && bike.modelo && typeof bike.modelo === 'string' && bike.modelo.trim()) {
                 brandName = bike.modelo.trim().split(/\s+/)[0];
             }
             brandName = brandName.trim();
@@ -126,12 +136,12 @@ export default function Metrics() {
             brandCounts[brandName] = (brandCounts[brandName] || 0) + 1;
 
             // Analyze Items
-            const items = s.items_extra || [];
-            totalLabor += s.precio_base || 0;
+            const items = Array.isArray(s.items_extra) ? s.items_extra : [];
 
             items.forEach((item: any) => {
-                if (item.categoria === 'part') {
-                    totalPartsRevenue += item.precio || 0;
+                const itemPrecio = Number(item.precio) || 0;
+                if (item.categoria === 'part' || item.categoria === 'producto' || item.categoria === 'repuesto') {
+                    totalPartsRevenue += itemPrecio;
                     totalPartsCount++;
                     const name = (item.descripcion || '').trim();
                     if (name) productCounts[name] = (productCounts[name] || 0) + 1;
@@ -143,7 +153,7 @@ export default function Metrics() {
                     else if (lower.includes('piñon') || lower.includes('piñón') || lower.includes('cassette') || lower.includes('plato') || lower.includes('cambio') || lower.includes('shifter')) trendCategories['Transmisión']++;
                     else trendCategories['Otros']++;
                 } else {
-                    totalLabor += item.precio || 0;
+                    totalLabor += itemPrecio;
                 }
             });
         });

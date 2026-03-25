@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { useDataStore } from '@/store/dataStore';
 import { useAuthStore } from '@/store/authStore';
 import {
     BarChart3,
@@ -19,28 +19,60 @@ import {
 } from 'lucide-react';
 
 export default function Metrics() {
-    const servicios = useDataStore(s => s.servicios);
-    const bicicletas = useDataStore(s => s.bicicletas);
-    const isHydrating = useDataStore(s => s.isHydrating);
     const tallerId = useAuthStore(s => s.taller_id);
 
     const [dateStart, setDateStart] = useState<string>(new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]);
     const [dateEnd, setDateEnd] = useState<string>(new Date().toISOString().split('T')[0]);
 
+    const [servicios, setServicios] = useState<any[]>([]);
+    const [bicicletas, setBicicletas] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchMetricsData = async () => {
+            if (!tallerId) return;
+            setIsLoading(true);
+            try {
+                // 1. Fetch bicicletas for this tenant
+                const { data: bData } = await supabase
+                    .from('bicicletas')
+                    .select('*')
+                    .eq('taller_id', tallerId);
+
+                if (bData) setBicicletas(bData);
+
+                // 2. Fetch completed/charged services matching date range, excluding soft deletes
+                const startStr = `${dateStart}T00:00:00.000Z`;
+                const endStr = `${dateEnd}T23:59:59.999Z`;
+
+                const { data: sData, error: sError } = await supabase
+                    .from('servicios')
+                    .select('*')
+                    .eq('taller_id', tallerId)
+                    .is('eliminado_en', null)
+                    .in('estado', ['Completed', 'completed', 'finalizado', 'entregado'])
+                    .gte('fecha_entrega', startStr)
+                    .lte('fecha_entrega', endStr);
+
+                if (sError) {
+                    console.error("Error fetching services:", sError);
+                } else {
+                    setServicios(sData || []);
+                }
+            } catch (err) {
+                console.error("Data fetch error in Metrics:", err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchMetricsData();
+    }, [tallerId, dateStart, dateEnd]);
+
     // --- FILTER & ANALYTICS ENGINE ---
     const stats = useMemo(() => {
-        const start = new Date(dateStart).getTime();
-        const end = new Date(dateEnd).getTime() + (24 * 60 * 60 * 1000);
-
-        // Only completed/finalized services
-        const completedStatuses = ['completed', 'finalizado', 'entregado'];
-        const filtered = servicios.filter(s => {
-            if (s.taller_id !== tallerId) return false;
-            if (s.eliminado_en) return false;
-            if (!completedStatuses.includes((s.estado || '').toLowerCase())) return false;
-            const date = new Date(s.fecha_entrega || s.fecha_ingreso || 0).getTime();
-            return date >= start && date <= end;
-        });
+        // Services are already filtered by Date, Status, Tenant, and Trash from backend
+        const filtered = servicios;
 
         // 1. Financial KPIs
         let totalRevenue = 0;
@@ -182,9 +214,9 @@ export default function Metrics() {
             laborPerc,
             partsPerc
         };
-    }, [servicios, bicicletas, dateStart, dateEnd]);
+    }, [servicios, bicicletas]);
 
-    if (isHydrating) {
+    if (isLoading) {
         return <div className="p-8 text-center text-muted-foreground">Cargando métricas...</div>;
     }
 

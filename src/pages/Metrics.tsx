@@ -15,8 +15,91 @@ import {
     ArrowDownRight,
     Brain,
     Ticket,
-    Tag
+    Tag,
+    Loader2
 } from 'lucide-react';
+
+// --- SEMANTIC ENGINE HELPERS ---
+export function parseItemQuantityAndName(rawDesc: string) {
+    let name = rawDesc.trim();
+    let qty = 1;
+
+    if (!name) return { name: "Desconocido", qty: 1 };
+
+    const lower = name.toLowerCase();
+
+    // Golden Tubeless Rule
+    if (lower.includes('tubeless') || lower.includes('tubelizado') || lower.includes('liquido') || lower.includes('líquido')) {
+        const match = lower.match(/(?:x\s*|por\s*)(\d+)\s*$/i);
+        if (match) {
+            qty = parseInt(match[1], 10);
+        } else if (lower.includes('x2') || lower.includes('x 2') || lower.includes('ambas') || lower.includes('dos')) {
+            qty = 2;
+        }
+        return { name: "Recargas Tubeless", qty };
+    }
+
+    // Generic Multiplier Regex (e.g., "x2", "x 3", "x12")
+    const match = name.match(/\s*x\s*(\d+)$/i);
+    if (match) {
+        qty = parseInt(match[1], 10);
+        name = name.replace(/\s*x\s*(\d+)$/i, '').trim();
+    }
+
+    // Apply Semantic Normalization
+    name = normalizeItemName(name);
+
+    return { name, qty };
+}
+
+export function normalizeItemName(rawName: string): string {
+    let lower = rawName.toLowerCase().trim();
+
+    // 1. Hardcoded Rules (Master Names)
+    if (lower.includes('b05s') && (lower.includes('pastilla') || lower.includes('freno'))) {
+        return 'Pastillas Shimano B05S';
+    }
+    if (lower.includes('hg601')) return 'Cadena Shimano 11v (HG601)';
+    if (lower.includes('hg40')) return 'Cadena Shimano 8v (HG40)';
+    if (lower.includes('nx') && lower.includes('cadena')) return 'Cadena SRAM NX';
+
+    // 2. Remove Noise Words
+    const noiseWords = ['de resina', 'mtb', 'ruta', 'compatible con'];
+    noiseWords.forEach(word => {
+        lower = lower.replace(new RegExp(word, 'gi'), '');
+    });
+
+    // Clean multi-spaces left by replacements
+    lower = lower.replace(/\s+/g, ' ').trim();
+
+    // 3. Capitalize Each Word (Title Case)
+    if (lower.length === 0) return "Desconocido";
+
+    return lower.split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+}
+
+export function getSemanticCategory(rawDesc: string): string {
+    const lower = rawDesc.toLowerCase();
+
+    const dic = {
+        'Transmisión': ['piñon', 'piñón', 'cadena', 'plato', 'palanca', 'caja pedalera', 'cambio', 'fusible', 'descarrilador', 'polea', 'hg', 'sram', 'shimano', 'cassette', 'shifter'],
+        'Frenos': ['pastilla', 'patin', 'disco', 'freno', 'purgado', 'ducto', 'liquido de freno', 'avid', 'cable'],
+        'Neumáticos y Ruedas': ['tubeless', 'tubelizado', 'camara', 'cámara', 'cubierta', 'aro', 'maza', 'centrado', 'rayo', 'roval', 'parche'],
+        'Suspensión': ['horquilla', 'shock', 'brain', 'rockshox', 'reten', 'retén'],
+        'Cockpit y Componentes': ['stem', 'manubrio', 'asiento', 'tija', 'pedal', 'cinta'],
+        'Mantenimiento General': ['lubricante', 'm.o.', 'limpieza', 'service', 'ajuste']
+    };
+
+    for (const [category, keywords] of Object.entries(dic)) {
+        if (keywords.some(kw => lower.includes(kw))) {
+            return category;
+        }
+    }
+
+    return 'Otros';
+}
 
 export default function Metrics() {
     const tallerId = useAuthStore(s => s.taller_id);
@@ -51,10 +134,10 @@ export default function Metrics() {
 
                 const { data: sData, error: sError } = await supabase
                     .from('servicios')
-                    .select('*')
+                    .select('*, servicio_items(*)')
                     .eq('taller_id', tallerId)
                     .is('eliminado_en', null)
-                    .in('estado', ['Completed', 'completed', 'finalizado', 'entregado'])
+                    .in('estado', ['Completed', 'completed', 'finalizado', 'entregado', 'ready', 'Ready'])
                     .gte('fecha_entrega', isoStart)
                     .lte('fecha_entrega', isoEnd);
 
@@ -92,11 +175,12 @@ export default function Metrics() {
 
         // 3. Workshop Trends (Macro)
         const trendCategories: Record<string, number> = {
-            'Cadenas': 0,
-            'Frenos': 0,
-            'Ruedas': 0,
             'Transmisión': 0,
-            'Servicios': 0,
+            'Frenos': 0,
+            'Neumáticos y Ruedas': 0,
+            'Suspensión': 0,
+            'Cockpit y Componentes': 0,
+            'Mantenimiento General': 0,
             'Otros': 0
         };
 
@@ -136,22 +220,23 @@ export default function Metrics() {
             brandCounts[brandName] = (brandCounts[brandName] || 0) + 1;
 
             // Analyze Items
-            const items = Array.isArray(s.items_extra) ? s.items_extra : [];
+            const items = Array.isArray(s.servicio_items) ? s.servicio_items : (Array.isArray(s.items_extra) ? s.items_extra : []);
 
             items.forEach((item: any) => {
                 const itemPrecio = Number(item.precio) || 0;
                 if (item.categoria === 'part' || item.categoria === 'producto' || item.categoria === 'repuesto') {
-                    totalPartsRevenue += itemPrecio;
-                    totalPartsCount++;
-                    const name = (item.descripcion || '').trim();
-                    if (name) productCounts[name] = (productCounts[name] || 0) + 1;
+                    const desc = (item.descripcion || '').trim();
+                    if (!desc) return;
 
-                    const lower = (item.descripcion || '').toLowerCase();
-                    if (lower.includes('cadena')) trendCategories['Cadenas']++;
-                    else if (lower.includes('pastilla') || lower.includes('freno') || lower.includes('disco') || lower.includes('cable') || lower.includes('ducto')) trendCategories['Frenos']++;
-                    else if (lower.includes('cubierta') || lower.includes('tubeless') || lower.includes('camara') || lower.includes('cámara') || lower.includes('parche')) trendCategories['Ruedas']++;
-                    else if (lower.includes('piñon') || lower.includes('piñón') || lower.includes('cassette') || lower.includes('plato') || lower.includes('cambio') || lower.includes('shifter')) trendCategories['Transmisión']++;
-                    else trendCategories['Otros']++;
+                    const { name, qty } = parseItemQuantityAndName(desc);
+
+                    totalPartsRevenue += itemPrecio;
+                    totalPartsCount += qty;
+
+                    productCounts[name] = (productCounts[name] || 0) + qty;
+
+                    const category = getSemanticCategory(desc);
+                    trendCategories[category] += qty;
                 } else {
                     totalLabor += itemPrecio;
                 }
@@ -226,10 +311,6 @@ export default function Metrics() {
         };
     }, [servicios, bicicletas]);
 
-    if (isLoading) {
-        return <div className="p-8 text-center text-muted-foreground">Cargando métricas...</div>;
-    }
-
     return (
         <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
             {/* HEADER & CONTROLS */}
@@ -246,6 +327,7 @@ export default function Metrics() {
                     <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-muted-foreground" />
                         <span className="text-sm font-semibold text-muted-foreground">Período:</span>
+                        {isLoading && <Loader2 className="w-4 h-4 text-primary animate-spin" />}
                     </div>
                     <div className="flex items-center gap-2">
                         <Input type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} className="bg-white h-8 w-fit text-xs" />
@@ -450,20 +532,24 @@ function KPICard({ title, value, icon, sublabel, trend, trendUp, className }: an
 
 function getCategoryColor(cat: string) {
     switch (cat) {
-        case 'Cadenas': return 'bg-secondary';
-        case 'Frenos': return 'bg-red-500';
-        case 'Ruedas': return 'bg-blue-500';
         case 'Transmisión': return 'bg-purple-500';
+        case 'Frenos': return 'bg-red-500';
+        case 'Neumáticos y Ruedas': return 'bg-blue-500';
+        case 'Suspensión': return 'bg-amber-500';
+        case 'Cockpit y Componentes': return 'bg-emerald-500';
+        case 'Mantenimiento General': return 'bg-teal-500';
         default: return 'bg-slate-400';
     }
 }
 
 function getCategoryIcon(cat: string) {
     switch (cat) {
-        case 'Cadenas': return '⛓️';
-        case 'Frenos': return '🛑';
-        case 'Ruedas': return '🔘';
         case 'Transmisión': return '⚙️';
+        case 'Frenos': return '🛑';
+        case 'Neumáticos y Ruedas': return '🔘';
+        case 'Suspensión': return '🪱';
+        case 'Cockpit y Componentes': return '💺';
+        case 'Mantenimiento General': return '🧰';
         default: return '📦';
     }
 }

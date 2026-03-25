@@ -4,51 +4,6 @@ import { cleanItemName } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { getBase64ImageFromUrl } from '@/lib/pdfGenerator';
 
-const TASKS_SPORT = [
-  "• Lavado de bicicleta y todos sus componentes",
-  "TRANSMISIÓN:",
-  "- Chequeo de desgaste",
-  "- Limpieza",
-  "- Lubricación",
-  "RUEDAS:",
-  "- Control de desgaste",
-  "- Control de presión",
-  "- No incluye centrado ni mantenimiento de maza y body",
-  "FRENOS:",
-  "- Regulado",
-  "- Limpieza de pastillas y discos",
-  "- No incluye: purgado ni cambio de líquido o componentes de ser necesario",
-  "CAMBIOS:",
-  "- Chequeo de desgaste",
-  "- Regulación",
-  "- Lubricación"
-];
-
-const TASKS_EXPERT = [
-  "• Lavado de bicicleta y todos sus componentes",
-  "TRANSMISIÓN:",
-  "- Chequeo de desgaste",
-  "- Limpieza profunda en batea de ultrasonido",
-  "- Lubricación",
-  "RUEDAS:",
-  "- Control de desgaste",
-  "- Chequeo Líquido Tubeless",
-  "- Control de presión",
-  "- No incluye centrado ni mantenimiento de maza y body",
-  "FRENOS:",
-  "- Regulado",
-  "- Limpieza de pastillas y discos",
-  "- No incluye: purgado ni cambio de líquido o componentes de ser necesario",
-  "CAMBIOS:",
-  "- Chequeo de desgaste",
-  "- Regulación",
-  "- Lubricación",
-  "CAJA PEDALERA Y JUEGO DE DIRECCIÓN:",
-  "- Desarme completo",
-  "- Limpieza",
-  "- Engrase general de rodamientos"
-];
-
 export const printServiceReport = async (
   job: any,
   clientName: string = 'Cliente',
@@ -71,46 +26,62 @@ export const printServiceReport = async (
   }
 
   // --- Logic ---
-  const serviceTypeRaw = job.service_type || job.serviceType || "General";
+  const serviceTypeRaw = job.service_type || job.serviceType || job.tipo_servicio || "General";
   const serviceType = serviceTypeRaw.toUpperCase();
-  let serviceTasks: string[] = [];
 
-  if (serviceType.includes('SPORT')) serviceTasks = TASKS_SPORT;
-  else if (serviceType.includes('EXPERT')) serviceTasks = TASKS_EXPERT;
-  // Logic for "OTRO" or undefined types: Use notes as the breakdown
-  else if (job.notes || job.mechanic_notes) {
-    const notesStr = job.notes || job.mechanic_notes;
-    serviceTasks = notesStr.split('\n').filter((t: string) => t.trim().length > 0);
-  }
+  // 1. Build the main labor description block
+  // Priority: rich HTML from catalog > plain notes > nothing
+  const descripcionHtml: string = job.descripcion_catalogo || job.descripcion_html || '';
+  const notesPlain: string = job.notes || job.mechanic_notes || '';
 
-  const basePrice = Number(job.basePrice) || 0;
-  const extraItems = job.extraItems || [];
+  const basePrice = Number(job.basePrice) || Number(job.precio_base) || 0;
+  const extraItems = job.extraItems || job.items_extra || [];
 
-
-  // Build Rows
-  const laborRows: any[] = [];
-  const extraLaborRows: any[] = [];
-  const productRows: any[] = [];
 
   // --- 1. LABOR (Mano de Obra) ---
-  // Header Row
-  if (serviceType !== 'OTRO' && serviceType !== 'OTHER') {
-    laborRows.push({ description: `SERVICE ${serviceType}`, price: basePrice, isHeader: true });
+  // Build title row (always)
+  const laborTitleRow = serviceType !== 'OTRO' && serviceType !== 'OTHER'
+    ? `<tr><td style="padding: 8px 0 4px 0; font-weight: 700; font-size: 14px; color: #333;">SERVICE ${serviceType}</td><td style="padding: 8px 0 4px 0; text-align: right; font-weight: 700; font-size: 14px;">$ ${basePrice.toLocaleString('es-AR')}</td></tr>`
+    : '';
+
+  // Build description block: prefer HTML, fall back to plain lines
+  let laborDescriptionBlock = '';
+  if (descripcionHtml && descripcionHtml.trim() !== '<p></p>') {
+    // Inject HTML directly — html2pdf uses Chromium-like rendering so CSS works
+    laborDescriptionBlock = `
+      <tr><td colspan="2" style="padding: 8px 0 4px 0;">
+        <div style="font-size: 11px; color: #555; line-height: 1.7;
+                    padding-left: 4px;
+                    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
+          <style>
+            .labor-desc ul { margin: 4px 0; padding-left: 18px; }
+            .labor-desc li { margin-bottom: 2px; }
+            .labor-desc strong, .labor-desc b { font-weight: 700; color: #333; }
+            .labor-desc em { font-style: italic; }
+            .labor-desc p { margin: 3px 0; }
+          </style>
+          <div class="labor-desc">${descripcionHtml}</div>
+        </div>
+      </td></tr>`;
+  } else if (notesPlain) {
+    // Fallback: plain text split by newlines
+    laborDescriptionBlock = notesPlain
+      .split('\n')
+      .filter((t: string) => t.trim())
+      .map((t: string) => {
+        if (t.trim().endsWith(':')) {
+          return `<tr><td style="padding: 10px 0 2px 0; font-weight: 700; font-size: 11px; color: #555; text-transform: uppercase;">${t}</td><td></td></tr>`;
+        }
+        const clean = t.replace(/^[-•]\s*/, '');
+        return `<tr><td style="padding: 1px 0 1px 15px; font-size: 11px; color: #666; line-height: 1.4;">• ${clean}</td><td></td></tr>`;
+      })
+      .join('');
   }
 
-  // Task Rows (Breakdown)
-  serviceTasks.forEach(task => {
-    // Detect Header vs Item
-    if (task.trim().endsWith(':')) {
-      laborRows.push({ description: task, isTaskHeader: true });
-    } else {
-      // Clean up bullet if present for consistent rendering
-      const cleanTask = task.replace(/^[-•]\s*/, '');
-      laborRows.push({ description: cleanTask, isTask: true, isMainBullet: task.includes('•') });
-    }
-  });
-
   // --- 2. EXTRA LABOR & PRODUCTS ---
+  const extraLaborRows: Array<{ description: string; price: number; isExtraLabor: boolean }> = [];
+  const productRows: Array<{ description: string; price: number; isProduct: boolean }> = [];
+
   extraItems.forEach((item: any) => {
     if (item.category === 'part') {
       productRows.push({
@@ -167,31 +138,14 @@ export const printServiceReport = async (
         </div>
       </div>
 
-      <!-- SECTION 1: MANO DE OBRA (Standard) -->
+      <!-- SECTION 1: MANO DE OBRA -->
       <div style="margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
         <span style="font-size: 12px; font-weight: 700; color: ${primaryColor}; text-transform: uppercase; letter-spacing: 1px;">MANO DE OBRA</span>
       </div>
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
         <tbody>
-          ${laborRows.map(row => {
-    const price = row.price > 0 ? `$ ${row.price.toLocaleString('es-AR')}` : '';
-
-    if (row.isHeader) {
-      // Main Service Title (e.g. SERVICE SPORT)
-      return `<tr><td style="padding: 8px 0 4px 0; font-weight: 700; font-size: 14px; color: #333;">${row.description}</td><td style="padding: 8px 0 4px 0; text-align: right; font-weight: 700; font-size: 14px;">${price}</td></tr>`;
-    }
-    if (row.isTaskHeader) {
-      // Sub-category (e.g. TRANSMISIÓN:)
-      return `<tr><td style="padding: 10px 0 2px 0; font-weight: 700; font-size: 11px; color: #555; text-transform: uppercase;">${row.description}</td><td></td></tr>`;
-    }
-    if (row.isTask) {
-      // Specific task item
-      const padding = row.isMainBullet ? "5px 0 5px 0" : "1px 0 1px 15px";
-      const weight = row.isMainBullet ? "600" : "400";
-      return `<tr><td style="padding: ${padding}; font-size: 11px; color: #666; font-weight: ${weight}; line-height: 1.4;">• ${row.description}</td><td></td></tr>`;
-    }
-    return '';
-  }).join('')}
+          ${laborTitleRow}
+          ${laborDescriptionBlock}
         </tbody>
       </table>
 

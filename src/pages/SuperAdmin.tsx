@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Pencil, Loader2, Save, UploadCloud, Plus, Trash2, Edit2, Check, X } from 'lucide-react';
+import { RichTextEditor } from '@/components/RichTextEditor';
 
 interface Taller {
     id: string;
@@ -468,12 +469,12 @@ export default function SuperAdmin() {
                                                 />
                                             </div>
                                             <div className="flex-1 space-y-1">
-                                                <Label className="text-xs">Descripción</Label>
-                                                <Input
-                                                    className="h-8 text-sm"
+                                                <Label className="text-xs">Descripción (Rich Text)</Label>
+                                                <RichTextEditor
                                                     value={nuevoServicio.descripcion}
-                                                    onChange={e => setNuevoServicio({ ...nuevoServicio, descripcion: e.target.value })}
-                                                    placeholder="Ej: Incluye filtro y mano de obra"
+                                                    onChange={(html) => setNuevoServicio({ ...nuevoServicio, descripcion: html })}
+                                                    placeholder="Incluye: limpieza, lubricación..."
+                                                    minHeight="80px"
                                                 />
                                             </div>
                                             <div className="w-28 space-y-1">
@@ -539,11 +540,11 @@ export default function SuperAdmin() {
                                                                         className="h-8 shadow-none"
                                                                     />
                                                                 </TableCell>
-                                                                <TableCell>
-                                                                    <Input
+                                                                <TableCell className="align-top">
+                                                                    <RichTextEditor
                                                                         value={editForm.descripcion}
-                                                                        onChange={(e) => setEditForm({ ...editForm, descripcion: e.target.value })}
-                                                                        className="h-8 shadow-none"
+                                                                        onChange={(html) => setEditForm({ ...editForm, descripcion: html })}
+                                                                        minHeight="60px"
                                                                     />
                                                                 </TableCell>
                                                                 <TableCell>
@@ -574,7 +575,12 @@ export default function SuperAdmin() {
                                                         ) : (
                                                             <>
                                                                 <TableCell className="font-medium">{servicio.nombre}</TableCell>
-                                                                <TableCell className="text-muted-foreground text-sm">{servicio.descripcion || '-'}</TableCell>
+                                                                <TableCell className="text-muted-foreground text-sm max-w-xs">
+                                                                    {servicio.descripcion
+                                                                        ? <span dangerouslySetInnerHTML={{ __html: servicio.descripcion }} className="prose prose-xs max-w-none" />
+                                                                        : '-'
+                                                                    }
+                                                                </TableCell>
                                                                 <TableCell className="text-right font-mono">${Number(servicio.precio).toFixed(2)}</TableCell>
                                                                 <TableCell className="whitespace-nowrap flex items-center justify-end gap-1">
                                                                     <Button

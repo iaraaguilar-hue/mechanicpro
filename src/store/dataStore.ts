@@ -46,6 +46,7 @@ export interface SupabaseService {
     carrera_id?: string | null;
     alertas_ocultas?: string[];
     items_extra?: { id: string; descripcion: string; precio: number; categoria?: string }[];
+    descripcion_catalogo?: string | null;
 }
 
 export interface SupabaseCarrera {
@@ -141,11 +142,12 @@ export const useDataStore = create<DataState>((set, get) => ({
                 console.error('[DataStore] ⚠️ Error al obtener carreras:', resCar.error);
             }
 
-            const [resC, resB, resS, resR] = await Promise.all([
+            const [resC, resB, resS, resR, resCat] = await Promise.all([
                 supabase.from('clientes').select('*').eq('taller_id', tallerId).order('numero_cliente', { ascending: true }),
                 supabase.from('bicicletas').select('*').eq('taller_id', tallerId),
                 supabase.from('servicios').select('*, servicio_items(*)').eq('taller_id', tallerId).is('eliminado_en', null),
                 supabase.from('recordatorios').select('*').eq('taller_id', tallerId),
+                supabase.from('catalogo_servicios').select('*').eq('taller_id', tallerId),
             ]);
 
             console.log('[DataStore] Respuesta Clientes:', resC.data?.length, resC.error);
@@ -154,14 +156,21 @@ export const useDataStore = create<DataState>((set, get) => ({
             console.log('[DataStore] Respuesta Recordatorios:', resR.data?.length, resR.error);
             console.log('[DataStore] Respuesta Carreras (Global):', resCar.data?.length, resCar.error);
 
-            const errors = [resC, resB, resS, resR].filter(r => r.error).map(r => r.error!.message);
+            const errors = [resC, resB, resS, resR, resCat].filter(r => r.error).map(r => r.error!.message);
             if (errors.length > 0) throw new Error(`Errores Supabase: ${errors.join(' | ')}`);
 
+            const catalogo = resCat.data || [];
+
             // Map servicio_items (from Supabase JOIN) → items_extra (UI-expected field)
-            const serviciosMapeados: SupabaseService[] = (resS.data || []).map((s: any) => ({
-                ...s,
-                items_extra: s.servicio_items || [],
-            }));
+            // Inject descripcion_catalogo from local cross-reference
+            const serviciosMapeados: SupabaseService[] = (resS.data || []).map((s: any) => {
+                const catMatch = catalogo.find((c: any) => c.nombre === s.tipo_servicio);
+                return {
+                    ...s,
+                    items_extra: s.servicio_items || [],
+                    descripcion_catalogo: catMatch ? catMatch.descripcion : null,
+                };
+            });
 
             set({
                 clientes: (resC.data as SupabaseClient[]) ?? [],

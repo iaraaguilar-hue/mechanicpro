@@ -25,7 +25,7 @@
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 13 89% 57%;
+    --accent: var(--theme-primary);
     --accent-foreground: 210 40% 98%;
 
     --destructive: 0 84.2% 60.2%;
@@ -33,7 +33,7 @@
 
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 198 100% 48%;
+    --ring: var(--theme-primary);
 
     --radius: 0.5rem;
   }
@@ -59,8 +59,8 @@
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
 
-    /* Accent is also Orange for active states */
-    --accent: 13 89% 57%;
+    /* Accent follows theme */
+    --accent: var(--theme-primary);
     --accent-foreground: 210 40% 98%;
 
     --destructive: 0 62.8% 30.6%;
@@ -68,7 +68,7 @@
 
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 198 100% 48%;
+    --ring: var(--theme-primary);
   }
 }
 

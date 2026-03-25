@@ -17,7 +17,7 @@ export function SuccessModal({ message, onClose }: SuccessModalProps) {
             >
                 <div className="flex justify-center mb-5">
                     <div className="bg-orange-50 rounded-full p-4">
-                        <CheckCircle className="w-12 h-12 text-orange-500" strokeWidth={1.5} />
+                        <CheckCircle className="w-12 h-12 text-primary" strokeWidth={1.5} />
                     </div>
                 </div>
 
@@ -31,7 +31,7 @@ export function SuccessModal({ message, onClose }: SuccessModalProps) {
 
                 <button
                     onClick={onClose}
-                    className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl transition-colors duration-200"
+                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-3 rounded-xl transition-colors duration-200"
                 >
                     Aceptar
                 </button>

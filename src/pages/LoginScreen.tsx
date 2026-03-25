@@ -159,7 +159,7 @@ export default function LoginScreen() {
                             <input
                                 type="email"
                                 placeholder="Email"
-                                className={`w-full bg-transparent border-0 border-b-2 ${error ? 'border-red-500' : 'border-gray-200'} focus:ring-0 focus:border-orange-500 px-1 py-2 text-gray-900 placeholder-gray-400 focus:outline-none transition-colors`}
+                                className={`w-full bg-transparent border-0 border-b-2 ${error ? 'border-red-500' : 'border-gray-200'} focus:ring-0 focus:border-primary px-1 py-2 text-gray-900 placeholder-gray-400 focus:outline-none transition-colors`}
                                 value={email}
                                 onChange={(e) => {
                                     setEmail(e.target.value);
@@ -176,7 +176,7 @@ export default function LoginScreen() {
                                 <input
                                     type={showPassword ? "text" : "password"}
                                     placeholder="Contraseña"
-                                    className={`w-full bg-transparent border-0 border-b-2 ${error ? 'border-red-500' : 'border-gray-200'} focus:ring-0 focus:border-orange-500 px-1 py-2 pr-10 text-gray-900 placeholder-gray-400 focus:outline-none transition-colors`}
+                                    className={`w-full bg-transparent border-0 border-b-2 ${error ? 'border-red-500' : 'border-gray-200'} focus:ring-0 focus:border-primary px-1 py-2 pr-10 text-gray-900 placeholder-gray-400 focus:outline-none transition-colors`}
                                     value={password}
                                     onChange={(e) => {
                                         setPassword(e.target.value);
@@ -214,7 +214,7 @@ export default function LoginScreen() {
                             <label className="flex items-center gap-2 cursor-pointer group">
                                 <input
                                     type="checkbox"
-                                    className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                                    className="rounded border-gray-300 text-primary focus:ring-primary"
                                     checked={rememberMe}
                                     onChange={(e) => setRememberMe(e.target.checked)}
                                 />
@@ -223,7 +223,7 @@ export default function LoginScreen() {
                             <button
                                 type="button"
                                 onClick={() => { setIsResetting(true); setError(""); }}
-                                className="hover:text-orange-600 transition-colors bg-transparent border-none p-0 cursor-pointer"
+                                className="hover:text-primary transition-colors bg-transparent border-none p-0 cursor-pointer"
                             >
                                 ¿Olvidaste tu contraseña?
                             </button>
@@ -234,7 +234,7 @@ export default function LoginScreen() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-orange-500 hover:bg-orange-600 text-white uppercase tracking-wider font-semibold py-3 rounded-md transition-all flex items-center justify-center gap-2 shadow-lg shadow-orange-500/30 disabled:opacity-70"
+                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground uppercase tracking-wider font-semibold py-3 rounded-md transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/30 disabled:opacity-70"
                     >
                         {loading ? (
                             <>

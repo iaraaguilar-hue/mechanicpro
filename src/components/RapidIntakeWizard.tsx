@@ -52,7 +52,7 @@ export function RapidIntakeWizard({ onComplete, trigger }: RapidIntakeWizardProp
             {trigger ? (
                 <div onClick={startFlow}>{trigger}</div>
             ) : (
-                <Button onClick={startFlow} className="bg-orange-600 hover:bg-orange-700 text-white font-medium px-6">
+                <Button onClick={startFlow} className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-6">
                     <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Cliente (Rápido)
                 </Button>
             )}

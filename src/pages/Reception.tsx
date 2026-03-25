@@ -11,7 +11,7 @@ export default function Reception() {
         <div className="max-w-4xl mx-auto space-y-12 py-10">
             <div className="text-center space-y-4">
                 <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 lg:text-5xl flex items-center justify-center gap-3">
-                    <UserPlus className="h-8 w-8 text-sky-500" />
+                    <UserPlus className="h-8 w-8 text-primary" />
                     Recepción de Clientes
                 </h1>
                 <p className="text-xl text-muted-foreground max-w-2xl mx-auto">

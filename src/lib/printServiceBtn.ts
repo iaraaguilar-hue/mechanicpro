@@ -61,6 +61,7 @@ export const printServiceReport = async (
   const taller = useAuthStore.getState().taller;
   const logoUrlRaw = taller?.logo_url || `${window.location.origin}/img/logo_full.png`;
   const primaryColor = taller?.color_primario || '#f25a30';
+  const politicaPago = taller?.politica_pago || '';
 
   // Transform to base64 to avoid html2canvas taint / CORS issues with Supabase Storage
   let logoBase64 = logoUrlRaw;
@@ -168,7 +169,7 @@ export const printServiceReport = async (
 
       <!-- SECTION 1: MANO DE OBRA (Standard) -->
       <div style="margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
-        <span style="font-size: 12px; font-weight: 700; color: #f97316; text-transform: uppercase; letter-spacing: 1px;">MANO DE OBRA</span>
+        <span style="font-size: 12px; font-weight: 700; color: ${primaryColor}; text-transform: uppercase; letter-spacing: 1px;">MANO DE OBRA</span>
       </div>
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
         <tbody>
@@ -212,7 +213,7 @@ export const printServiceReport = async (
       <!-- SECTION 2: PRODUCTOS (Only if exists) -->
       ${productRows.length > 0 ? `
         <div style="margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-top: 20px;">
-            <span style="font-size: 12px; font-weight: 700; color: #f97316; text-transform: uppercase; letter-spacing: 1px;">REPUESTOS E INSUMOS</span>
+            <span style="font-size: 12px; font-weight: 700; color: ${primaryColor}; text-transform: uppercase; letter-spacing: 1px;">REPUESTOS E INSUMOS</span>
         </div>
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
             <tbody>
@@ -231,7 +232,7 @@ export const printServiceReport = async (
          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div style="font-size: 14px; font-weight: 700; color: #333;">
               TOTAL MANO DE OBRA 
-              <span style="color: #333; text-transform: uppercase; font-weight: 700; font-size: 11px; margin-left: 8px;">(SOLO EFECTIVO O TRANSFERENCIA)</span>
+              ${politicaPago ? `<span style="color: #333; text-transform: uppercase; font-weight: 700; font-size: 11px; margin-left: 8px;">${politicaPago}</span>` : ''}
             </div>
             <div style="font-size: 16px; font-weight: 700; color: #333; font-family: monospace;">$ ${totalLabor.toLocaleString('es-AR')}</div>
          </div>

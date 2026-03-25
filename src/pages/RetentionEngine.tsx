@@ -125,7 +125,7 @@ export default function RetentionEngine() {
         <div className="space-y-8 animate-in fade-in duration-500">
             <div>
                 <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
-                    <BellRing className="w-8 h-8 text-sky-500" />
+                    <BellRing className="w-8 h-8 text-primary" />
                     Motor de Retención
                 </h1>
                 <p className="text-muted-foreground mt-1">Gestiona los vencimientos de componentes y genera re-compras.</p>
@@ -192,8 +192,8 @@ export default function RetentionEngine() {
                                             <Button variant="ghost" size="sm" asChild className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50">
                                                 <a
                                                     href={`https://wa.me/${alert.clientPhone.replace(/[^0-9]/g, '')}?text=${alert.isPreCarrera
-                                                            ? encodeURIComponent(`¡Hola ${alert.clientName}! Vi que se acerca el ${alert.carreraName}, ¿querés que le demos una revisada a la ${alert.bikeModel} antes de viajar?`)
-                                                            : ""
+                                                        ? encodeURIComponent(`¡Hola ${alert.clientName}! Vi que se acerca el ${alert.carreraName}, ¿querés que le demos una revisada a la ${alert.bikeModel} antes de viajar?`)
+                                                        : ""
                                                         }`}
                                                     target="_blank"
                                                     rel="noreferrer"

@@ -37,8 +37,8 @@ export default function JobCard({ job, client, bikeModel = 'Bicicleta' }: JobCar
             <CardHeader className="p-4 cursor-pointer bg-white" onClick={() => setExpanded(!expanded)}>
                 <div className="flex justify-between items-center">
                     <div className="flex items-center gap-4">
-                        <div className={`p-2 rounded-full ${isFinished ? 'bg-green-100' : 'bg-orange-100'}`}>
-                            {isFinished ? <CheckCircle className="w-5 h-5 text-green-600" /> : <Clock className="w-5 h-5 text-orange-500" />}
+                        <div className={`p-2 rounded-full ${isFinished ? 'bg-green-100' : 'bg-primary/20'}`}>
+                            {isFinished ? <CheckCircle className="w-5 h-5 text-green-600" /> : <Clock className="w-5 h-5 text-primary" />}
                         </div>
                         <div>
                             <CardTitle className="text-base font-bold text-slate-800">
@@ -55,7 +55,7 @@ export default function JobCard({ job, client, bikeModel = 'Bicicleta' }: JobCar
                     <div className="flex items-center gap-3">
                         <span className="font-bold text-slate-700">$ {total.toLocaleString('es-AR')}</span>
                         <Button variant="ghost" size="icon" onClick={handleDownload} title="Descargar PDF">
-                            <Download className="w-4 h-4 text-orange-600" />
+                            <Download className="w-4 h-4 text-primary" />
                         </Button>
                         {expanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
                     </div>

@@ -42,7 +42,7 @@ export default function Admin() {
     return (
         <div className="space-y-6">
             <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-                <Settings className="h-8 w-8 text-sky-500" />
+                <Settings className="h-8 w-8 text-primary" />
                 Configuración
             </h1>
             <p className="text-muted-foreground">Clientes con componentes vencidos o próximos a vencer (Hoy).</p>

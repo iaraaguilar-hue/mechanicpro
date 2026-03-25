@@ -178,7 +178,7 @@ export default function ServiceJob() {
             <div className="max-w-5xl mx-auto flex items-center justify-between mb-6">
                 <Button variant="ghost" onClick={() => navigate(-1)} className="gap-2"><ArrowLeft className="w-4 h-4" /> Volver</Button>
                 <div className="flex gap-2">
-                    <Button variant="outline" onClick={handleDownloadPDF} className="gap-2 bg-white text-orange-700 border-orange-200"><FileText className="w-4 h-4" /> PDF</Button>
+                    <Button variant="outline" onClick={handleDownloadPDF} className="gap-2 bg-white text-primary border-primary/30"><FileText className="w-4 h-4" /> PDF</Button>
 
                     {/* BOTÓN MORADO DE PRUEBA */}
                     <Button onClick={handleFinishJob} disabled={isSending} className="gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold border-2 border-purple-400">
@@ -206,7 +206,7 @@ export default function ServiceJob() {
                                         <div key={x} className="flex justify-between p-3 text-sm">
                                             <span className="flex items-center gap-2">
                                                 {i.description}
-                                                {i.category === 'part' && <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200 text-[10px]">Producto</Badge>}
+                                                {i.category === 'part' && <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px]">Producto</Badge>}
                                             </span>
                                             <span>$ {Number(i.price).toLocaleString('es-AR')}</span>
                                         </div>
@@ -216,7 +216,7 @@ export default function ServiceJob() {
                         </CardContent>
                     </Card>
                 </div>
-                <div><Card className="bg-blue-50 border-blue-200"><CardContent className="pt-6"><div className="flex justify-between items-end"><span className="font-bold text-lg">TOTAL</span><span className="text-3xl font-black text-blue-600">$ {(job.totalPrice || 0).toLocaleString('es-AR')}</span></div></CardContent></Card></div>
+                <div><Card className="bg-primary/10 border-primary/20"><CardContent className="pt-6"><div className="flex justify-between items-end"><span className="font-bold text-lg">TOTAL</span><span className="text-3xl font-black text-primary">$ {(job.totalPrice || 0).toLocaleString('es-AR')}</span></div></CardContent></Card></div>
             </div>
         </div>
     );

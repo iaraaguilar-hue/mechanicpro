@@ -18,6 +18,7 @@ interface Taller {
     color_primario: string;
     color_secundario: string;
     mensaje_informe: string;
+    politica_pago?: string;
     created_at?: string;
 }
 
@@ -171,6 +172,7 @@ export default function SuperAdmin() {
                     color_primario: editingTaller.color_primario,
                     color_secundario: editingTaller.color_secundario,
                     mensaje_informe: editingTaller.mensaje_informe,
+                    politica_pago: editingTaller.politica_pago,
                 })
                 .eq('id', editingTaller.id);
 
@@ -436,6 +438,16 @@ export default function SuperAdmin() {
                                             placeholder="Gracias por confiar en nosotros."
                                         />
                                     </div>
+                                    <div className="space-y-2">
+                                        <Label>Política de Pago (PDF)</Label>
+                                        <textarea
+                                            name="politica_pago"
+                                            className="w-full min-h-[80px] p-2 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                            value={editingTaller.politica_pago || ''}
+                                            onChange={handleChange as any}
+                                            placeholder="MANO DE OBRA SOLO EFECTIVO O TRANSFERENCIA"
+                                        />
+                                    </div>
                                 </div>
                             </TabsContent>
 
@@ -566,7 +578,7 @@ export default function SuperAdmin() {
                                                                 <TableCell className="text-right font-mono">${Number(servicio.precio).toFixed(2)}</TableCell>
                                                                 <TableCell className="whitespace-nowrap flex items-center justify-end gap-1">
                                                                     <Button
-                                                                        variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-500 hover:bg-blue-50"
+                                                                        variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/10"
                                                                         onClick={() => {
                                                                             setEditingServiceId(servicio.id);
                                                                             setEditForm({ nombre: servicio.nombre, descripcion: servicio.descripcion || '', precio: servicio.precio.toString() });

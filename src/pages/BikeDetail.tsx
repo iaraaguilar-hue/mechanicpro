@@ -195,7 +195,7 @@ export default function BikeDetail() {
                         <div>
                             <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
                                 {client?.nombre}
-                                <Button variant="ghost" size="icon" className="h-auto w-auto p-1 text-slate-400 hover:text-blue-600 self-center" onClick={handleEditClick}>
+                                <Button variant="ghost" size="icon" className="h-auto w-auto p-1 text-slate-400 hover:text-primary self-center" onClick={handleEditClick}>
                                     <Info className="h-7 w-7" />
                                 </Button>
                             </h1>
@@ -222,11 +222,11 @@ export default function BikeDetail() {
                                     className={cn(
                                         "flex flex-col items-start px-4 py-2 rounded-t-lg transition-all min-w-[140px] border-b-2",
                                         activeBikeId === b.id
-                                            ? "border-orange-500 bg-orange-50/50 text-orange-900"
+                                            ? "border-primary bg-primary/10 text-primary"
                                             : "border-transparent hover:bg-slate-50 text-slate-500"
                                     )}
                                 >
-                                    <span className={cn("font-bold text-sm", activeBikeId === b.id ? "text-orange-700" : "text-slate-700")}>
+                                    <span className={cn("font-bold text-sm", activeBikeId === b.id ? "text-primary" : "text-slate-700")}>
                                         {b.modelo}
                                     </span>
                                     <span className="text-[10px] uppercase tracking-wider">{b.marca}</span>
@@ -365,8 +365,8 @@ export default function BikeDetail() {
                                                 <AccordionItem key={service.id} value={`item-${service.id}`} className="border rounded-lg bg-card px-4">
                                                     <AccordionTrigger className="hover:no-underline py-3">
                                                         <div className="flex items-center gap-4 w-full text-left">
-                                                            <Badge variant={service.tipo_servicio === "Expert" ? "default" : "secondary"} className="w-20 justify-center">
-                                                                {service.tipo_servicio}
+                                                            <Badge variant={(service.tipo_servicio || "").toLowerCase() === "expert" ? "default" : "secondary"} className="w-20 justify-center">
+                                                                {(service.tipo_servicio || "OTRO").toUpperCase()}
                                                             </Badge>
                                                             <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-4 flex-1">
                                                                 <span className="font-semibold text-slate-800">
@@ -402,7 +402,7 @@ export default function BikeDetail() {
                                                                         <div>
                                                                             <div className="font-semibold text-slate-700 mb-1 flex items-center gap-1"><span className="text-xs">🛠️</span> MANO DE OBRA</div>
                                                                             <div className="flex justify-between items-center text-slate-600 pl-2">
-                                                                                <span>Service Base ({service.tipo_servicio})</span>
+                                                                                <span>Service Base ({(service.tipo_servicio || "OTRO").toUpperCase()})</span>
                                                                                 <span className="font-mono">$ {service.precio_base?.toLocaleString("es-AR") || 0}</span>
                                                                             </div>
                                                                             {laborItems.map((item: any) => (
@@ -419,7 +419,7 @@ export default function BikeDetail() {
 
                                                                         <div className="bg-slate-100 -mx-3 -mb-3 p-3 mt-2 border-t border-slate-200 flex justify-between items-center rounded-b-lg">
                                                                             <span className="font-bold text-slate-900">TOTAL FINAL</span>
-                                                                            <span className="text-lg font-black text-blue-600">$ {service.precio_total?.toLocaleString("es-AR") || 0}</span>
+                                                                            <span className="text-lg font-black text-primary">$ {service.precio_total?.toLocaleString("es-AR") || 0}</span>
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -436,7 +436,7 @@ export default function BikeDetail() {
                                                             <Button
                                                                 variant="outline"
                                                                 size="sm"
-                                                                className="gap-2 text-blue-600 border-blue-200 hover:bg-blue-50"
+                                                                className="gap-2 text-primary border-primary/30 hover:bg-primary/10"
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     if (activeBike && client) {
@@ -533,7 +533,7 @@ export default function BikeDetail() {
                                     {clientBikes.map(b => (
                                         <div key={b.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-slate-50 transition-colors">
                                             <div className="flex items-center gap-3">
-                                                <div className="h-8 w-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600">
+                                                <div className="h-8 w-8 bg-primary/20 rounded-full flex items-center justify-center text-primary">
                                                     <BikeIcon size={16} />
                                                 </div>
                                                 <div>
@@ -542,7 +542,7 @@ export default function BikeDetail() {
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-1">
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-blue-600" onClick={() => startEditingBike(b)}>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-primary" onClick={() => startEditingBike(b)}>
                                                     <Pencil size={14} />
                                                 </Button>
                                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-red-600"

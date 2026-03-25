@@ -99,7 +99,7 @@ export default function Home() {
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <Input
                             placeholder="Buscar por cliente o modelo..."
-                            className="pl-10 h-11 bg-white border-slate-200 focus-visible:ring-orange-500"
+                            className="pl-10 h-11 bg-white border-slate-200 focus-visible:ring-primary"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -112,7 +112,7 @@ export default function Home() {
                 <RapidIntakeWizard
                     onComplete={() => handleRefresh()}
                     trigger={
-                        <Button className="bg-orange-600 hover:bg-orange-700 text-white font-medium px-6">
+                        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-6">
                             <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Cliente
                         </Button>
                     }
@@ -141,7 +141,7 @@ export default function Home() {
                                 {/* Client Header */}
                                 <div className="flex justify-between items-start mb-2">
                                     <div className="flex items-center gap-2">
-                                        <span className="bg-orange-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                                        <span className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold flex-shrink-0">
                                             {client.numero_cliente || index + 1}
                                         </span>
                                         <h3 className="text-base font-bold text-slate-900">{client.clientName}</h3>
@@ -176,7 +176,7 @@ export default function Home() {
 
                                                 <div className="flex items-center gap-2 mt-1">
                                                     {bike.next_due_date ? (
-                                                        <div className="bg-orange-50 text-orange-700 border border-orange-100 px-2 py-0.5 rounded-full text-[10px] font-medium flex items-center gap-1">
+                                                        <div className="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full text-[10px] font-medium flex items-center gap-1">
                                                             <Clock size={10} />
                                                             {bike.next_due_component}: {new Date(bike.next_due_date).toLocaleDateString()}
                                                         </div>

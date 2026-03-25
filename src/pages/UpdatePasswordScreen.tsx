@@ -39,7 +39,7 @@ export default function UpdatePasswordScreen() {
             <div className="bg-white max-w-md w-full p-8 md:p-10 rounded-lg shadow-2xl shadow-gray-200/50">
                 <div className="text-center mb-8">
                     <div className="text-2xl font-bold text-gray-900 flex items-center justify-center gap-2">
-                        <Wrench className="h-6 w-6 text-orange-500" />
+                        <Wrench className="h-6 w-6 text-primary" />
                         Mechanic Pro
                     </div>
                     <h2 className="text-lg font-medium text-gray-800 mt-4">
@@ -56,7 +56,7 @@ export default function UpdatePasswordScreen() {
                             <input
                                 type="password"
                                 placeholder="Nueva Contraseña"
-                                className={`w-full bg-transparent border-0 border-b-2 ${error ? 'border-red-500' : 'border-gray-200'} focus:ring-0 focus:border-orange-500 px-1 py-2 text-gray-900 placeholder-gray-400 focus:outline-none transition-colors`}
+                                className={`w-full bg-transparent border-0 border-b-2 ${error ? 'border-red-500' : 'border-gray-200'} focus:ring-0 focus:border-primary px-1 py-2 text-gray-900 placeholder-gray-400 focus:outline-none transition-colors`}
                                 value={password}
                                 onChange={(e) => {
                                     setPassword(e.target.value);
@@ -76,7 +76,7 @@ export default function UpdatePasswordScreen() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full bg-orange-500 hover:bg-orange-600 text-white uppercase tracking-wider font-semibold py-3 rounded-md transition-all flex items-center justify-center gap-2 shadow-lg shadow-orange-500/30 disabled:opacity-70"
+                        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground uppercase tracking-wider font-semibold py-3 rounded-md transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/30 disabled:opacity-70"
                     >
                         {loading ? (
                             <>

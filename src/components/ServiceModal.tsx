@@ -306,7 +306,8 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
             if (!taller_id) return;
             const { data } = await supabase.from('catalogo_servicios').select('*').eq('taller_id', taller_id);
             if (data) {
-                setCatalogoServicios(data);
+                const dataConOtro = [...data, { id: 'otro_universal', nombre: 'OTRO', precio: 0 }];
+                setCatalogoServicios(dataConOtro);
             }
         };
         fetchCatalogo();
@@ -461,7 +462,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                         <p className="text-sm font-semibold">{clientName}</p>
                         <p className="font-bold">{bike?.marca} {bike?.modelo}</p>
                     </div>
-                    {!serviceId && <Button variant="ghost" size="sm" onClick={onBack} className="hover:bg-orange-100 text-orange-700">Cambiar Bici</Button>}
+                    {!serviceId && <Button variant="ghost" size="sm" onClick={onBack} className="hover:bg-primary/10 text-primary">Cambiar Bici</Button>}
                 </div>
             </div>
 
@@ -598,11 +599,11 @@ function ServiceOption({ selected, onClick, title, desc }: { selected: boolean, 
     return (
         <div
             onClick={onClick}
-            className={`cursor-pointer border-2 rounded-xl p-4 text-center transition-all ${selected ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"}`}
+            className={`cursor-pointer border-2 rounded-xl p-4 text-center transition-all flex flex-col items-center justify-center ${selected ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"}`}
         >
-            <div className={`font-black text-xl mb-1 ${selected ? "text-primary" : "text-foreground"}`}>{title}</div>
+            <div className={`font-black text-xl mb-1 ${selected ? "text-primary" : "text-foreground"}`}>{(title || "OTRO").toUpperCase()}</div>
             <div className="text-xs text-muted-foreground uppercase tracking-wider">{desc}</div>
-            {selected && <div className="mt-2 flex justify-center text-primary"><CheckCircle size={16} fill="currentColor" className="text-white" /></div>}
+            {selected && <div className="mt-2 text-primary"><CheckCircle size={16} fill="currentColor" className="text-white" /></div>}
         </div>
     );
 }

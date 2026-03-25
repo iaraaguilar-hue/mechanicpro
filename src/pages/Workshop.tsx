@@ -105,7 +105,7 @@ export default function Workshop() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-                        <Wrench className="h-8 w-8 text-sky-500" />
+                        <Wrench className="h-8 w-8 text-primary" />
                         Taller Activo
                     </h1>
                     <p className="text-muted-foreground mt-1">Gestión de trabajos en curso.</p>
@@ -116,7 +116,7 @@ export default function Workshop() {
             </div>
 
             <div className="w-full">
-                <Card className="bg-[#00adf7] border-none shadow-md text-white w-full">
+                <Card className="bg-primary border-none shadow-md text-primary-foreground w-full">
                     <CardContent className="p-6 flex flex-col gap-1">
                         <p className="text-xs font-bold text-white/90 uppercase tracking-widest">En Proceso</p>
                         <div className="flex items-baseline gap-2">
@@ -184,17 +184,11 @@ function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () =
 
     const statusBadge = <StatusBadge status={job.status} />;
 
-    let serviceBadge;
-    switch (job.service_type) {
-        case "Sport":
-            serviceBadge = <Badge className="bg-[#00adf7] hover:bg-[#0099da] text-white border-none">SPORT</Badge>;
-            break;
-        case "Expert":
-            serviceBadge = <Badge className="bg-[#f25a30] hover:bg-[#d94e28] text-white border-none">EXPERT</Badge>;
-            break;
-        default:
-            serviceBadge = <Badge variant="secondary" className="text-muted-foreground">OTRO</Badge>;
-    }
+    const serviceBadge = (
+        <Badge variant={(job.service_type || "OTRO").toUpperCase() === "OTRO" ? "secondary" : "default"} className={`whitespace-nowrap ${(job.service_type || "OTRO").toUpperCase() !== "OTRO" ? "bg-primary hover:bg-primary/90 text-primary-foreground border-none" : "text-muted-foreground"}`}>
+            {(job.service_type || "OTRO").toUpperCase()}
+        </Badge>
+    );
 
     return (
         <TableRow className="hover:bg-muted/30 transition-colors cursor-pointer" onClick={onClick}>
@@ -430,7 +424,7 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
                             <Button variant="secondary" onClick={handleDownloadPDF}>
                                 <FileDown className="mr-2 h-4 w-4" /> PDF
                             </Button>
-                            <Button onClick={handleFinalize} disabled={isSaving} className="bg-orange-500 hover:bg-orange-600 text-white">
+                            <Button onClick={handleFinalize} disabled={isSaving} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                                 <Save className="mr-2 h-4 w-4" /> Guardar Cambios
                             </Button>
                         </>

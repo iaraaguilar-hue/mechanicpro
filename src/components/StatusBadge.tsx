@@ -10,7 +10,7 @@ export function StatusBadge({ status }: StatusBadgeProps) {
     if (normalized === 'in_progress' || normalized === 'in progress' || normalized === 'en curso' || normalized === 'pending' || normalized === 'pendiente' || normalized === 'intake') {
         return (
             <div className="inline-flex items-center gap-1.5 bg-sky-50 text-sky-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border border-sky-100/50 w-fit whitespace-nowrap">
-                <span className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse"></span>
+                <span className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></span>
                 En curso
             </div>
         );

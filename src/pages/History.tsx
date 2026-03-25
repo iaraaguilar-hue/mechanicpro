@@ -341,7 +341,7 @@ export default function History() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-extrabold text-slate-900 flex items-center gap-3 tracking-tight">
-                        <ClipboardList className="h-8 w-8 text-sky-500" />
+                        <ClipboardList className="h-8 w-8 text-primary" />
                         Historial de Trabajos
                     </h1>
                     <p className="text-muted-foreground mt-1 text-lg">Gestión centralizada de servicios y mantenimientos.</p>
@@ -454,7 +454,7 @@ export default function History() {
                     <Input
                         type="search"
                         placeholder="Buscar cliente, modelo, ID o trabajo (ej: horquilla)..."
-                        className="pl-9 h-10 bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-[#f25a30]/20 transition-all font-medium w-full"
+                        className="pl-9 h-10 bg-slate-50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-primary/20 transition-all font-medium w-full"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -513,8 +513,8 @@ export default function History() {
                                                 <div className="text-sm text-slate-500">{job.bikeModel.replace(job.bikeBrand, "").trim()}</div>
                                             </TableCell>
                                             <TableCell className="py-4">
-                                                <Badge variant="outline" className="text-slate-600 bg-white border-slate-200 font-normal">
-                                                    {job.serviceType}
+                                                <Badge variant="outline" className="text-slate-600 bg-white border-slate-200 font-bold whitespace-nowrap">
+                                                    {(job.serviceType || "OTRO").toUpperCase()}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-right pr-6 py-4">
@@ -538,10 +538,10 @@ export default function History() {
                                                             <MessageCircle className="w-4 h-4" />
                                                         </Button>
                                                     )}
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-[#f25a30] hover:bg-orange-50" title="Imprimir" onClick={() => printServiceReport(job.rawJob, job.clientName, job.bikeModel, job.clientDni, job.clientPhone)}>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/10" title="Imprimir" onClick={() => printServiceReport(job.rawJob, job.clientName, job.bikeModel, job.clientDni, job.clientPhone)}>
                                                         <FileText className="w-4 h-4" />
                                                     </Button>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50" title="Ver Detalles" onClick={() => toggleExpand(job.id)}>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/10" title="Ver Detalles" onClick={() => toggleExpand(job.id)}>
                                                         {isExpanded ? <ChevronUp className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                                     </Button>
                                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50" title="Editar" onClick={() => setEditingServiceId(job.id)}>
@@ -618,14 +618,14 @@ function ExpandedServiceDetail({ job }: { job: any }) {
     const totalLabor = (service.basePrice || 0) + laborItems.reduce((acc: number, i: any) => acc + i.price, 0);
 
     return (
-        <div className="bg-white border border-orange-100 rounded-xl p-6 shadow-sm animate-in slide-in-from-top-2 duration-200">
+        <div className="bg-white border border-primary/20 rounded-xl p-6 shadow-sm animate-in slide-in-from-top-2 duration-200">
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 pb-4 border-b border-gray-100 gap-4">
-                <h2 className="text-xl font-bold text-orange-600 flex items-center gap-2">
+                <h2 className="text-xl font-bold text-primary flex items-center gap-2">
                     <ClipboardList className="w-5 h-5" />
                     Detalle del Service {formatOrdenNumber(job.numero_orden, job.id)} <span className="text-gray-400 font-normal text-sm ml-2">| {job.bikeModel}</span>
                 </h2>
-                <Button onClick={() => printServiceReport(job.rawJob, job.clientName, job.bikeModel, job.clientDni, job.clientPhone)} className="bg-orange-500 hover:bg-orange-600 text-white font-semibold">
+                <Button onClick={() => printServiceReport(job.rawJob, job.clientName, job.bikeModel, job.clientDni, job.clientPhone)} className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
                     <FileText className="w-4 h-4 mr-2" />
                     Imprimir Comprobante
                 </Button>
@@ -634,30 +634,30 @@ function ExpandedServiceDetail({ job }: { job: any }) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full">
                 {/* Left: Summary */}
                 <div className="md:col-span-1 space-y-4">
-                    <h3 className="text-sky-500 flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
+                    <h3 className="text-primary flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
                         <Info className="w-4 h-4" /> Resumen del Trabajo
                     </h3>
                     <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div className="bg-sky-50 p-4 rounded-lg border border-sky-100 flex flex-col justify-center">
-                            <span className="text-xs text-sky-600 font-medium block mb-1">Mano de Obra</span>
+                        <div className="bg-primary/10 p-4 rounded-lg border border-primary/20 flex flex-col justify-center">
+                            <span className="text-xs text-primary font-medium block mb-1">Mano de Obra</span>
                             <div className="flex flex-row items-baseline gap-1 whitespace-nowrap">
                                 <span className="text-lg font-mono font-bold text-slate-800">$</span>
                                 <span className="text-xl font-mono font-bold text-slate-800">{totalLabor.toLocaleString("es-AR")}</span>
                             </div>
                         </div>
-                        <div className="bg-sky-50 p-4 rounded-lg border border-sky-100 flex flex-col justify-center">
-                            <span className="text-xs text-sky-600 font-medium block mb-1">Repuestos</span>
+                        <div className="bg-primary/10 p-4 rounded-lg border border-primary/20 flex flex-col justify-center">
+                            <span className="text-xs text-primary font-medium block mb-1">Repuestos</span>
                             <div className="flex flex-row items-baseline gap-1 whitespace-nowrap">
                                 <span className="text-lg font-mono font-bold text-slate-800">$</span>
                                 <span className="text-xl font-mono font-bold text-slate-800">{totalParts.toLocaleString("es-AR")}</span>
                             </div>
                         </div>
                     </div>
-                    <div className="bg-orange-50 p-4 rounded-xl flex justify-between items-center shadow-sm border border-orange-200 mt-6 whitespace-nowrap flex-wrap gap-2">
-                        <span className="font-bold text-sm uppercase text-orange-800 shrink-0">Total Final</span>
+                    <div className="bg-primary/10 p-4 rounded-xl flex justify-between items-center shadow-sm border border-primary/20 mt-6 whitespace-nowrap flex-wrap gap-2">
+                        <span className="font-bold text-sm uppercase text-primary shrink-0">Total Final</span>
                         <div className="flex flex-row items-baseline gap-1 shrink-0">
-                            <span className="text-2xl font-bold text-orange-600">$</span>
-                            <span className="text-3xl font-bold text-orange-600">{service.totalPrice?.toLocaleString("es-AR") || 0}</span>
+                            <span className="text-2xl font-bold text-primary">$</span>
+                            <span className="text-3xl font-bold text-primary">{service.totalPrice?.toLocaleString("es-AR") || 0}</span>
                         </div>
                     </div>
                 </div>
@@ -665,10 +665,10 @@ function ExpandedServiceDetail({ job }: { job: any }) {
                 {/* Right: Detailed List */}
                 <div className="md:col-span-2 space-y-6 md:pl-8 md:border-l border-gray-100 w-full">
                     <div>
-                        <h3 className="text-sky-500 flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
+                        <h3 className="text-primary flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
                             <Wrench className="w-4 h-4" /> Mano de Obra
                         </h3>
-                        <div className="space-y-2 bg-sky-50/50 p-4 rounded-lg border border-sky-100/50 w-full">
+                        <div className="space-y-2 bg-primary/5 p-4 rounded-lg border border-primary/10 w-full">
                             <div className="flex justify-between items-center text-sm p-3 bg-white rounded-md shadow-sm border border-gray-100 gap-4">
                                 <span className="text-slate-700 font-medium break-words">Service Base ({service.service_type})</span>
                                 <span className="font-mono font-bold text-slate-700 whitespace-nowrap shrink-0">$ {service.basePrice?.toLocaleString("es-AR") || 0}</span>
@@ -684,10 +684,10 @@ function ExpandedServiceDetail({ job }: { job: any }) {
 
                     {partItems.length > 0 && (
                         <div>
-                            <h3 className="text-sky-500 flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
+                            <h3 className="text-primary flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
                                 <Package className="w-4 h-4" /> Repuestos
                             </h3>
-                            <div className="space-y-2 bg-sky-50/50 p-4 rounded-lg border border-sky-100/50 w-full">
+                            <div className="space-y-2 bg-primary/5 p-4 rounded-lg border border-primary/10 w-full">
                                 {partItems.map((item: any) => (
                                     <div key={item.id} className="flex justify-between items-center text-sm p-3 bg-white rounded-md shadow-sm border border-gray-100 gap-4">
                                         <span className="text-slate-700 break-words">{item.description}</span>
@@ -703,7 +703,7 @@ function ExpandedServiceDetail({ job }: { job: any }) {
             {/* Notes */}
             {service.mechanic_notes && (
                 <div className="mt-8 pt-6 border-t border-gray-100">
-                    <h4 className="text-sky-500 flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
+                    <h4 className="text-primary flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
                         <Tag className="w-4 h-4" /> Notas del Mecánico
                     </h4>
                     <p className="text-sm text-slate-700 italic bg-slate-50 p-4 rounded-lg border border-slate-200">

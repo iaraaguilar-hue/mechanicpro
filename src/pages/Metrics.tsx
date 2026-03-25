@@ -194,7 +194,7 @@ export default function Metrics() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-                        <BarChart3 className="h-8 w-8 text-sky-500" />
+                        <BarChart3 className="h-8 w-8 text-primary" />
                         Métricas y Estadísticas
                     </h1>
                     <p className="text-muted-foreground">Análisis financiero y operativo del taller.</p>
@@ -216,9 +216,9 @@ export default function Metrics() {
             {/* KPI CARDS */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <KPICard title="Facturación Total" value={`$ ${stats.revenue.toLocaleString('es-AR')}`} icon={<DollarSign className="w-5 h-5 text-green-600" />} trend="+12%" trendUp={true} className="bg-green-50 border-green-100" />
-                <KPICard title="Mano de Obra" value={`$ ${stats.labor.toLocaleString('es-AR')}`} icon={<Wrench className="w-5 h-5 text-blue-600" />} sublabel={`${stats.count} Servicios realizados`} />
-                <KPICard title="Venta Repuestos" value={`$ ${stats.parts.toLocaleString('es-AR')}`} icon={<Package className="w-5 h-5 text-orange-600" />} sublabel={`${stats.partsCount} Productos vendidos`} />
-                <KPICard title="Ticket Promedio" value={`$ ${stats.avgTicket.toLocaleString('es-AR')}`} icon={<Ticket className="w-5 h-5 text-blue-500" />} sublabel="Por visita de cliente" />
+                <KPICard title="Mano de Obra" value={`$ ${stats.labor.toLocaleString('es-AR')}`} icon={<Wrench className="w-5 h-5 text-primary" />} sublabel={`${stats.count} Servicios realizados`} />
+                <KPICard title="Venta Repuestos" value={`$ ${stats.parts.toLocaleString('es-AR')}`} icon={<Package className="w-5 h-5 text-secondary" />} sublabel={`${stats.partsCount} Productos vendidos`} />
+                <KPICard title="Ticket Promedio" value={`$ ${stats.avgTicket.toLocaleString('es-AR')}`} icon={<Ticket className="w-5 h-5 text-primary" />} sublabel="Por visita de cliente" />
                 <KPICard title="Bicis Atendidas" value={stats.bikesCount.toString()} icon={<TrendingUp className="w-5 h-5 text-purple-600" />} sublabel="En el período seleccionado" />
 
                 {/* MIX DE FACTURACIÓN CARD */}
@@ -233,12 +233,12 @@ export default function Metrics() {
                             <h3 className="text-sm font-medium text-muted-foreground">Mix Facturación</h3>
                             <div className="pt-1">
                                 <div className="flex justify-between text-xs font-bold mb-1">
-                                    <span className="text-blue-600">{stats.laborPerc}% MO</span>
-                                    <span className="text-orange-600">{stats.partsPerc}% REP</span>
+                                    <span className="text-primary">{stats.laborPerc}% MO</span>
+                                    <span className="text-secondary">{stats.partsPerc}% REP</span>
                                 </div>
-                                <div className="h-3 w-full bg-orange-100 rounded-full overflow-hidden flex">
-                                    <div className="bg-blue-500 h-full transition-all duration-1000" style={{ width: `${stats.laborPerc}%` }} />
-                                    <div className="bg-orange-500 h-full transition-all duration-1000" style={{ width: `${stats.partsPerc}%` }} />
+                                <div className="h-3 w-full bg-secondary/20 rounded-full overflow-hidden flex">
+                                    <div className="bg-primary h-full transition-all duration-1000" style={{ width: `${stats.laborPerc}%` }} />
+                                    <div className="bg-secondary h-full transition-all duration-1000" style={{ width: `${stats.partsPerc}%` }} />
                                 </div>
                             </div>
                         </div>
@@ -252,7 +252,7 @@ export default function Metrics() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
                     <div className="flex items-center justify-between mb-5">
                         <div className="flex items-center gap-2">
-                            <Package className="w-6 h-6 text-sky-500" />
+                            <Package className="w-6 h-6 text-primary" />
                             <h3 className="text-lg font-bold text-gray-900">Ranking de Stock</h3>
                         </div>
                         <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 5 Vendidos</span>
@@ -281,7 +281,7 @@ export default function Metrics() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
                     <div className="flex items-center justify-between mb-5">
                         <div className="flex items-center gap-2">
-                            <PieChart className="w-6 h-6 text-sky-500" />
+                            <PieChart className="w-6 h-6 text-primary" />
                             <h3 className="text-lg font-bold text-gray-900">Tendencias de Taller</h3>
                         </div>
                         <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Categorías</span>
@@ -317,7 +317,7 @@ export default function Metrics() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
                     <div className="flex items-center justify-between mb-5">
                         <div className="flex items-center gap-2">
-                            <Brain className="w-6 h-6 text-sky-500" />
+                            <Brain className="w-6 h-6 text-primary" />
                             <h3 className="text-lg font-bold text-gray-900">Distribución de Services</h3>
                         </div>
                         <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Tipos</span>
@@ -350,7 +350,7 @@ export default function Metrics() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
                     <div className="flex items-center justify-between mb-5">
                         <div className="flex items-center gap-2">
-                            <Tag className="w-6 h-6 text-sky-500" />
+                            <Tag className="w-6 h-6 text-primary" />
                             <h3 className="text-lg font-bold text-gray-900">Flota por Marcas</h3>
                         </div>
                         <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Distribución</span>
@@ -369,7 +369,7 @@ export default function Metrics() {
                                             <span className="text-slate-600 font-bold">{item.percentage}% <span className="text-xs text-muted-foreground font-normal">({item.count})</span></span>
                                         </div>
                                         <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
-                                            <div className={`h-full rounded-full transition-all duration-1000 ${idx === 0 ? 'bg-sky-500' : idx === 1 ? 'bg-sky-400' : idx === 2 ? 'bg-sky-300' : idx === 3 ? 'bg-slate-400' : 'bg-slate-300'}`} style={{ width: `${item.percentage}%` }} />
+                                            <div className={`h-full rounded-full transition-all duration-1000 ${idx === 0 ? 'bg-primary' : idx === 1 ? 'bg-primary/80' : idx === 2 ? 'bg-primary/60' : idx === 3 ? 'bg-slate-400' : 'bg-slate-300'}`} style={{ width: `${item.percentage}%` }} />
                                         </div>
                                     </div>
                                 ))}
@@ -408,7 +408,7 @@ function KPICard({ title, value, icon, sublabel, trend, trendUp, className }: an
 
 function getCategoryColor(cat: string) {
     switch (cat) {
-        case 'Cadenas': return 'bg-orange-500';
+        case 'Cadenas': return 'bg-secondary';
         case 'Frenos': return 'bg-red-500';
         case 'Ruedas': return 'bg-blue-500';
         case 'Transmisión': return 'bg-purple-500';

@@ -297,36 +297,40 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
                 await upsertRecordatorios(reminderItems);
             }
 
-            // Webhook logic
-            const soldProducts = service.items_extra?.filter((i: any) => i.categoria === 'part') || [];
-            const itemsParaFacturar = soldProducts.filter((p: any) => !isExternalItem(p.descripcion));
+            // Mark as completed if not already
+            const currentStatus = (service.estado || '').toLowerCase();
+            const wasJustCompleted = currentStatus !== 'ready' && currentStatus !== 'delivered';
 
-            if (soldProducts.length > 0 && client) {
+            if (wasJustCompleted) {
+                // 1. UPDATE a Supabase para cambiar el estado
+                await updateServicio(job.service_id, { estado: 'ready', fecha_finalizacion: new Date().toISOString() });
+
+                // 2. Inmediatamente después del éxito del update, enviamos el Webhook
                 try {
                     const payload = {
-                        dni_cliente: client.dni || "Sin DNI",
-                        nombre_cliente: client.nombre || "Cliente",
+                        service_id: job.service_id,
+                        numero_orden: service.numero_orden || service.id,
+                        dni_cliente: client?.dni || "Sin DNI",
+                        nombre_cliente: client?.nombre || "Cliente",
+                        telefono_cliente: client?.telefono || "",
                         fecha_finalizacion: new Date().toISOString(),
-                        nombre_producto: itemsParaFacturar.map((p: any) => p.descripcion).join(", "),
-                        productos: itemsParaFacturar.map((p: any) => ({ descripcion: p.descripcion, precio: Number(p.precio) || 0 })),
                         total_service: Number(service.precio_total) || 0,
-                        numero_orden: service.numero_orden || service.id
+                        items_utilizados: service.items_extra?.map((p: any) => ({
+                            descripcion: p.descripcion,
+                            precio: Number(p.precio) || 0,
+                            categoria: p.categoria
+                        })) || []
                     };
+
                     fetch("https://nonlepidopterous-memphis-palaeological.ngrok-free.dev/webhook/generar-orden", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify(payload),
                         keepalive: true
-                    }).catch(e => console.error("Webhook Error:", e));
+                    }).catch(e => console.error("Webhook Error (Fetch):", e));
                 } catch (err) {
-                    console.error("Error en Webhook:", err);
+                    console.error("Error preparando el Webhook:", err);
                 }
-            }
-
-            // Mark as completed if not already
-            const currentStatus = (service.estado || '').toLowerCase();
-            if (currentStatus !== 'ready' && currentStatus !== 'delivered') {
-                await updateServicio(job.service_id, { estado: 'ready', fecha_finalizacion: new Date().toISOString() });
             }
 
             onClose();

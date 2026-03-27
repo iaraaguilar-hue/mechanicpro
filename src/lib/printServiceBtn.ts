@@ -41,7 +41,7 @@ export const printServiceReport = async (
   // --- 1. LABOR (Mano de Obra) ---
   // Build title row (always)
   const laborTitleRow = serviceType !== 'OTRO' && serviceType !== 'OTHER'
-    ? `<tr><td style="padding: 8px 0 4px 0; font-weight: 700; font-size: 14px; color: #333;">SERVICE ${serviceType}</td><td style="padding: 8px 0 4px 0; text-align: right; font-weight: 700; font-size: 14px;">$ ${basePrice.toLocaleString('es-AR')}</td></tr>`
+    ? `<tr><td style="padding: 8px 0 4px 0; font-weight: 700; font-size: 14px; color: #333;">${serviceType}</td><td style="padding: 8px 0 4px 0; text-align: right; font-weight: 700; font-size: 14px;">$ ${basePrice.toLocaleString('es-AR')}</td></tr>`
     : '';
 
   // Build description block: prefer HTML, fall back to plain lines

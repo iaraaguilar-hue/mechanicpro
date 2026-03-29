@@ -20,6 +20,7 @@ export default function Home() {
     const deleteCliente = useDataStore(s => s.deleteCliente);
     const fetchDashboardData = useDataStore(s => s.fetchDashboardData);
     const taller_id = useAuthStore(s => s.taller_id);
+    const taller = useAuthStore(s => s.taller);
 
     // Build fleet view from store data (replaces getFleetStatus)
     const clientList = useMemo(() => {
@@ -91,7 +92,19 @@ export default function Home() {
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-center gap-6 pb-2">
                 <div className="flex items-center gap-3">
-                    <img src="/img/logo_full.png" alt="ProBikes" className="h-16 w-auto" />
+                    {taller?.logo_url ? (
+                        <img
+                            src={taller.logo_url}
+                            alt={taller.nombre ? `Logo de ${taller.nombre}` : "Logo del Taller"}
+                            className="h-16 w-auto object-contain"
+                        />
+                    ) : (
+                        <div className="flex items-center justify-center h-16 px-4 bg-slate-100 border border-slate-200 rounded-md">
+                            <span className="text-xl font-bold text-slate-800">
+                                {taller?.nombre || "Mi Taller"}
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex items-center gap-4 flex-1 justify-end w-full md:w-auto">

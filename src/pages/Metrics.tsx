@@ -18,7 +18,9 @@ import {
     Ticket,
     Tag,
     Loader2,
-    Lock
+    Lock,
+    Layers,
+    Bike
 } from 'lucide-react';
 
 // --- SEMANTIC ENGINE HELPERS ---
@@ -168,6 +170,8 @@ export default function Metrics() {
         };
         const serviceTypeCounts: Record<string, number> = {};
         const brandCounts: Record<string, number> = {};
+        const modelCounts: Record<string, number> = {};
+        const categoryCounts: Record<string, number> = {};
 
         filtered.forEach(s => {
             const precioTotal = Number(s.precio_total) || 0;
@@ -181,11 +185,21 @@ export default function Metrics() {
             serviceTypeCounts[normalizedType] = (serviceTypeCounts[normalizedType] || 0) + 1;
 
             const bike = bicicletas.find(b => b.id === s.bicicleta_id);
-            let brandName = 'Desconocida';
-            if (bike?.modelo?.trim()) brandName = bike.modelo.trim().split(/\s+/)[0];
-            brandName = brandName.trim();
+
+            // BugFix 1: Consume STRICTLY from bike.marca
+            let brandName = bike?.marca?.trim() || 'Desconocida';
             brandName = brandName.length > 0 ? brandName.charAt(0).toUpperCase() + brandName.slice(1).toLowerCase() : 'Desconocida';
             brandCounts[brandName] = (brandCounts[brandName] || 0) + 1;
+
+            // BugFix 2: Add Model grouping
+            let modelName = bike?.modelo?.trim() || 'Desconocido';
+            modelName = modelName.length > 0 ? modelName.charAt(0).toUpperCase() + modelName.slice(1).toLowerCase() : 'Desconocido';
+            modelCounts[modelName] = (modelCounts[modelName] || 0) + 1;
+
+            // BugFix 3: Add Category grouping
+            let catName = bike?.categoria?.trim() || 'Indefinido';
+            catName = catName.length > 0 ? catName.charAt(0).toUpperCase() + catName.slice(1).toLowerCase() : 'Indef.';
+            categoryCounts[catName] = (categoryCounts[catName] || 0) + 1;
 
             const items = Array.isArray(s.servicio_items) ? s.servicio_items : (Array.isArray(s.items_extra) ? s.items_extra : []);
             items.forEach((item: any) => {
@@ -217,16 +231,24 @@ export default function Metrics() {
             .map(([type, count]) => ({ type, count, percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0 }))
             .sort((a, b) => b.count - a.count);
 
-        const brandEntries = Object.entries(brandCounts).sort(([, a], [, b]) => b - a);
-        let finalBrandData: any[] = [];
-        if (brandEntries.length > 4) {
-            const top4 = brandEntries.slice(0, 4);
-            const othersCount = brandEntries.slice(4).reduce((sum, [, count]) => sum + count, 0);
-            finalBrandData = top4.map(([brand, count]) => ({ brand, count, percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0 }));
-            if (othersCount > 0) finalBrandData.push({ brand: 'Otras', count: othersCount, percentage: totalServices > 0 ? Math.round((othersCount / totalServices) * 100) : 0 });
-        } else {
-            finalBrandData = brandEntries.map(([brand, count]) => ({ brand, count, percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0 }));
-        }
+        // Utility to process TOP 4 + Others
+        const processTop4 = (countsMap: Record<string, number>) => {
+            const entries = Object.entries(countsMap).sort(([, a], [, b]) => b - a);
+            let finalData: any[] = [];
+            if (entries.length > 4) {
+                const top4 = entries.slice(0, 4);
+                const othersCount = entries.slice(4).reduce((sum, [, count]) => sum + count, 0);
+                finalData = top4.map(([name, count]) => ({ name, count, percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0 }));
+                if (othersCount > 0) finalData.push({ name: 'Otras', count: othersCount, percentage: totalServices > 0 ? Math.round((othersCount / totalServices) * 100) : 0 });
+            } else {
+                finalData = entries.map(([name, count]) => ({ name, count, percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0 }));
+            }
+            return finalData;
+        };
+
+        const finalBrandData = processTop4(brandCounts);
+        const finalModelData = processTop4(modelCounts);
+        const finalCategoryData = processTop4(categoryCounts);
 
         const totalFacturacion = totalLabor + totalPartsRevenue;
         const avgTicket = uniqueBikes.size > 0 ? Math.round(totalFacturacion / uniqueBikes.size) : 0;
@@ -237,7 +259,8 @@ export default function Metrics() {
             count: filtered.length, revenue: totalFacturacion, labor: totalLabor,
             parts: totalPartsRevenue, partsCount: totalPartsCount, bikesCount: uniqueBikes.size,
             topProducts: sortedProducts, trends: trendData, serviceDist: serviceDistData,
-            brandDist: finalBrandData, avgTicket, laborPerc, partsPerc
+            brandDist: finalBrandData, modelDist: finalModelData, categoryDist: finalCategoryData,
+            avgTicket, laborPerc, partsPerc
         };
     }, [servicios, bicicletas]);
 
@@ -301,7 +324,7 @@ export default function Metrics() {
 
     // ─── Pro analysis panels ──────────────────────────────────────────────────
     const analysisPanels = (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* 1. STOCK RANKING */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
                 <div className="flex items-center justify-between mb-5">
@@ -309,7 +332,7 @@ export default function Metrics() {
                         <Package className="w-6 h-6 text-primary" />
                         <h3 className="text-lg font-bold text-gray-900">Ranking de Stock</h3>
                     </div>
-                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 5 Vendidos</span>
+                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 5</span>
                 </div>
                 <div className="flex-1">
                     {stats.topProducts.length === 0 ? (
@@ -373,7 +396,7 @@ export default function Metrics() {
                 </div>
                 <div className="flex-1">
                     {stats.serviceDist.length === 0 ? (
-                        <div className="h-40 flex items-center justify-center text-muted-foreground italic">No hay datos de servicios en este período.</div>
+                        <div className="h-40 flex items-center justify-center text-muted-foreground italic">No hay datos en este período.</div>
                     ) : (
                         <div className="space-y-6 pt-2">
                             {stats.serviceDist.map((item: any, idx: number) => (
@@ -402,21 +425,81 @@ export default function Metrics() {
                         <Tag className="w-6 h-6 text-primary" />
                         <h3 className="text-lg font-bold text-gray-900">Flota por Marcas</h3>
                     </div>
-                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Distribución</span>
+                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 4</span>
                 </div>
                 <div className="flex-1">
                     {stats.brandDist.length === 0 ? (
-                        <div className="h-40 flex items-center justify-center text-muted-foreground italic">No hay datos de marcas en este período.</div>
+                        <div className="h-40 flex items-center justify-center text-muted-foreground italic">No hay datos en este período.</div>
                     ) : (
                         <div className="space-y-6 pt-2">
                             {stats.brandDist.map((item: any, idx: number) => (
                                 <div key={idx} className="space-y-1">
                                     <div className="flex justify-between items-center mb-1 text-sm font-medium">
-                                        <span className="text-slate-700">{item.brand}</span>
+                                        <span className="text-slate-700">{item.name}</span>
                                         <span className="text-slate-600 font-bold">{item.percentage}% <span className="text-xs text-muted-foreground font-normal">({item.count})</span></span>
                                     </div>
                                     <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
-                                        <div className={`h-full rounded-full transition-all duration-1000 ${idx === 0 ? 'bg-primary' : idx === 1 ? 'bg-primary/80' : idx === 2 ? 'bg-primary/60' : idx === 3 ? 'bg-slate-400' : 'bg-slate-300'}`} style={{ width: `${item.percentage}%` }} />
+                                        <div className={`h-full rounded-full transition-all duration-1000 ${item.name === 'Otras' ? 'bg-slate-300' : idx === 0 ? 'bg-primary' : idx === 1 ? 'bg-primary/80' : idx === 2 ? 'bg-primary/60' : 'bg-primary/40'}`} style={{ width: `${item.percentage}%` }} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* 5. MODEL DISTRIBUTION */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
+                <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-2">
+                        <Layers className="w-6 h-6 text-fuchsia-600" />
+                        <h3 className="text-lg font-bold text-gray-900">Distribución por Modelo</h3>
+                    </div>
+                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 4</span>
+                </div>
+                <div className="flex-1">
+                    {stats.modelDist.length === 0 ? (
+                        <div className="h-40 flex items-center justify-center text-muted-foreground italic">No hay datos en este período.</div>
+                    ) : (
+                        <div className="space-y-6 pt-2">
+                            {stats.modelDist.map((item: any, idx: number) => (
+                                <div key={idx} className="space-y-1">
+                                    <div className="flex justify-between items-center mb-1 text-sm font-medium">
+                                        <span className="text-slate-700">{item.name}</span>
+                                        <span className="text-slate-600 font-bold">{item.percentage}% <span className="text-xs text-muted-foreground font-normal">({item.count})</span></span>
+                                    </div>
+                                    <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+                                        <div className={`h-full rounded-full transition-all duration-1000 ${item.name === 'Otras' ? 'bg-slate-300' : idx === 0 ? 'bg-fuchsia-600' : idx === 1 ? 'bg-fuchsia-500' : idx === 2 ? 'bg-fuchsia-400' : 'bg-fuchsia-300'}`} style={{ width: `${item.percentage}%` }} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* 6. CATEGORY DISTRIBUTION */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
+                <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-2">
+                        <Bike className="w-6 h-6 text-sky-600" />
+                        <h3 className="text-lg font-bold text-gray-900">Segmento de Bicicletas</h3>
+                    </div>
+                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 4</span>
+                </div>
+                <div className="flex-1">
+                    {stats.categoryDist.length === 0 ? (
+                        <div className="h-40 flex items-center justify-center text-muted-foreground italic">No hay datos en este período.</div>
+                    ) : (
+                        <div className="space-y-6 pt-2">
+                            {stats.categoryDist.map((item: any, idx: number) => (
+                                <div key={idx} className="space-y-1">
+                                    <div className="flex justify-between items-center mb-1 text-sm font-medium">
+                                        <span className="text-slate-700">{item.name}</span>
+                                        <span className="text-slate-600 font-bold">{item.percentage}% <span className="text-xs text-muted-foreground font-normal">({item.count})</span></span>
+                                    </div>
+                                    <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+                                        <div className={`h-full rounded-full transition-all duration-1000 ${item.name === 'Otras' ? 'bg-slate-300' : idx === 0 ? 'bg-sky-600' : idx === 1 ? 'bg-sky-500' : idx === 2 ? 'bg-sky-400' : 'bg-sky-300'}`} style={{ width: `${item.percentage}%` }} />
                                     </div>
                                 </div>
                             ))}

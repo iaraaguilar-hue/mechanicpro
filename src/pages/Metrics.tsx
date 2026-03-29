@@ -228,12 +228,13 @@ export default function Metrics() {
             finalBrandData = brandEntries.map(([brand, count]) => ({ brand, count, percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0 }));
         }
 
-        const avgTicket = totalServices > 0 ? Math.round(totalRevenue / totalServices) : 0;
-        const laborPerc = totalRevenue > 0 ? Math.round((totalLabor / totalRevenue) * 100) : 0;
-        const partsPerc = totalRevenue > 0 ? Math.round((totalPartsRevenue / totalRevenue) * 100) : 0;
+        const totalFacturacion = totalLabor + totalPartsRevenue;
+        const avgTicket = uniqueBikes.size > 0 ? Math.round(totalFacturacion / uniqueBikes.size) : 0;
+        const laborPerc = totalFacturacion > 0 ? Math.round((totalLabor / totalFacturacion) * 100) : 0;
+        const partsPerc = totalFacturacion > 0 ? Math.round((totalPartsRevenue / totalFacturacion) * 100) : 0;
 
         return {
-            count: filtered.length, revenue: totalRevenue, labor: totalLabor,
+            count: filtered.length, revenue: totalFacturacion, labor: totalLabor,
             parts: totalPartsRevenue, partsCount: totalPartsCount, bikesCount: uniqueBikes.size,
             topProducts: sortedProducts, trends: trendData, serviceDist: serviceDistData,
             brandDist: finalBrandData, avgTicket, laborPerc, partsPerc

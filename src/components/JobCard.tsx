@@ -45,7 +45,7 @@ export default function JobCard({ job, client, bikeModel = 'Bicicleta' }: JobCar
                                 {new Date(job.createdAt || Date.now()).toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                             </CardTitle>
                             <div className="flex gap-2 mt-1">
-                                <Badge variant="outline" className="text-xs font-normal text-slate-500 border-slate-300">
+                                <Badge variant="outline" className="text-xs font-normal text-slate-500 border-slate-300 bg-slate-900 border-slate-900 text-slate-50 whitespace-nowrap w-fit px-3 py-1">
                                     {job.serviceType}
                                 </Badge>
                                 <span className="text-xs text-slate-400">ID: #{job.id.slice(-4)}</span>

@@ -13,7 +13,7 @@ export interface SupabaseClient {
     telefono?: string;
     email?: string;
     tipo_ciclista?: string;
-    isDeleted?: boolean;
+    eliminado_en?: string | null;
     created_at?: string;
 }
 
@@ -143,7 +143,7 @@ export const useDataStore = create<DataState>((set, get) => ({
             }
 
             const [resC, resB, resS, resR, resCat] = await Promise.all([
-                supabase.from('clientes').select('*').eq('taller_id', tallerId).order('numero_cliente', { ascending: true }),
+                supabase.from('clientes').select('*').eq('taller_id', tallerId).is('eliminado_en', null).order('numero_cliente', { ascending: true }),
                 supabase.from('bicicletas').select('*').eq('taller_id', tallerId),
                 supabase.from('servicios').select('*, servicio_items(*)').eq('taller_id', tallerId).is('eliminado_en', null),
                 supabase.from('recordatorios').select('*').eq('taller_id', tallerId),
@@ -214,7 +214,8 @@ export const useDataStore = create<DataState>((set, get) => ({
     },
 
     deleteCliente: async (id) => {
-        const { error } = await supabase.from('clientes').delete().eq('id', id);
+        const eliminado_en = new Date().toISOString();
+        const { error } = await supabase.from('clientes').update({ eliminado_en }).eq('id', id);
         if (error) throw new Error(`Error eliminando cliente: ${error.message}`);
         set({ clientes: get().clientes.filter(c => c.id !== id) });
     },

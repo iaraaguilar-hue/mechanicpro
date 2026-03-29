@@ -28,7 +28,7 @@ export default function Home() {
 
         // Filter active clients and enforce fallback sort
         const activeClients = clientes
-            .filter(c => !c.isDeleted)
+            .filter(c => !c.eliminado_en)
             .sort((a, b) => (a.numero_cliente || Infinity) - (b.numero_cliente || Infinity));
 
         // Group bikes per client

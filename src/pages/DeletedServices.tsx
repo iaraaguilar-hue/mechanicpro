@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Trash2, AlertCircle, CalendarIcon, ServerCrash, Clock, UserX, RefreshCcw, Loader2 } from 'lucide-react';
+import { Trash2, AlertCircle, CalendarIcon, ServerCrash, Clock, UserX, RefreshCcw, Loader2, Wrench, Users } from 'lucide-react';
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { supabase } from '@/lib/supabase';
@@ -15,7 +15,10 @@ export default function DeletedServices() {
     const session = useAuthStore((state) => state.session);
     const navigate = useNavigate();
 
+    const [activeTab, setActiveTab] = useState<'services' | 'clients'>('services');
+
     const [deletedJobs, setDeletedJobs] = useState<any[]>([]);
+    const [deletedClients, setDeletedClients] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [restoringId, setRestoringId] = useState<string | null>(null);
@@ -31,16 +34,13 @@ export default function DeletedServices() {
         setLoading(true);
         setError(null);
         try {
-            // EXPLICIT BACKEND CALL: Fetch soft-deleted records directly from Supabase DB
             const { data, error: supaError } = await supabase
                 .from('servicios')
                 .select('*, bicicletas(id, marca, modelo, clientes(id, nombre, dni))')
                 .not('eliminado_en', 'is', null)
                 .order('eliminado_en', { ascending: false });
 
-            if (supaError) {
-                throw new Error(supaError.message);
-            }
+            if (supaError) throw new Error(supaError.message);
 
             if (data) {
                 const mappedData = data.map((item: any) => ({
@@ -65,18 +65,58 @@ export default function DeletedServices() {
         }
     };
 
+    const fetchDeletedClients = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const { data, error: supaError } = await supabase
+                .from('clientes')
+                .select('*')
+                .not('eliminado_en', 'is', null)
+                .order('eliminado_en', { ascending: false });
+
+            if (supaError) throw new Error(supaError.message);
+
+            if (data) {
+                setDeletedClients(data);
+            }
+        } catch (err: any) {
+            console.error("Error fetching deleted clients:", err.message);
+            setError(err.message || 'Error de conexión');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (rol === 'admin') {
-            fetchDeletedServices();
+            if (activeTab === 'services') {
+                fetchDeletedServices();
+            } else {
+                fetchDeletedClients();
+            }
         }
-    }, [rol]);
+    }, [rol, activeTab]);
 
-    const handleRestore = async (id: string) => {
+    const handleRestoreService = async (id: string) => {
         try {
             setRestoringId(id);
             const { error } = await supabase.from('servicios').update({ eliminado_en: null }).eq('id', id);
             if (error) throw error;
             await fetchDeletedServices();
+        } catch (err: any) {
+            alert("Error al restaurar: " + err.message);
+        } finally {
+            setRestoringId(null);
+        }
+    };
+
+    const handleRestoreClient = async (id: string) => {
+        try {
+            setRestoringId(id);
+            const { error } = await supabase.from('clientes').update({ eliminado_en: null }).eq('id', id);
+            if (error) throw error;
+            await fetchDeletedClients();
         } catch (err: any) {
             alert("Error al restaurar: " + err.message);
         } finally {
@@ -101,6 +141,24 @@ export default function DeletedServices() {
                 </div>
             </div>
 
+            {/* View Toggles */}
+            <div className="flex gap-2 p-1 bg-slate-100 rounded-lg w-fit">
+                <Button
+                    variant={activeTab === 'services' ? "default" : "ghost"}
+                    className="flex gap-2 items-center"
+                    onClick={() => setActiveTab('services')}
+                >
+                    <Wrench className="w-4 h-4" /> Servicios
+                </Button>
+                <Button
+                    variant={activeTab === 'clients' ? "default" : "ghost"}
+                    className="flex gap-2 items-center"
+                    onClick={() => setActiveTab('clients')}
+                >
+                    <Users className="w-4 h-4" /> Clientes
+                </Button>
+            </div>
+
             {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md flex items-center gap-3">
                     <AlertCircle className="w-5 h-5 text-red-500" />
@@ -113,14 +171,24 @@ export default function DeletedServices() {
                 <CardContent className="p-0">
                     <Table>
                         <TableHeader className="bg-red-50/50">
-                            <TableRow className="hover:bg-transparent border-slate-100">
-                                <TableHead className="py-4 pl-6 text-red-800">Fecha de Eliminación</TableHead>
-                                <TableHead className="py-4 text-slate-600">ID / Ingreso</TableHead>
-                                <TableHead className="py-4 text-slate-600">Cliente</TableHead>
-                                <TableHead className="py-4 text-slate-600">Bicicleta</TableHead>
-                                <TableHead className="py-4 text-slate-600">Monto Original</TableHead>
-                                <TableHead className="py-4 pr-6 text-right text-red-800">Acciones</TableHead>
-                            </TableRow>
+                            {activeTab === 'services' ? (
+                                <TableRow className="hover:bg-transparent border-slate-100">
+                                    <TableHead className="py-4 pl-6 text-red-800">Fecha de Eliminación</TableHead>
+                                    <TableHead className="py-4 text-slate-600">ID / Ingreso</TableHead>
+                                    <TableHead className="py-4 text-slate-600">Cliente</TableHead>
+                                    <TableHead className="py-4 text-slate-600">Bicicleta</TableHead>
+                                    <TableHead className="py-4 text-slate-600">Monto Original</TableHead>
+                                    <TableHead className="py-4 pr-6 text-right text-red-800">Acciones</TableHead>
+                                </TableRow>
+                            ) : (
+                                <TableRow className="hover:bg-transparent border-slate-100">
+                                    <TableHead className="py-4 pl-6 text-red-800">Fecha de Eliminación</TableHead>
+                                    <TableHead className="py-4 text-slate-600">Nombre / ID</TableHead>
+                                    <TableHead className="py-4 text-slate-600">Teléfono</TableHead>
+                                    <TableHead className="py-4 text-slate-600">Tipo Ciclista</TableHead>
+                                    <TableHead className="py-4 pr-6 text-right text-red-800">Acciones</TableHead>
+                                </TableRow>
+                            )}
                         </TableHeader>
                         <TableBody>
                             {loading ? (
@@ -132,7 +200,7 @@ export default function DeletedServices() {
                                         </div>
                                     </TableCell>
                                 </TableRow>
-                            ) : deletedJobs.length === 0 ? (
+                            ) : (activeTab === 'services' && deletedJobs.length === 0) || (activeTab === 'clients' && deletedClients.length === 0) ? (
                                 <TableRow>
                                     <TableCell colSpan={6} className="text-center py-20 text-muted-foreground">
                                         <div className="flex flex-col items-center gap-3">
@@ -141,12 +209,14 @@ export default function DeletedServices() {
                                             </div>
                                             <div className="text-center">
                                                 <p className="font-medium text-slate-900">La papelera está vacía</p>
-                                                <p className="text-sm text-slate-500 mt-1">No hay órdenes de servicio eliminadas recientemente.</p>
+                                                <p className="text-sm text-slate-500 mt-1">
+                                                    No hay {activeTab === 'services' ? 'órdenes de servicio' : 'clientes'} eliminados recientemente.
+                                                </p>
                                             </div>
                                         </div>
                                     </TableCell>
                                 </TableRow>
-                            ) : (
+                            ) : activeTab === 'services' ? (
                                 deletedJobs.map((job) => {
                                     const delDate = job.deletedAt ? new Date(job.deletedAt) : null;
                                     const inDate = job.dateIn ? new Date(job.dateIn) : null;
@@ -161,7 +231,7 @@ export default function DeletedServices() {
                                             </TableCell>
                                             <TableCell className="py-4">
                                                 <div className="flex flex-col">
-                                                    <span className="font-bold text-slate-500 text-sm line-through decoration-slate-300">#{job.id}</span>
+                                                    <span className="font-bold text-slate-500 text-sm line-through decoration-slate-300">#{job.id.slice(0, 8)}</span>
                                                     <span className="text-xs text-slate-400 flex items-center gap-1">
                                                         <CalendarIcon className="w-3 h-3" />
                                                         {inDate ? format(inDate, "dd/MM/yy") : '-'}
@@ -192,10 +262,52 @@ export default function DeletedServices() {
                                                     variant="outline"
                                                     size="sm"
                                                     className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
-                                                    onClick={() => handleRestore(job.id)}
+                                                    onClick={() => handleRestoreService(job.id)}
                                                     disabled={restoringId === job.id}
                                                 >
                                                     {restoringId === job.id ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCcw className="w-4 h-4 mr-1" />}
+                                                    Restaurar
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
+                            ) : (
+                                deletedClients.map((client) => {
+                                    const delDate = client.eliminado_en ? new Date(client.eliminado_en) : null;
+
+                                    return (
+                                        <TableRow key={client.id} className="hover:bg-red-50/30 transition-colors border-slate-100 disabled text-slate-600 cursor-not-allowed">
+                                            <TableCell className="pl-6 py-4">
+                                                <div className="flex items-center gap-2 text-red-600 font-medium">
+                                                    <Clock className="w-4 h-4" />
+                                                    {delDate ? format(delDate, "dd MMM yyyy, HH:mm", { locale: es }) : 'Desconocida'}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-slate-500 text-sm line-through decoration-slate-300">{client.nombre}</span>
+                                                    <span className="text-xs text-slate-400">ID: {client.numero_cliente || '-'}</span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="py-4">
+                                                <div className="text-sm text-slate-600">{client.telefono || '-'}</div>
+                                            </TableCell>
+                                            <TableCell className="py-4">
+                                                <div className="font-semibold text-slate-600 capitalize opacity-80">{client.tipo_ciclista || 'Standard'}</div>
+                                            </TableCell>
+                                            <TableCell className="text-right pr-6 py-4 flex justify-end items-center gap-2">
+                                                <Badge variant="outline" className="text-slate-400 bg-transparent border-red-200 uppercase font-normal text-[10px] tracking-wider hidden md:inline-flex">
+                                                    Anulado
+                                                </Badge>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                                                    onClick={() => handleRestoreClient(client.id)}
+                                                    disabled={restoringId === client.id}
+                                                >
+                                                    {restoringId === client.id ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCcw className="w-4 h-4 mr-1" />}
                                                     Restaurar
                                                 </Button>
                                             </TableCell>

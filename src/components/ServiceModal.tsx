@@ -625,12 +625,15 @@ function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, 
 
     const selectedCarrera = carreras.find(c => c.id === selectedId);
 
+    const normalizeStr = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
     const filteredCarreras = useMemo(() => {
         if (!search) return carreras.slice(0, 5);
-        return carreras.filter(c => c.nombre.toLowerCase().includes(search.toLowerCase())).slice(0, 5);
+        const normSearch = normalizeStr(search);
+        return carreras.filter(c => normalizeStr(c.nombre).includes(normSearch)).slice(0, 5);
     }, [search, carreras]);
 
-    const exactMatch = carreras.some(c => c.nombre.toLowerCase() === search.toLowerCase());
+    const exactMatch = carreras.some(c => normalizeStr(c.nombre) === normalizeStr(search));
 
     const handleSelect = (id: string) => {
         if (selectedId === id) onSelect(null);
@@ -703,9 +706,9 @@ function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, 
 
                 {/* Dropdown Content */}
                 <PopoverContent
-                    className="w-[var(--radix-popover-trigger-width)] p-0 shadow-2xl rounded-md z-[9999] border-slate-200"
+                    className="w-[95vw] sm:w-[500px] p-0 shadow-2xl rounded-md z-[9999] border-slate-200"
                     align="start"
-                    sideOffset={4}
+                    sideOffset={8}
                 >
                     <div className="flex flex-col w-full bg-white rounded-md overflow-hidden">
                         <div className="p-2 border-b bg-slate-50/50">

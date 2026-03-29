@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/authStore';
+import ExpertMetrics from '@/components/ExpertMetrics';
 import {
     BarChart3,
     TrendingUp,
@@ -16,7 +17,8 @@ import {
     Brain,
     Ticket,
     Tag,
-    Loader2
+    Loader2,
+    Lock
 } from 'lucide-react';
 
 // --- SEMANTIC ENGINE HELPERS ---
@@ -103,6 +105,8 @@ export function getSemanticCategory(rawDesc: string): string {
 
 export default function Metrics() {
     const tallerId = useAuthStore(s => s.taller_id);
+    const taller = useAuthStore(s => s.taller);
+    const planActual: string = taller?.plan_actual || 'Sport';
 
     const [dateStart, setDateStart] = useState<string>(new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]);
     const [dateEnd, setDateEnd] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -116,7 +120,6 @@ export default function Metrics() {
             if (!tallerId) return;
             setIsLoading(true);
             try {
-                // 1. Fetch bicicletas for this tenant
                 const { data: bData } = await supabase
                     .from('bicicletas')
                     .select('*')
@@ -124,13 +127,10 @@ export default function Metrics() {
 
                 if (bData) setBicicletas(bData);
 
-                // 2. Fetch completed/charged services matching date range, excluding soft deletes
                 const startDate = new Date(`${dateStart}T00:00:00`);
                 const endDate = new Date(`${dateEnd}T23:59:59.999`);
                 const isoStart = startDate.toISOString();
                 const isoEnd = endDate.toISOString();
-
-                console.log('Filtros enviados a Supabase:', { tallerId, fechaInicio: isoStart, fechaFin: isoEnd });
 
                 const { data: sData, error: sError } = await supabase
                     .from('servicios')
@@ -141,13 +141,8 @@ export default function Metrics() {
                     .gte('fecha_entrega', isoStart)
                     .lte('fecha_entrega', isoEnd);
 
-                console.log('Data cruda de Supabase:', sData);
-
-                if (sError) {
-                    console.error("Error fetching services:", sError);
-                } else {
-                    setServicios(sData || []);
-                }
+                if (sError) console.error("Error fetching services:", sError);
+                else setServicios(sData || []);
             } catch (err) {
                 console.error("Data fetch error in Metrics:", err);
             } finally {
@@ -158,83 +153,50 @@ export default function Metrics() {
         fetchMetricsData();
     }, [tallerId, dateStart, dateEnd]);
 
-    // --- FILTER & ANALYTICS ENGINE ---
+    // --- ANALYTICS ENGINE ---
     const stats = useMemo(() => {
-        // Services are already filtered by Date, Status, Tenant, and Trash from backend
         const filtered = servicios;
-
-        // 1. Financial KPIs
         let totalRevenue = 0;
         let totalLabor = 0;
         let totalPartsRevenue = 0;
         let totalPartsCount = 0;
         const uniqueBikes = new Set();
-
-        // 2. Stock Analysis (Micro)
         const productCounts: Record<string, number> = {};
-
-        // 3. Workshop Trends (Macro)
         const trendCategories: Record<string, number> = {
-            'Transmisión': 0,
-            'Frenos': 0,
-            'Neumáticos y Ruedas': 0,
-            'Suspensión': 0,
-            'Cockpit y Componentes': 0,
-            'Mantenimiento General': 0,
-            'Otros': 0
+            'Transmisión': 0, 'Frenos': 0, 'Neumáticos y Ruedas': 0,
+            'Suspensión': 0, 'Cockpit y Componentes': 0, 'Mantenimiento General': 0, 'Otros': 0
         };
-
-        // 4. Service Distribution (Types)
         const serviceTypeCounts: Record<string, number> = {};
-
-        // 5. Brand Market Share
         const brandCounts: Record<string, number> = {};
 
         filtered.forEach(s => {
             const precioTotal = Number(s.precio_total) || 0;
             const precioBase = Number(s.precio_base) || 0;
-
             totalRevenue += precioTotal > 0 ? precioTotal : precioBase;
             totalLabor += precioBase;
             uniqueBikes.add(s.bicicleta_id);
 
-            // Analyze Service Types
             const rawType = (s.tipo_servicio || 'General').trim();
-            const normalizedType = rawType.length > 1
-                ? rawType.charAt(0).toUpperCase() + rawType.slice(1).toLowerCase()
-                : rawType.toUpperCase();
+            const normalizedType = rawType.length > 1 ? rawType.charAt(0).toUpperCase() + rawType.slice(1).toLowerCase() : rawType.toUpperCase();
             serviceTypeCounts[normalizedType] = (serviceTypeCounts[normalizedType] || 0) + 1;
 
-            // Analyze Brands (Dynamic from modelo)
             const bike = bicicletas.find(b => b.id === s.bicicleta_id);
-            let brandName = "Desconocida";
-            if (bike && bike.modelo && typeof bike.modelo === 'string' && bike.modelo.trim()) {
-                brandName = bike.modelo.trim().split(/\s+/)[0];
-            }
+            let brandName = 'Desconocida';
+            if (bike?.modelo?.trim()) brandName = bike.modelo.trim().split(/\s+/)[0];
             brandName = brandName.trim();
-            if (brandName.length > 0) {
-                brandName = brandName.charAt(0).toUpperCase() + brandName.slice(1).toLowerCase();
-            } else {
-                brandName = "Desconocida";
-            }
+            brandName = brandName.length > 0 ? brandName.charAt(0).toUpperCase() + brandName.slice(1).toLowerCase() : 'Desconocida';
             brandCounts[brandName] = (brandCounts[brandName] || 0) + 1;
 
-            // Analyze Items
             const items = Array.isArray(s.servicio_items) ? s.servicio_items : (Array.isArray(s.items_extra) ? s.items_extra : []);
-
             items.forEach((item: any) => {
                 const itemPrecio = Number(item.precio) || 0;
                 if (item.categoria === 'part' || item.categoria === 'producto' || item.categoria === 'repuesto') {
                     const desc = (item.descripcion || '').trim();
                     if (!desc) return;
-
                     const { name, qty } = parseItemQuantityAndName(desc);
-
                     totalPartsRevenue += itemPrecio;
                     totalPartsCount += qty;
-
                     productCounts[name] = (productCounts[name] || 0) + qty;
-
                     const category = getSemanticCategory(desc);
                     trendCategories[category] += qty;
                 } else {
@@ -243,51 +205,27 @@ export default function Metrics() {
             });
         });
 
-        // Process Top 5 Products
-        const sortedProducts = Object.entries(productCounts)
-            .sort(([, a], [, b]) => b - a).slice(0, 5)
-            .map(([name, count]) => ({ name, count }));
-
-        // Process Trends
+        const sortedProducts = Object.entries(productCounts).sort(([, a], [, b]) => b - a).slice(0, 5).map(([name, count]) => ({ name, count }));
         const totalTrendCount = Object.values(trendCategories).reduce((a, b) => a + b, 0);
         const trendData = Object.entries(trendCategories)
             .filter(([, count]) => count > 0)
-            .map(([category, count]) => ({
-                category, count,
-                percentage: totalTrendCount > 0 ? Math.round((count / totalTrendCount) * 100) : 0
-            }))
+            .map(([category, count]) => ({ category, count, percentage: totalTrendCount > 0 ? Math.round((count / totalTrendCount) * 100) : 0 }))
             .sort((a, b) => b.count - a.count);
 
-        // Process Service Distribution
         const totalServices = filtered.length;
         const serviceDistData = Object.entries(serviceTypeCounts)
-            .map(([type, count]) => ({
-                type, count,
-                percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0
-            }))
+            .map(([type, count]) => ({ type, count, percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0 }))
             .sort((a, b) => b.count - a.count);
 
-        // Process Brand Distribution
         const brandEntries = Object.entries(brandCounts).sort(([, a], [, b]) => b - a);
-        let finalBrandData = [];
+        let finalBrandData: any[] = [];
         if (brandEntries.length > 4) {
             const top4 = brandEntries.slice(0, 4);
             const othersCount = brandEntries.slice(4).reduce((sum, [, count]) => sum + count, 0);
-            finalBrandData = top4.map(([brand, count]) => ({
-                brand, count,
-                percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0
-            }));
-            if (othersCount > 0) {
-                finalBrandData.push({
-                    brand: 'Otras', count: othersCount,
-                    percentage: totalServices > 0 ? Math.round((othersCount / totalServices) * 100) : 0
-                });
-            }
+            finalBrandData = top4.map(([brand, count]) => ({ brand, count, percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0 }));
+            if (othersCount > 0) finalBrandData.push({ brand: 'Otras', count: othersCount, percentage: totalServices > 0 ? Math.round((othersCount / totalServices) * 100) : 0 });
         } else {
-            finalBrandData = brandEntries.map(([brand, count]) => ({
-                brand, count,
-                percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0
-            }));
+            finalBrandData = brandEntries.map(([brand, count]) => ({ brand, count, percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0 }));
         }
 
         const avgTicket = totalServices > 0 ? Math.round(totalRevenue / totalServices) : 0;
@@ -295,213 +233,239 @@ export default function Metrics() {
         const partsPerc = totalRevenue > 0 ? Math.round((totalPartsRevenue / totalRevenue) * 100) : 0;
 
         return {
-            count: filtered.length,
-            revenue: totalRevenue,
-            labor: totalLabor,
-            parts: totalPartsRevenue,
-            partsCount: totalPartsCount,
-            bikesCount: uniqueBikes.size,
-            topProducts: sortedProducts,
-            trends: trendData,
-            serviceDist: serviceDistData,
-            brandDist: finalBrandData,
-            avgTicket,
-            laborPerc,
-            partsPerc
+            count: filtered.length, revenue: totalRevenue, labor: totalLabor,
+            parts: totalPartsRevenue, partsCount: totalPartsCount, bikesCount: uniqueBikes.size,
+            topProducts: sortedProducts, trends: trendData, serviceDist: serviceDistData,
+            brandDist: finalBrandData, avgTicket, laborPerc, partsPerc
         };
     }, [servicios, bicicletas]);
 
+    // ─── Shared Header ────────────────────────────────────────────────────────
+    const header = (
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+                <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+                    <BarChart3 className="h-8 w-8 text-primary" />
+                    Métricas y Estadísticas
+                </h1>
+                <p className="text-muted-foreground">Análisis financiero y operativo del taller.</p>
+            </div>
+            <Card className="p-1 px-4 flex items-center gap-4 bg-muted/50 border-none">
+                <div className="flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-semibold text-muted-foreground">Período:</span>
+                    {isLoading && <Loader2 className="w-4 h-4 text-primary animate-spin" />}
+                </div>
+                <div className="flex items-center gap-2">
+                    <Input type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} className="bg-white h-8 w-fit text-xs" />
+                    <span className="text-muted-foreground">-</span>
+                    <Input type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} className="bg-white h-8 w-fit text-xs" />
+                </div>
+            </Card>
+        </div>
+    );
+
+    // ─── Shared KPI cards ─────────────────────────────────────────────────────
+    const kpiCards = (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <KPICard title="Facturación Total" value={`$ ${stats.revenue.toLocaleString('es-AR')}`} icon={<DollarSign className="w-5 h-5 text-green-600" />} trend="+12%" trendUp={true} className="bg-green-50 border-green-100" />
+            <KPICard title="Mano de Obra" value={`$ ${stats.labor.toLocaleString('es-AR')}`} icon={<Wrench className="w-5 h-5 text-primary" />} sublabel={`${stats.count} Servicios realizados`} />
+            <KPICard title="Venta Repuestos" value={`$ ${stats.parts.toLocaleString('es-AR')}`} icon={<Package className="w-5 h-5 text-secondary" />} sublabel={`${stats.partsCount} Productos vendidos`} />
+            <KPICard title="Ticket Promedio" value={`$ ${stats.avgTicket.toLocaleString('es-AR')}`} icon={<Ticket className="w-5 h-5 text-primary" />} sublabel="Por visita de cliente" />
+            <KPICard title="Bicis Atendidas" value={stats.bikesCount.toString()} icon={<TrendingUp className="w-5 h-5 text-purple-600" />} sublabel="En el período seleccionado" />
+            <Card className="hover:shadow-md transition-shadow">
+                <CardContent className="p-6">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-100">
+                            <PieChart className="w-5 h-5 text-indigo-600" />
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <h3 className="text-sm font-medium text-muted-foreground">Mix Facturación</h3>
+                        <div className="pt-1">
+                            <div className="flex justify-between text-xs font-bold mb-1">
+                                <span className="text-primary">{stats.laborPerc}% MO</span>
+                                <span className="text-secondary">{stats.partsPerc}% REP</span>
+                            </div>
+                            <div className="h-3 w-full bg-secondary/20 rounded-full overflow-hidden flex">
+                                <div className="bg-primary h-full transition-all duration-1000" style={{ width: `${stats.laborPerc}%` }} />
+                                <div className="bg-secondary h-full transition-all duration-1000" style={{ width: `${stats.partsPerc}%` }} />
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+    );
+
+    // ─── Pro analysis panels ──────────────────────────────────────────────────
+    const analysisPanels = (
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
+            {/* 1. STOCK RANKING */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
+                <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-2">
+                        <Package className="w-6 h-6 text-primary" />
+                        <h3 className="text-lg font-bold text-gray-900">Ranking de Stock</h3>
+                    </div>
+                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 5 Vendidos</span>
+                </div>
+                <div className="flex-1">
+                    {stats.topProducts.length === 0 ? (
+                        <div className="h-40 flex items-center justify-center text-muted-foreground italic">No hay datos de ventas en este período.</div>
+                    ) : (
+                        <div className="space-y-4">
+                            {stats.topProducts.map((prod: any, idx: number) => (
+                                <div key={idx} className="flex items-center gap-4 group">
+                                    <div className="flex-none font-bold text-2xl text-slate-200 w-8 text-center group-hover:text-primary transition-colors">#{idx + 1}</div>
+                                    <div className="flex-1">
+                                        <div className="font-semibold text-slate-800">{prod.name}</div>
+                                        <div className="text-xs text-muted-foreground">Repuesto específico</div>
+                                    </div>
+                                    <div className="flex-none bg-primary/10 text-primary font-bold px-3 py-1 rounded-lg">{prod.count} u.</div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* 2. REPAIR TRENDS */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
+                <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-2">
+                        <PieChart className="w-6 h-6 text-primary" />
+                        <h3 className="text-lg font-bold text-gray-900">Tendencias de Taller</h3>
+                    </div>
+                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Categorías</span>
+                </div>
+                <div className="flex-1 flex flex-col justify-between">
+                    {stats.trends.length === 0 ? (
+                        <div className="h-40 flex items-center justify-center text-muted-foreground italic">No hay datos de servicios en este período.</div>
+                    ) : (
+                        <div className="space-y-6 pt-2">
+                            {stats.trends.map((cat: any, idx: number) => (
+                                <div key={idx} className="space-y-1">
+                                    <div className="flex justify-between items-center mb-1 text-sm font-medium">
+                                        <span className="flex items-center gap-2">{getCategoryIcon(cat.category)}<span className="text-slate-700">{cat.category}</span></span>
+                                        <span className="text-slate-600 font-bold">{cat.percentage}% <span className="text-xs text-muted-foreground font-normal">({cat.count})</span></span>
+                                    </div>
+                                    <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+                                        <div className={`h-full rounded-full transition-all duration-1000 ${getCategoryColor(cat.category)}`} style={{ width: `${cat.percentage}%` }} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    <div className="mt-6 pt-4 border-t text-xs text-muted-foreground text-center">* Agrupación automática basada en descripción de items.</div>
+                </div>
+            </div>
+
+            {/* 3. SERVICE DISTRIBUTION */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
+                <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-2">
+                        <Brain className="w-6 h-6 text-primary" />
+                        <h3 className="text-lg font-bold text-gray-900">Distribución de Services</h3>
+                    </div>
+                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Tipos</span>
+                </div>
+                <div className="flex-1">
+                    {stats.serviceDist.length === 0 ? (
+                        <div className="h-40 flex items-center justify-center text-muted-foreground italic">No hay datos de servicios en este período.</div>
+                    ) : (
+                        <div className="space-y-6 pt-2">
+                            {stats.serviceDist.map((item: any, idx: number) => (
+                                <div key={idx} className="space-y-1">
+                                    <div className="flex justify-between items-center mb-1 text-sm font-medium">
+                                        <span className="flex items-center gap-2">
+                                            {item.type === 'Sport' ? '🚴' : item.type === 'Expert' ? '🚵' : '🔧'}
+                                            <span className="text-slate-700">{item.type}</span>
+                                        </span>
+                                        <span className="text-slate-600 font-bold">{item.percentage}% <span className="text-xs text-muted-foreground font-normal">({item.count})</span></span>
+                                    </div>
+                                    <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+                                        <div className={`h-full rounded-full transition-all duration-1000 ${item.type === 'Sport' ? 'bg-emerald-500' : item.type === 'Expert' ? 'bg-indigo-500' : 'bg-slate-400'}`} style={{ width: `${item.percentage}%` }} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* 4. BRAND DISTRIBUTION */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
+                <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-2">
+                        <Tag className="w-6 h-6 text-primary" />
+                        <h3 className="text-lg font-bold text-gray-900">Flota por Marcas</h3>
+                    </div>
+                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Distribución</span>
+                </div>
+                <div className="flex-1">
+                    {stats.brandDist.length === 0 ? (
+                        <div className="h-40 flex items-center justify-center text-muted-foreground italic">No hay datos de marcas en este período.</div>
+                    ) : (
+                        <div className="space-y-6 pt-2">
+                            {stats.brandDist.map((item: any, idx: number) => (
+                                <div key={idx} className="space-y-1">
+                                    <div className="flex justify-between items-center mb-1 text-sm font-medium">
+                                        <span className="text-slate-700">{item.brand}</span>
+                                        <span className="text-slate-600 font-bold">{item.percentage}% <span className="text-xs text-muted-foreground font-normal">({item.count})</span></span>
+                                    </div>
+                                    <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+                                        <div className={`h-full rounded-full transition-all duration-1000 ${idx === 0 ? 'bg-primary' : idx === 1 ? 'bg-primary/80' : idx === 2 ? 'bg-primary/60' : idx === 3 ? 'bg-slate-400' : 'bg-slate-300'}`} style={{ width: `${item.percentage}%` }} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+
+    // ─── Plan: Sport → BasicMetrics ───────────────────────────────────────────
+    if (planActual === 'Sport') {
+        return (
+            <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
+                {header}
+                {kpiCards}
+                {/* Upgrade nudge */}
+                <div className="flex items-center gap-3 px-5 py-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-medium">
+                    <Lock className="w-4 h-4 shrink-0" />
+                    Actualiza al plan <strong className="mx-1">Pro</strong> o <strong className="mx-1">Expert</strong> para desbloquear análisis de tendencias, distribución de marcas e inteligencia de equipo.
+                </div>
+            </div>
+        );
+    }
+
+    // ─── Plan: Pro → OperationalMetrics ──────────────────────────────────────
+    if (planActual === 'Pro') {
+        return (
+            <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
+                {header}
+                {kpiCards}
+                {analysisPanels}
+            </div>
+        );
+    }
+
+    // ─── Plan: Expert → ExpertMetrics ────────────────────────────────────────
     return (
         <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
-            {/* HEADER & CONTROLS */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-                        <BarChart3 className="h-8 w-8 text-primary" />
-                        Métricas y Estadísticas
-                    </h1>
-                    <p className="text-muted-foreground">Análisis financiero y operativo del taller.</p>
-                </div>
-
-                <Card className="p-1 px-4 flex items-center gap-4 bg-muted/50 border-none">
-                    <div className="flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm font-semibold text-muted-foreground">Período:</span>
-                        {isLoading && <Loader2 className="w-4 h-4 text-primary animate-spin" />}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Input type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} className="bg-white h-8 w-fit text-xs" />
-                        <span className="text-muted-foreground">-</span>
-                        <Input type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} className="bg-white h-8 w-fit text-xs" />
-                    </div>
-                </Card>
-            </div>
-
-            {/* KPI CARDS */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <KPICard title="Facturación Total" value={`$ ${stats.revenue.toLocaleString('es-AR')}`} icon={<DollarSign className="w-5 h-5 text-green-600" />} trend="+12%" trendUp={true} className="bg-green-50 border-green-100" />
-                <KPICard title="Mano de Obra" value={`$ ${stats.labor.toLocaleString('es-AR')}`} icon={<Wrench className="w-5 h-5 text-primary" />} sublabel={`${stats.count} Servicios realizados`} />
-                <KPICard title="Venta Repuestos" value={`$ ${stats.parts.toLocaleString('es-AR')}`} icon={<Package className="w-5 h-5 text-secondary" />} sublabel={`${stats.partsCount} Productos vendidos`} />
-                <KPICard title="Ticket Promedio" value={`$ ${stats.avgTicket.toLocaleString('es-AR')}`} icon={<Ticket className="w-5 h-5 text-primary" />} sublabel="Por visita de cliente" />
-                <KPICard title="Bicis Atendidas" value={stats.bikesCount.toString()} icon={<TrendingUp className="w-5 h-5 text-purple-600" />} sublabel="En el período seleccionado" />
-
-                {/* MIX DE FACTURACIÓN CARD */}
-                <Card className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-6">
-                        <div className="flex justify-between items-start mb-2">
-                            <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-100">
-                                <PieChart className="w-5 h-5 text-indigo-600" />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <h3 className="text-sm font-medium text-muted-foreground">Mix Facturación</h3>
-                            <div className="pt-1">
-                                <div className="flex justify-between text-xs font-bold mb-1">
-                                    <span className="text-primary">{stats.laborPerc}% MO</span>
-                                    <span className="text-secondary">{stats.partsPerc}% REP</span>
-                                </div>
-                                <div className="h-3 w-full bg-secondary/20 rounded-full overflow-hidden flex">
-                                    <div className="bg-primary h-full transition-all duration-1000" style={{ width: `${stats.laborPerc}%` }} />
-                                    <div className="bg-secondary h-full transition-all duration-1000" style={{ width: `${stats.partsPerc}%` }} />
-                                </div>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* MAIN ANALYSIS GRID */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6">
-                {/* 1. STOCK RANKING */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
-                    <div className="flex items-center justify-between mb-5">
-                        <div className="flex items-center gap-2">
-                            <Package className="w-6 h-6 text-primary" />
-                            <h3 className="text-lg font-bold text-gray-900">Ranking de Stock</h3>
-                        </div>
-                        <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 5 Vendidos</span>
-                    </div>
-                    <div className="flex-1">
-                        {stats.topProducts.length === 0 ? (
-                            <div className="h-40 flex items-center justify-center text-muted-foreground italic">No hay datos de ventas en este período.</div>
-                        ) : (
-                            <div className="space-y-4">
-                                {stats.topProducts.map((prod, idx) => (
-                                    <div key={idx} className="flex items-center gap-4 group">
-                                        <div className="flex-none font-bold text-2xl text-slate-200 w-8 text-center group-hover:text-primary transition-colors">#{idx + 1}</div>
-                                        <div className="flex-1">
-                                            <div className="font-semibold text-slate-800">{prod.name}</div>
-                                            <div className="text-xs text-muted-foreground">Repuesto específico</div>
-                                        </div>
-                                        <div className="flex-none bg-primary/10 text-primary font-bold px-3 py-1 rounded-lg">{prod.count} u.</div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* 2. REPAIR TRENDS */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
-                    <div className="flex items-center justify-between mb-5">
-                        <div className="flex items-center gap-2">
-                            <PieChart className="w-6 h-6 text-primary" />
-                            <h3 className="text-lg font-bold text-gray-900">Tendencias de Taller</h3>
-                        </div>
-                        <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Categorías</span>
-                    </div>
-                    <div className="flex-1 flex flex-col justify-between">
-                        {stats.trends.length === 0 ? (
-                            <div className="h-40 flex items-center justify-center text-muted-foreground italic">No hay datos de servicios en este período.</div>
-                        ) : (
-                            <div className="space-y-6 pt-2">
-                                {stats.trends.map((cat, idx) => (
-                                    <div key={idx} className="space-y-1">
-                                        <div className="flex justify-between items-center mb-1 text-sm font-medium">
-                                            <span className="flex items-center gap-2">
-                                                {getCategoryIcon(cat.category)}
-                                                <span className="text-slate-700">{cat.category}</span>
-                                            </span>
-                                            <span className="text-slate-600 font-bold">{cat.percentage}% <span className="text-xs text-muted-foreground font-normal">({cat.count})</span></span>
-                                        </div>
-                                        <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
-                                            <div className={`h-full rounded-full transition-all duration-1000 ${getCategoryColor(cat.category)}`} style={{ width: `${cat.percentage}%` }} />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                        <div className="mt-6 pt-4 border-t text-xs text-muted-foreground text-center">
-                            * Agrupación automática basada en descripción de items.
-                        </div>
-                    </div>
-                </div>
-
-                {/* 3. SERVICE DISTRIBUTION */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
-                    <div className="flex items-center justify-between mb-5">
-                        <div className="flex items-center gap-2">
-                            <Brain className="w-6 h-6 text-primary" />
-                            <h3 className="text-lg font-bold text-gray-900">Distribución de Services</h3>
-                        </div>
-                        <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Tipos</span>
-                    </div>
-                    <div className="flex-1">
-                        {stats.serviceDist.length === 0 ? (
-                            <div className="h-40 flex items-center justify-center text-muted-foreground italic">No hay datos de servicios en este período.</div>
-                        ) : (
-                            <div className="space-y-6 pt-2">
-                                {stats.serviceDist.map((item, idx) => (
-                                    <div key={idx} className="space-y-1">
-                                        <div className="flex justify-between items-center mb-1 text-sm font-medium">
-                                            <span className="flex items-center gap-2">
-                                                {item.type === 'Sport' ? '🚴' : item.type === 'Expert' ? '🚵' : '🔧'}
-                                                <span className="text-slate-700">{item.type}</span>
-                                            </span>
-                                            <span className="text-slate-600 font-bold">{item.percentage}% <span className="text-xs text-muted-foreground font-normal">({item.count})</span></span>
-                                        </div>
-                                        <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
-                                            <div className={`h-full rounded-full transition-all duration-1000 ${item.type === 'Sport' ? 'bg-emerald-500' : item.type === 'Expert' ? 'bg-indigo-500' : 'bg-slate-400'}`} style={{ width: `${item.percentage}%` }} />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* 4. BRAND DISTRIBUTION */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
-                    <div className="flex items-center justify-between mb-5">
-                        <div className="flex items-center gap-2">
-                            <Tag className="w-6 h-6 text-primary" />
-                            <h3 className="text-lg font-bold text-gray-900">Flota por Marcas</h3>
-                        </div>
-                        <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Distribución</span>
-                    </div>
-                    <div className="flex-1">
-                        {stats.brandDist.length === 0 ? (
-                            <div className="h-40 flex items-center justify-center text-muted-foreground italic">No hay datos de marcas en este período.</div>
-                        ) : (
-                            <div className="space-y-6 pt-2">
-                                {stats.brandDist.map((item, idx) => (
-                                    <div key={idx} className="space-y-1">
-                                        <div className="flex justify-between items-center mb-1 text-sm font-medium">
-                                            <span className="flex items-center gap-2">
-                                                <span className="text-slate-700">{item.brand}</span>
-                                            </span>
-                                            <span className="text-slate-600 font-bold">{item.percentage}% <span className="text-xs text-muted-foreground font-normal">({item.count})</span></span>
-                                        </div>
-                                        <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
-                                            <div className={`h-full rounded-full transition-all duration-1000 ${idx === 0 ? 'bg-primary' : idx === 1 ? 'bg-primary/80' : idx === 2 ? 'bg-primary/60' : idx === 3 ? 'bg-slate-400' : 'bg-slate-300'}`} style={{ width: `${item.percentage}%` }} />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
+            {header}
+            {kpiCards}
+            {analysisPanels}
+            <ExpertMetrics
+                tallerId={tallerId || ''}
+                dateStart={dateStart}
+                dateEnd={dateEnd}
+                stats={stats}
+                servicios={servicios}
+                isLoading={isLoading}
+            />
         </div>
     );
 }

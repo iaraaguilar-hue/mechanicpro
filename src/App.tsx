@@ -172,7 +172,7 @@ function AppContent() {
           <Link to="/admin">
             <NavButton icon={<Settings />} label="Admin" />
           </Link>
-          {rol?.toLowerCase()?.trim() === 'admin' && (
+          {rol?.toLowerCase()?.trim() === 'admin' && taller?.plan_actual !== 'Sport' && (
             <Link to="/auditoria">
               <NavButton icon={<Trash2 />} label="Auditoría (Admin)" />
             </Link>

@@ -4,6 +4,21 @@ import { cleanItemName } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { getBase64ImageFromUrl } from '@/lib/pdfGenerator';
 
+// ─── Strip HTML to plain text (Sport plan fallback) ───────────────────────────
+function stripHtml(html: string): string {
+  if (!html) return '';
+  // Replace block-level tags with newlines, then strip remaining tags
+  return html
+    .replace(/<\/?(p|div|li|br)[^>]*>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export const printServiceReport = async (
   job: any,
   clientName: string = 'Cliente',
@@ -14,7 +29,14 @@ export const printServiceReport = async (
   if (!job) return;
 
   const taller = useAuthStore.getState().taller;
-  const logoUrlRaw = taller?.logo_url || `${window.location.origin}/img/logo_full.png`;
+  const planActual: string = taller?.plan_actual || 'Pro';
+  const isSportPlan = planActual === 'Sport';
+
+  // Sport plan → always use the generic/fallback logo
+  const logoUrlRaw = isSportPlan
+    ? `${window.location.origin}/img/logo_full.png`
+    : (taller?.logo_url || `${window.location.origin}/img/logo_full.png`);
+
   const primaryColor = taller?.color_primario || '#f25a30';
   const politicaPago = taller?.politica_pago || '';
 
@@ -44,10 +66,10 @@ export const printServiceReport = async (
     ? `<tr><td style="padding: 8px 0 4px 0; font-weight: 700; font-size: 14px; color: #333;">${serviceType}</td><td style="padding: 8px 0 4px 0; text-align: right; font-weight: 700; font-size: 14px;">$ ${basePrice.toLocaleString('es-AR')}</td></tr>`
     : '';
 
-  // Build description block: prefer HTML, fall back to plain lines
+  // Build description block: Sport → plain text, Pro/Expert → prefer HTML, fall back to plain
   let laborDescriptionBlock = '';
-  if (descripcionHtml && descripcionHtml.trim() !== '<p></p>') {
-    // Inject HTML directly — html2pdf uses Chromium-like rendering so CSS works
+  if (!isSportPlan && descripcionHtml && descripcionHtml.trim() !== '<p></p>') {
+    // Pro/Expert: Inject HTML directly — html2pdf uses Chromium-like rendering so CSS works
     laborDescriptionBlock = `
       <tr><td colspan="2" style="padding: 8px 0 4px 0;">
         <div style="font-size: 11px; color: #555; line-height: 1.7;
@@ -63,19 +85,26 @@ export const printServiceReport = async (
           <div class="labor-desc">${descripcionHtml}</div>
         </div>
       </td></tr>`;
-  } else if (notesPlain) {
-    // Fallback: plain text split by newlines
-    laborDescriptionBlock = notesPlain
-      .split('\n')
-      .filter((t: string) => t.trim())
-      .map((t: string) => {
-        if (t.trim().endsWith(':')) {
-          return `<tr><td style="padding: 10px 0 2px 0; font-weight: 700; font-size: 11px; color: #555; text-transform: uppercase;">${t}</td><td></td></tr>`;
-        }
-        const clean = t.replace(/^[-•]\s*/, '');
-        return `<tr><td style="padding: 1px 0 1px 15px; font-size: 11px; color: #666; line-height: 1.4;">• ${clean}</td><td></td></tr>`;
-      })
-      .join('');
+  } else {
+    // Sport plan (or no HTML): render as plain text lines
+    // For Sport, strip any residual HTML from descripcionHtml first, then combine with notesPlain
+    const plainSource = isSportPlan
+      ? (stripHtml(descripcionHtml) || notesPlain)
+      : notesPlain;
+
+    if (plainSource) {
+      laborDescriptionBlock = plainSource
+        .split('\n')
+        .filter((t: string) => t.trim())
+        .map((t: string) => {
+          if (t.trim().endsWith(':')) {
+            return `<tr><td style="padding: 10px 0 2px 0; font-weight: 700; font-size: 11px; color: #555; text-transform: uppercase;">${t}</td><td></td></tr>`;
+          }
+          const clean = t.replace(/^[-•]\s*/, '');
+          return `<tr><td style="padding: 1px 0 1px 15px; font-size: 11px; color: #666; line-height: 1.4;">• ${clean}</td><td></td></tr>`;
+        })
+        .join('');
+    }
   }
 
   // --- 2. EXTRA LABOR & PRODUCTS ---

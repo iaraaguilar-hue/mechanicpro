@@ -20,6 +20,7 @@ interface Taller {
     color_secundario: string;
     mensaje_informe: string;
     politica_pago?: string;
+    plan_actual?: string;
     created_at?: string;
 }
 
@@ -469,13 +470,27 @@ export default function SuperAdmin() {
                                                 />
                                             </div>
                                             <div className="flex-1 space-y-1">
-                                                <Label className="text-xs">Descripción (Rich Text)</Label>
-                                                <RichTextEditor
-                                                    value={nuevoServicio.descripcion}
-                                                    onChange={(html) => setNuevoServicio({ ...nuevoServicio, descripcion: html })}
-                                                    placeholder="Incluye: limpieza, lubricación..."
-                                                    minHeight="80px"
-                                                />
+                                                <Label className="text-xs">
+                                                    Descripción {editingTaller?.plan_actual !== 'Sport' ? '(Rich Text)' : '(Texto Plano)'}
+                                                    {editingTaller?.plan_actual === 'Sport' && (
+                                                        <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">Plan Sport</span>
+                                                    )}
+                                                </Label>
+                                                {editingTaller?.plan_actual === 'Pro' || editingTaller?.plan_actual === 'Expert' ? (
+                                                    <RichTextEditor
+                                                        value={nuevoServicio.descripcion}
+                                                        onChange={(html) => setNuevoServicio({ ...nuevoServicio, descripcion: html })}
+                                                        placeholder="Incluye: limpieza, lubricación..."
+                                                        minHeight="80px"
+                                                    />
+                                                ) : (
+                                                    <textarea
+                                                        className="w-full min-h-[80px] p-2 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                        value={nuevoServicio.descripcion}
+                                                        onChange={(e) => setNuevoServicio({ ...nuevoServicio, descripcion: e.target.value })}
+                                                        placeholder="Incluye: limpieza, lubricación..."
+                                                    />
+                                                )}
                                             </div>
                                             <div className="w-28 space-y-1">
                                                 <Label className="text-xs">Precio ($)</Label>
@@ -541,11 +556,19 @@ export default function SuperAdmin() {
                                                                     />
                                                                 </TableCell>
                                                                 <TableCell className="align-top">
-                                                                    <RichTextEditor
-                                                                        value={editForm.descripcion}
-                                                                        onChange={(html) => setEditForm({ ...editForm, descripcion: html })}
-                                                                        minHeight="60px"
-                                                                    />
+                                                                    {editingTaller?.plan_actual === 'Pro' || editingTaller?.plan_actual === 'Expert' ? (
+                                                                        <RichTextEditor
+                                                                            value={editForm.descripcion}
+                                                                            onChange={(html) => setEditForm({ ...editForm, descripcion: html })}
+                                                                            minHeight="60px"
+                                                                        />
+                                                                    ) : (
+                                                                        <textarea
+                                                                            className="w-full min-h-[60px] p-2 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                                                            value={editForm.descripcion}
+                                                                            onChange={(e) => setEditForm({ ...editForm, descripcion: e.target.value })}
+                                                                        />
+                                                                    )}
                                                                 </TableCell>
                                                                 <TableCell>
                                                                     <Input

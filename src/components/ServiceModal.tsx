@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Search, User, Bike as BikeIcon, Plus, CheckCircle, Wrench, Pencil, Trash2, ArrowLeft, Flag, Calendar, ChevronDown } from "lucide-react";
 import { AddClientDialog } from "@/components/AddClientDialog";
 import { AddBikeDialog } from "@/components/AddBikeDialog";
@@ -145,10 +146,10 @@ function ClientSearchStep({ onClientSelect }: { onClientSelect: (c: SupabaseClie
     const clientes = useDataStore(s => s.clientes);
 
     const filtered = useMemo(() => {
-        if (!query) return clientes.filter(c => !c.isDeleted).slice(0, 20);
+        if (!query) return clientes.filter(c => !c.eliminado_en).slice(0, 20);
         const q = query.toLowerCase();
         return clientes
-            .filter(c => !c.isDeleted && (
+            .filter(c => !c.eliminado_en && (
                 c.nombre.toLowerCase().includes(q) ||
                 (c.telefono || "").includes(q) ||
                 (c.dni || "").includes(q)
@@ -659,129 +660,137 @@ function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, 
     };
 
     return (
-        <div className="space-y-2 relative border-t border-dashed pt-4 mt-4">
+        <div className="space-y-2 border-t border-dashed pt-4 mt-4 flex flex-col items-start w-full">
             <Label className="flex items-center gap-2 text-indigo-700 font-semibold mb-2">
                 <Flag className="w-4 h-4" />
                 🏁 ¿Se prepara para una carrera o evento? (Opcional)
             </Label>
 
-            {/* Trigger Button */}
-            <div
-                className="flex items-center justify-between border rounded-md p-3 cursor-pointer hover:bg-slate-50 transition-colors bg-white"
-                onClick={() => setIsOpen(!isOpen)}
-            >
-                <div className="flex flex-col">
-                    {selectedCarrera ? (
-                        <>
-                            <span className="font-semibold">{selectedCarrera.nombre}</span>
-                            {selectedCarrera.fecha_evento && (
-                                <span className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                                    <Calendar className="w-3 h-3" />
-                                    {selectedCarrera.fecha_evento.split('-').reverse().join('/')}
-                                </span>
-                            )}
-                        </>
-                    ) : (
-                        <span className="text-muted-foreground italic">Seleccionar o crear evento...</span>
-                    )}
-                </div>
-                {selectedCarrera && (
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => { e.stopPropagation(); onSelect(null); }}
-                        className="h-6 w-6 p-0 text-red-500 rounded-full hover:bg-red-100"
+            <Popover open={isOpen} onOpenChange={setIsOpen}>
+                <PopoverTrigger asChild>
+                    {/* Trigger Button */}
+                    <div
+                        className="flex items-center justify-between border rounded-md p-3 cursor-pointer hover:bg-slate-50 transition-colors bg-white w-full"
                     >
-                        &times;
-                    </Button>
-                )}
-                {!selectedCarrera && <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-            </div>
-
-            {/* Dropdown Content */}
-            {isOpen && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white border shadow-xl rounded-md z-50 overflow-hidden">
-                    <div className="p-2 border-b">
-                        <Input
-                            value={search}
-                            onChange={(e) => { setSearch(e.target.value); setIsCreating(false); }}
-                            placeholder="Buscar evento (ej. Pinto, Río Tinto)..."
-                            className="h-10 border-indigo-200 focus-visible:ring-indigo-500"
-                            autoFocus
-                        />
-                    </div>
-
-                    {!isCreating ? (
-                        <div className="max-h-60 overflow-y-auto">
-                            {filteredCarreras.length > 0 ? (
-                                <div className="p-1">
-                                    {filteredCarreras.map(c => (
-                                        <div
-                                            key={c.id}
-                                            onClick={() => handleSelect(c.id)}
-                                            className={`p-2 rounded-md cursor-pointer flex items-center justify-between ${selectedId === c.id ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-100'}`}
-                                        >
-                                            <span className="font-medium">{c.nombre}</span>
-                                            {selectedId === c.id && <CheckCircle className="w-4 h-4" />}
-                                        </div>
-                                    ))}
-                                </div>
+                        <div className="flex flex-col">
+                            {selectedCarrera ? (
+                                <>
+                                    <span className="font-semibold">{selectedCarrera.nombre}</span>
+                                    {selectedCarrera.fecha_evento && (
+                                        <span className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                                            <Calendar className="w-3 h-3" />
+                                            {selectedCarrera.fecha_evento.split('-').reverse().join('/')}
+                                        </span>
+                                    )}
+                                </>
                             ) : (
-                                search && (
-                                    <div className="p-4 text-center text-muted-foreground text-sm">
-                                        No se encontraron carreras similares.
-                                    </div>
-                                )
+                                <span className="text-muted-foreground italic">Seleccionar o crear evento...</span>
                             )}
+                        </div>
+                        {selectedCarrera && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => { e.stopPropagation(); onSelect(null); }}
+                                className="h-6 w-6 p-0 text-red-500 rounded-full hover:bg-red-100"
+                            >
+                                &times;
+                            </Button>
+                        )}
+                        {!selectedCarrera && <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                    </div>
+                </PopoverTrigger>
 
-                            {search && !exactMatch && (
-                                <div className="p-2 border-t bg-slate-50">
+                {/* Dropdown Content */}
+                <PopoverContent
+                    className="w-[var(--radix-popover-trigger-width)] p-0 shadow-2xl rounded-md z-[9999] border-slate-200"
+                    align="start"
+                    sideOffset={4}
+                >
+                    <div className="flex flex-col w-full bg-white rounded-md overflow-hidden">
+                        <div className="p-2 border-b bg-slate-50/50">
+                            <Input
+                                value={search}
+                                onChange={(e) => { setSearch(e.target.value); setIsCreating(false); }}
+                                placeholder="Buscar evento (ej. Pinto, Río Tinto)..."
+                                className="h-10 border-indigo-200 focus-visible:ring-indigo-500 bg-white"
+                                autoFocus
+                            />
+                        </div>
+
+                        {!isCreating ? (
+                            <div className="max-h-60 overflow-y-auto w-full">
+                                {filteredCarreras.length > 0 ? (
+                                    <div className="p-1">
+                                        {filteredCarreras.map(c => (
+                                            <div
+                                                key={c.id}
+                                                onClick={() => handleSelect(c.id)}
+                                                className={`p-3 rounded-md cursor-pointer flex items-center justify-between transition-colors ${selectedId === c.id ? 'bg-indigo-50 text-indigo-700 font-semibold' : 'hover:bg-slate-100 text-slate-700'}`}
+                                            >
+                                                <span>{c.nombre}</span>
+                                                {selectedId === c.id && <CheckCircle className="w-4 h-4 text-indigo-600" />}
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    search && (
+                                        <div className="p-6 text-center text-muted-foreground text-sm flex flex-col items-center gap-2">
+                                            <Flag className="w-6 h-6 text-slate-300" />
+                                            <span>No se encontraron carreras similares.</span>
+                                        </div>
+                                    )
+                                )}
+
+                                {search && !exactMatch && (
+                                    <div className="p-2 border-t bg-slate-50">
+                                        <Button
+                                            variant="outline"
+                                            className="w-full justify-start text-indigo-700 border-indigo-200 hover:bg-indigo-100 font-medium"
+                                            onClick={() => setIsCreating(true)}
+                                        >
+                                            <Plus className="w-4 h-4 mr-2" />
+                                            Añadir nueva carrera: <span className="font-bold ml-1">{search}</span>
+                                        </Button>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="p-4 bg-indigo-50/80 space-y-4 w-full">
+                                <p className="text-sm font-medium text-indigo-900 border-b border-indigo-100 pb-2">
+                                    Creando competencia: <span className="font-bold">{search}</span>
+                                </p>
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-bold text-slate-500 uppercase tracking-wider block">Fecha del Evento (Opcional)</Label>
+                                    <Input
+                                        type="date"
+                                        value={newDate}
+                                        onChange={e => setNewDate(e.target.value)}
+                                        className="bg-white border-indigo-200"
+                                    />
+                                </div>
+                                <div className="flex gap-2 pt-2">
                                     <Button
                                         variant="outline"
-                                        className="w-full justify-start text-indigo-600 border-indigo-200 hover:bg-indigo-50"
-                                        onClick={() => setIsCreating(true)}
+                                        onClick={() => setIsCreating(false)}
+                                        className="flex-1 bg-white hover:bg-slate-50"
+                                        disabled={isSaving}
                                     >
-                                        <Plus className="w-4 h-4 mr-2" />
-                                        Añadir nueva carrera: <span className="font-bold ml-1">{search}</span>
+                                        Cancelar
+                                    </Button>
+                                    <Button
+                                        onClick={handleCreate}
+                                        className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm"
+                                        disabled={isSaving}
+                                    >
+                                        {isSaving ? "Guardando..." : "Crear Evento"}
                                     </Button>
                                 </div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="p-4 bg-indigo-50/50 space-y-4">
-                            <p className="text-sm font-medium text-indigo-900">
-                                Creando nueva carrera: <span className="font-bold">{search}</span>
-                            </p>
-                            <div className="space-y-2">
-                                <Label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fecha del Evento (Opcional)</Label>
-                                <Input
-                                    type="date"
-                                    value={newDate}
-                                    onChange={e => setNewDate(e.target.value)}
-                                    className="bg-white"
-                                />
                             </div>
-                            <div className="flex gap-2">
-                                <Button
-                                    variant="outline"
-                                    onClick={() => setIsCreating(false)}
-                                    className="flex-1"
-                                    disabled={isSaving}
-                                >
-                                    Cancelar
-                                </Button>
-                                <Button
-                                    onClick={handleCreate}
-                                    className="flex-1 bg-indigo-600 hover:bg-indigo-700"
-                                    disabled={isSaving}
-                                >
-                                    {isSaving ? "Guardando..." : "Crear y Seleccionar"}
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
+                        )}
+                    </div>
+                </PopoverContent>
+            </Popover>
         </div>
     );
 }

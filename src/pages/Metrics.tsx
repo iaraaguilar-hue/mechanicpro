@@ -4,6 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/authStore';
 import ExpertMetrics from '@/components/ExpertMetrics';
+import { normalizeBikeData } from '@/lib/bikeDataNormalizer';
 import {
     BarChart3,
     TrendingUp,
@@ -158,6 +159,8 @@ export default function Metrics() {
     // --- ANALYTICS ENGINE ---
     const stats = useMemo(() => {
         const filtered = servicios;
+        // Normalize bikes ONCE before aggregating
+        const normalizedBikes = normalizeBikeData(bicicletas);
         let totalRevenue = 0;
         let totalLabor = 0;
         let totalPartsRevenue = 0;
@@ -184,22 +187,20 @@ export default function Metrics() {
             const normalizedType = rawType.length > 1 ? rawType.charAt(0).toUpperCase() + rawType.slice(1).toLowerCase() : rawType.toUpperCase();
             serviceTypeCounts[normalizedType] = (serviceTypeCounts[normalizedType] || 0) + 1;
 
-            const bike = bicicletas.find(b => b.id === s.bicicleta_id);
+            const bike = normalizedBikes.find(b => b.id === s.bicicleta_id);
 
-            // BugFix 1: Consume STRICTLY from bike.marca
+            // Consume strictly bike.marca for brand
             let brandName = bike?.marca?.trim() || 'Desconocida';
             brandName = brandName.length > 0 ? brandName.charAt(0).toUpperCase() + brandName.slice(1).toLowerCase() : 'Desconocida';
             brandCounts[brandName] = (brandCounts[brandName] || 0) + 1;
 
-            // BugFix 2: Add Model grouping
-            let modelName = bike?.modelo?.trim() || 'Desconocido';
-            modelName = modelName.length > 0 ? modelName.charAt(0).toUpperCase() + modelName.slice(1).toLowerCase() : 'Desconocido';
-            modelCounts[modelName] = (modelCounts[modelName] || 0) + 1;
+            // Normalized model family (ej. "Epic 8 Pro (azul)" → "Epic")
+            const modelFamily = bike?.modelFamily || 'Desconocido';
+            modelCounts[modelFamily] = (modelCounts[modelFamily] || 0) + 1;
 
-            // BugFix 3: Add Category grouping
-            let catName = bike?.categoria?.trim() || 'Indefinido';
-            catName = catName.length > 0 ? catName.charAt(0).toUpperCase() + catName.slice(1).toLowerCase() : 'Indef.';
-            categoryCounts[catName] = (categoryCounts[catName] || 0) + 1;
+            // Inferred segment (ej. "Epic" → "MTB")
+            const segment = bike?.segment || 'Otros';
+            categoryCounts[segment] = (categoryCounts[segment] || 0) + 1;
 
             const items = Array.isArray(s.servicio_items) ? s.servicio_items : (Array.isArray(s.items_extra) ? s.items_extra : []);
             items.forEach((item: any) => {

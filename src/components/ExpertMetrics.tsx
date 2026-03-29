@@ -1,23 +1,22 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, PieChart as PieIcon, Users } from 'lucide-react';
+import { Loader2, PieChart as PieIcon, TrendingUp } from 'lucide-react';
 import {
     PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
-    BarChart, Bar, XAxis, YAxis, CartesianGrid,
+    AreaChart, Area, XAxis, YAxis, CartesianGrid,
 } from 'recharts';
 
 // ─── Color palette ───────────────────────────────────────────────────────────
 const CATEGORY_COLORS: Record<string, string> = {
-    'Sistemas de Frenado': '#ef4444',
-    'Transmisión': '#8b5cf6',
-    'Neumáticos y Ruedas': '#3b82f6',
-    'Suspensión': '#f59e0b',
-    'Cockpit y Componentes': '#10b981',
-    'Mantenimiento General': '#14b8a6',
-    'Otros': '#94a3b8',
+    'Sistemas de Frenado': '#ef4444', // red-500
+    'Transmisión': '#8b5cf6', // violet-500
+    'Neumáticos y Ruedas': '#3b82f6', // blue-500
+    'Suspensión': '#f59e0b', // amber-500
+    'Cockpit y Componentes': '#10b981', // emerald-500
+    'Mantenimiento General': '#14b8a6', // teal-500
+    'Otros': '#94a3b8', // slate-400
 };
-const CHART_COLORS = ['#f25a30', '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#14b8a6'];
+const CHART_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#14b8a6', '#94a3b8'];
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface TrendItem {
@@ -25,19 +24,16 @@ interface TrendItem {
     conteo: number;
 }
 
-interface MechanicStat {
-    mecanico: string;
-    tickets: number;
-    ticket_promedio: number;
+interface TimelineStat {
+    fecha: string;
+    ingresos: number;
 }
 
 interface Props {
     tallerId: string;
     dateStart?: string;
     dateEnd?: string;
-    /** Pass the already-computed top KPI stats so ExpertMetrics can render the full Pro view + extras */
     stats: any;
-    /** All services (already filtered by date range) */
     servicios: any[];
     isLoading: boolean;
 }
@@ -47,26 +43,24 @@ const CustomPieTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
         const d = payload[0];
         return (
-            <div className="bg-white border border-slate-200 shadow-lg rounded-xl px-4 py-2 text-sm">
-                <p className="font-bold text-slate-800">{d.name}</p>
-                <p className="text-slate-600">{d.value} ítems registrados</p>
+            <div className="bg-white border border-gray-100 shadow-sm rounded-xl px-4 py-2 text-sm">
+                <p className="font-bold text-gray-900">{d.name}</p>
+                <p className="text-gray-600">{d.value} ítems registrados</p>
             </div>
         );
     }
     return null;
 };
 
-// ─── Custom Tooltip for BarChart ─────────────────────────────────────────────
-const CustomBarTooltip = ({ active, payload, label }: any) => {
+// ─── Custom Tooltip for AreaChart ─────────────────────────────────────────────
+const CustomAreaTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-white border border-slate-200 shadow-lg rounded-xl px-4 py-2 text-sm space-y-1">
-                <p className="font-bold text-slate-800 truncate max-w-[160px]">{label}</p>
-                {payload.map((p: any) => (
-                    <p key={p.dataKey} style={{ color: p.color }} className="font-medium">
-                        {p.name}: {p.dataKey === 'ticket_promedio' ? `$${p.value.toLocaleString('es-AR')}` : p.value}
-                    </p>
-                ))}
+            <div className="bg-white border border-gray-100 shadow-sm rounded-xl px-4 py-3 text-sm">
+                <p className="font-bold text-gray-900 mb-1">{label}</p>
+                <p className="font-medium text-emerald-600">
+                    Facturación: ${payload[0].value.toLocaleString('es-AR')}
+                </p>
             </div>
         );
     }
@@ -76,7 +70,7 @@ const CustomBarTooltip = ({ active, payload, label }: any) => {
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
 export default function ExpertMetrics({ tallerId, servicios, isLoading }: Props) {
     const [trends, setTrends] = useState<TrendItem[]>([]);
-    const [teamStats, setTeamStats] = useState<MechanicStat[]>([]);
+    const [revenueTimeline, setRevenueTimeline] = useState<TimelineStat[]>([]);
     const [loadingTrends, setLoadingTrends] = useState(true);
 
     // ── Load trend data from RPC ──────────────────────────────────────────────
@@ -101,34 +95,32 @@ export default function ExpertMetrics({ tallerId, servicios, isLoading }: Props)
         fetchTrends();
     }, [tallerId]);
 
-    // ── Compute mechanic performance from servicios ───────────────────────────
+    // ── Compute revenue timeline from servicios ───────────────────────────
     useEffect(() => {
-        if (!servicios.length) { setTeamStats([]); return; }
+        if (!servicios.length) { setRevenueTimeline([]); return; }
 
-        const mechanicMap: Record<string, { total: number; count: number }> = {};
+        const timelineMap: Record<string, number> = {};
 
         servicios.forEach((s: any) => {
-            const mecName: string =
-                s.notas_mecanico?.split('\n')[0]?.trim() ||
-                s.mecanico ||
-                'Sin asignar';
+            const dateStr = s.fecha_entrega || s.created_at || new Date().toISOString();
+            const dateKey = dateStr.split('T')[0]; // YYYY-MM-DD
 
             const revenue = Number(s.precio_total) || Number(s.precio_base) || 0;
-            if (!mechanicMap[mecName]) mechanicMap[mecName] = { total: 0, count: 0 };
-            mechanicMap[mecName].total += revenue;
-            mechanicMap[mecName].count += 1;
+            timelineMap[dateKey] = (timelineMap[dateKey] || 0) + revenue;
         });
 
-        const computed: MechanicStat[] = Object.entries(mechanicMap)
-            .map(([mecanico, { total, count }]) => ({
-                mecanico: mecanico.length > 18 ? mecanico.slice(0, 16) + '…' : mecanico,
-                tickets: count,
-                ticket_promedio: count > 0 ? Math.round(total / count) : 0,
-            }))
-            .sort((a, b) => b.tickets - a.tickets)
-            .slice(0, 8);
+        const computed: TimelineStat[] = Object.entries(timelineMap)
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([dateKey, ingresos]) => {
+                const parts = dateKey.split('-');
+                const shortDate = `${parts[2]}/${parts[1]}`;
+                return {
+                    fecha: shortDate,
+                    ingresos
+                };
+            });
 
-        setTeamStats(computed);
+        setRevenueTimeline(computed);
     }, [servicios]);
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -136,136 +128,129 @@ export default function ExpertMetrics({ tallerId, servicios, isLoading }: Props)
         <div className="space-y-6 animate-in fade-in duration-500">
             {/* ── Expert Badge ───────────────────────────────────────────── */}
             <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-xs font-bold tracking-wider uppercase shadow-md">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-xs font-bold tracking-wider uppercase shadow-sm">
                     ✦ Expert Plan — Business Intelligence
                 </span>
             </div>
 
-            {/* ── Trends Pie + Team Bar ───────────────────────────────────── */}
+            {/* ── Trends Donut + Revenue Area ───────────────────────────────────── */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
-                {/* Tendencias de Taller (Pie) */}
-                <Card className="shadow-sm border-gray-100 overflow-hidden">
-                    <CardContent className="p-6">
-                        <div className="flex items-center gap-2 mb-5">
-                            <div className="p-2 bg-violet-50 rounded-lg">
-                                <PieIcon className="w-5 h-5 text-violet-600" />
-                            </div>
-                            <div>
-                                <h3 className="text-base font-bold text-gray-900 leading-tight">Tendencias del Taller</h3>
-                                <p className="text-xs text-muted-foreground">Motor semántico Regex — histórico completo</p>
-                            </div>
+                {/* Análisis Categórico Semántico (Donut) */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
+                    <div className="flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-2">
+                            <PieIcon className="w-6 h-6 text-primary" />
+                            <h3 className="text-lg font-bold text-gray-900">Análisis Categórico Semántico</h3>
                         </div>
+                        <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Motor Regex</span>
+                    </div>
 
+                    <div className="flex-1 flex flex-col justify-center">
                         {loadingTrends || isLoading ? (
-                            <div className="h-64 flex items-center justify-center">
+                            <div className="h-[300px] flex items-center justify-center">
                                 <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                                    <Loader2 className="w-6 h-6 animate-spin text-violet-500" />
+                                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
                                     <span className="text-xs">Analizando patrones...</span>
                                 </div>
                             </div>
                         ) : trends.length === 0 ? (
-                            <div className="h-64 flex items-center justify-center text-muted-foreground italic text-sm">
+                            <div className="h-[300px] flex items-center justify-center text-muted-foreground italic text-sm">
                                 No hay suficientes datos para generar tendencias.
                             </div>
                         ) : (
-                            <ResponsiveContainer width="100%" height={280}>
+                            <ResponsiveContainer width="100%" height={300}>
                                 <PieChart>
                                     <Pie
                                         data={trends}
                                         cx="50%"
                                         cy="45%"
+                                        innerRadius={65}
                                         outerRadius={95}
-                                        innerRadius={42}
                                         dataKey="conteo"
                                         nameKey="categoria"
-                                        paddingAngle={2}
-                                        label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                                            if (percent == null || midAngle == null || percent < 0.05) return null;
-                                            const RADIAN = Math.PI / 180;
-                                            const r = innerRadius + (outerRadius - innerRadius) * 0.55;
-                                            const x = cx + r * Math.cos(-midAngle * RADIAN);
-                                            const y = cy + r * Math.sin(-midAngle * RADIAN);
-                                            return (
-                                                <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={700}>
-                                                    {`${(percent * 100).toFixed(0)}%`}
-                                                </text>
-                                            );
-                                        }}
+                                        paddingAngle={3}
                                     >
                                         {trends.map((entry, idx) => (
                                             <Cell
-                                                key={entry.categoria}
+                                                key={`cell-${idx}`}
                                                 fill={CATEGORY_COLORS[entry.categoria] || CHART_COLORS[idx % CHART_COLORS.length]}
+                                                stroke="none"
                                             />
                                         ))}
                                     </Pie>
                                     <Tooltip content={<CustomPieTooltip />} />
                                     <Legend
-                                        formatter={(value) => (
-                                            <span className="text-xs text-slate-600 font-medium">{value}</span>
-                                        )}
-                                        iconSize={10}
+                                        verticalAlign="bottom"
+                                        formatter={(value) => <span className="text-xs text-gray-600 font-medium">{value}</span>}
+                                        iconSize={8}
                                         iconType="circle"
+                                        wrapperStyle={{ paddingTop: 20 }}
                                     />
                                 </PieChart>
                             </ResponsiveContainer>
                         )}
-                    </CardContent>
-                </Card>
+                    </div>
+                </div>
 
-                {/* Rendimiento de Equipo (Bar) */}
-                <Card className="shadow-sm border-gray-100 overflow-hidden">
-                    <CardContent className="p-6">
-                        <div className="flex items-center gap-2 mb-5">
-                            <div className="p-2 bg-indigo-50 rounded-lg">
-                                <Users className="w-5 h-5 text-indigo-600" />
-                            </div>
-                            <div>
-                                <h3 className="text-base font-bold text-gray-900 leading-tight">Rendimiento de Equipo</h3>
-                                <p className="text-xs text-muted-foreground">Tickets atendidos vs. Ticket promedio ($)</p>
-                            </div>
+                {/* Evolución de Ingresos (Area) */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
+                    <div className="flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-2">
+                            <TrendingUp className="w-6 h-6 text-primary" />
+                            <h3 className="text-lg font-bold text-gray-900">Evolución de Ingresos</h3>
                         </div>
+                        <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Facturación Total</span>
+                    </div>
 
+                    <div className="flex-1 flex flex-col justify-center">
                         {isLoading ? (
-                            <div className="h-64 flex items-center justify-center">
-                                <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+                            <div className="h-[300px] flex items-center justify-center">
+                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
                             </div>
-                        ) : teamStats.length === 0 ? (
-                            <div className="h-64 flex items-center justify-center text-muted-foreground italic text-sm">
-                                No hay datos de mecánicos en el período seleccionado.
+                        ) : revenueTimeline.length === 0 ? (
+                            <div className="h-[300px] flex items-center justify-center text-muted-foreground italic text-sm">
+                                No hay datos de facturación en el período seleccionado.
                             </div>
                         ) : (
-                            <ResponsiveContainer width="100%" height={280}>
-                                <BarChart data={teamStats} margin={{ top: 4, right: 8, left: 0, bottom: 32 }}
-                                    barCategoryGap="30%"
-                                >
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                            <ResponsiveContainer width="100%" height={300}>
+                                <AreaChart data={revenueTimeline} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                    <defs>
+                                        <linearGradient id="colorIngresos" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                     <XAxis
-                                        dataKey="mecanico"
-                                        tick={{ fontSize: 11, fill: '#64748b' }}
-                                        angle={-25}
-                                        textAnchor="end"
-                                        interval={0}
+                                        dataKey="fecha"
+                                        tick={{ fontSize: 12, fill: '#64748b' }}
+                                        axisLine={false}
+                                        tickLine={false}
+                                        dy={10}
                                     />
-                                    <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#64748b' }} width={28} />
-                                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#94a3b8' }} width={48}
+                                    <YAxis
+                                        tick={{ fontSize: 12, fill: '#64748b' }}
                                         tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                                        axisLine={false}
+                                        tickLine={false}
+                                        dx={-10}
                                     />
-                                    <Tooltip content={<CustomBarTooltip />} />
-                                    <Legend
-                                        verticalAlign="top"
-                                        formatter={(v) => <span className="text-xs text-slate-600 font-medium">{v}</span>}
-                                        iconSize={10}
-                                        wrapperStyle={{ paddingBottom: 8 }}
+                                    <Tooltip content={<CustomAreaTooltip />} />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="ingresos"
+                                        stroke="#10b981"
+                                        strokeWidth={3}
+                                        fillOpacity={1}
+                                        fill="url(#colorIngresos)"
                                     />
-                                    <Bar yAxisId="left" dataKey="tickets" name="Tickets" fill="#6366f1" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                                    <Bar yAxisId="right" dataKey="ticket_promedio" name="Ticket Promedio $" fill="#f25a30" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                                </BarChart>
+                                </AreaChart>
                             </ResponsiveContainer>
                         )}
-                    </CardContent>
-                </Card>
+                    </div>
+                </div>
+
             </div>
         </div>
     );

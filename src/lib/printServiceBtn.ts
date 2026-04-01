@@ -4,10 +4,8 @@ import { cleanItemName } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { getBase64ImageFromUrl } from '@/lib/pdfGenerator';
 
-// ─── Strip HTML to plain text (Sport plan fallback) ───────────────────────────
 function stripHtml(html: string): string {
   if (!html) return '';
-  // Replace block-level tags with newlines, then strip remaining tags
   return html
     .replace(/<\/?(p|div|li|br)[^>]*>/gi, '\n')
     .replace(/<[^>]+>/g, '')
@@ -32,7 +30,6 @@ export const printServiceReport = async (
   const planActual: string = taller?.plan_actual || 'Pro';
   const isSportPlan = planActual === 'Sport';
 
-  // Sport plan → always use the generic/fallback logo
   const logoUrlRaw = isSportPlan
     ? `${window.location.origin}/img/logo_full.png`
     : (taller?.logo_url || `${window.location.origin}/img/logo_full.png`);
@@ -40,41 +37,31 @@ export const printServiceReport = async (
   const primaryColor = taller?.color_primario || '#f25a30';
   const politicaPago = taller?.politica_pago || '';
 
-  // Transform to base64 to avoid html2canvas taint / CORS issues with Supabase Storage
   let logoBase64 = logoUrlRaw;
   if (logoUrlRaw.startsWith('http')) {
     const b64 = await getBase64ImageFromUrl(logoUrlRaw);
     if (b64) logoBase64 = b64;
   }
 
-  // --- Logic ---
   const serviceTypeRaw = job.service_type || job.serviceType || job.tipo_servicio || "General";
   const serviceType = serviceTypeRaw.toUpperCase();
 
-  // 1. Build the main labor description block
-  // Priority: rich HTML from catalog > plain notes > nothing
   const descripcionHtml: string = job.descripcion_catalogo || job.descripcion_html || '';
   const notesPlain: string = job.notes || job.mechanic_notes || '';
 
   const basePrice = Number(job.basePrice) || Number(job.precio_base) || 0;
   const extraItems = job.extraItems || job.items_extra || [];
 
-
   // --- 1. LABOR (Mano de Obra) ---
-  // Build title row (always)
   const laborTitleRow = serviceType !== 'OTRO' && serviceType !== 'OTHER'
     ? `<tr><td style="padding: 8px 0 4px 0; font-weight: 700; font-size: 14px; color: #333;">${serviceType}</td><td style="padding: 8px 0 4px 0; text-align: right; font-weight: 700; font-size: 14px;">$ ${basePrice.toLocaleString('es-AR')}</td></tr>`
     : '';
 
-  // Build description block: Sport → plain text, Pro/Expert → prefer HTML, fall back to plain
   let laborDescriptionBlock = '';
   if (!isSportPlan && descripcionHtml && descripcionHtml.trim() !== '<p></p>') {
-    // Pro/Expert: Inject HTML directly — html2pdf uses Chromium-like rendering so CSS works
     laborDescriptionBlock = `
       <tr><td colspan="2" style="padding: 8px 0 4px 0;">
-        <div style="font-size: 11px; color: #555; line-height: 1.7;
-                    padding-left: 4px;
-                    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
+        <div style="font-size: 11px; color: #555; line-height: 1.7; padding-left: 4px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">
           <style>
             .labor-desc ul { margin: 4px 0; padding-left: 18px; }
             .labor-desc li { margin-bottom: 2px; }
@@ -86,8 +73,6 @@ export const printServiceReport = async (
         </div>
       </td></tr>`;
   } else {
-    // Sport plan (or no HTML): render as plain text lines
-    // For Sport, strip any residual HTML from descripcionHtml first, then combine with notesPlain
     const plainSource = isSportPlan
       ? (stripHtml(descripcionHtml) || notesPlain)
       : notesPlain;
@@ -114,14 +99,13 @@ export const printServiceReport = async (
   extraItems.forEach((item: any) => {
     if (item.category === 'part') {
       productRows.push({
-        description: item.description,
+        description: item.description || item.descripcion,
         price: Number(item.price) || 0,
         isProduct: true
       });
     } else {
-      // It's labor (or undefined category, treated as labor)
       extraLaborRows.push({
-        description: item.description,
+        description: item.description || item.descripcion,
         price: Number(item.price) || 0,
         isExtraLabor: true
       });
@@ -134,14 +118,14 @@ export const printServiceReport = async (
   const dateInStr = job.fecha_ingreso ? new Date(job.fecha_ingreso).toLocaleDateString('es-AR') : new Date().toLocaleDateString('es-AR');
   const dateOutStr = job.fecha_entrega ? new Date(job.fecha_entrega).toLocaleDateString('es-AR') : null;
 
-  // --- HTML TEMPLATE (Clean, White, No ID, No Signature) ---
+  // --- Premium HTML TEMPLATE ---
   const element = document.createElement('div');
   element.innerHTML = `
     <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #333; max-width: 800px; margin: 0 auto; background: white; padding: 40px;">
       
       <div style="border-bottom: 2px solid ${primaryColor}; padding-bottom: 20px; margin-bottom: 40px; display: flex; justify-content: space-between; align-items: flex-end;">
         <div>
-           <img src="${logoBase64}" alt="Mecánico" style="max-height: 85px; max-width: 250px; object-fit: contain;" crossorigin="anonymous" />
+           <img src="${logoBase64}" alt="Logo" style="max-width: 150px; max-height: 70px; height: auto; width: auto; object-fit: contain;" crossorigin="anonymous" />
         </div>
         <div style="text-align: right;">
            <div style="font-size: 12px; color: #999; text-transform: uppercase; letter-spacing: 1px;">Informe de Servicio</div>
@@ -171,14 +155,14 @@ export const printServiceReport = async (
       <div style="margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">
         <span style="font-size: 12px; font-weight: 700; color: ${primaryColor}; text-transform: uppercase; letter-spacing: 1px;">MANO DE OBRA</span>
       </div>
-      <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+      <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px; page-break-inside: avoid;">
         <tbody>
           ${laborTitleRow}
           ${laborDescriptionBlock}
         </tbody>
       </table>
 
-      <!-- SECTION 1.5: EXTRA LABOR (Attached to Labor Section but with separators) -->
+      <!-- SECTION 1.5: EXTRA LABOR -->
       ${extraLaborRows.length > 0 ? `
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px; margin-top: 0; border-top: 1px solid #eee;">
             <tbody>
@@ -193,7 +177,7 @@ export const printServiceReport = async (
         </table>
       ` : ''}
 
-      <!-- SECTION 2: PRODUCTOS (Only if exists) -->
+      <!-- SECTION 2: PRODUCTOS -->
       ${productRows.length > 0 ? `
         <div style="margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-top: 20px;">
             <span style="font-size: 12px; font-weight: 700; color: ${primaryColor}; text-transform: uppercase; letter-spacing: 1px;">REPUESTOS E INSUMOS</span>
@@ -211,7 +195,7 @@ export const printServiceReport = async (
         </table>
       ` : ''}
 
-      <div style="margin-top: 30px; padding-top: 15px; border-top: 2px solid #333;">
+      <div style="margin-top: 30px; padding-top: 15px; border-top: 2px solid #333; page-break-inside: avoid;">
          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div style="font-size: 14px; font-weight: 700; color: #333;">
               TOTAL MANO DE OBRA 
@@ -233,19 +217,22 @@ export const printServiceReport = async (
           <div style="font-size: 10px; color: #999; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">Observaciones</div>
           <div style="font-size: 12px; color: #555;">${job.notes || job.mechanic_notes}</div>
         </div>
-      ` : ''
-    }
+      ` : ''}
 
-<div style="margin-top: 60px; text-align: center; font-size: 10px; color: #ccc;" > PROBIKES SERVICE CENTER </div>
-  </div>
-    `;
+      <div style="margin-top: 60px; text-align: center; font-size: 10px; color: #ccc;">PROBIKES SERVICE CENTER</div>
+    </div>
+  `;
+
+  const safeClientName = clientName.trim().replace(/\s+/g, '_');
+  const printFileName = `${safeClientName}_#${formatOrdenNumber(job.numero_orden, job.id)}_Informe_Service`;
 
   const opt = {
     margin: 0,
-    filename: `Informe_Service.pdf`,
+    filename: `${printFileName}.pdf`,
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2, useCORS: true, logging: false },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
+
   html2pdf().set(opt as any).from(element).save();
 };

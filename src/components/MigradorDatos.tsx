@@ -67,7 +67,7 @@ export default function MigradorDatos() {
 
             for (const client of clientes) {
                 // Filtrar eliminados
-                if (client.isDeleted) continue;
+                if (client.isDeleted || client.eliminado_en) continue;
 
                 // Insertar en Supabase
                 const { data: newClient, error } = await supabase

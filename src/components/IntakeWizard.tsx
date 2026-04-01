@@ -161,10 +161,10 @@ function ClientSearchStep({ onClientSelect }: { onClientSelect: (c: SupabaseClie
     const clientes = useDataStore(s => s.clientes);
 
     const filtered = useMemo(() => {
-        if (!query) return clientes.filter(c => !c.isDeleted).slice(0, 20);
+        if (!query) return clientes.filter(c => !c.eliminado_en).slice(0, 20);
         const q = query.toLowerCase();
         return clientes
-            .filter(c => !c.isDeleted && (
+            .filter(c => !c.eliminado_en && (
                 c.nombre.toLowerCase().includes(q) ||
                 (c.telefono || "").includes(q) ||
                 (c.dni || "").includes(q)

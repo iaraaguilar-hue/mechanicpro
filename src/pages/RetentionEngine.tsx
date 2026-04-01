@@ -27,7 +27,7 @@ export default function RetentionEngine() {
                     ? servicios.filter(s => s.bicicleta_id === bike.id).flatMap(s => s.alertas_ocultas || [])
                     : [];
 
-                return !client?.isDeleted && !dismissedAlerts.includes(r.componente || '');
+                return !client?.eliminado_en && !dismissedAlerts.includes(r.componente || '');
             })
             .map(r => {
                 const bike = bicicletas.find(b => b.id === r.bicicleta_id);
@@ -63,7 +63,7 @@ export default function RetentionEngine() {
                 const bike = bicicletas.find(b => b.id === s.bicicleta_id);
                 const client = bike ? clientes.find(c => c.id === bike.cliente_id) : null;
 
-                if (!carrera || !carrera.fecha_evento || !client || client.isDeleted) return null;
+                if (!carrera || !carrera.fecha_evento || !client || client.eliminado_en) return null;
 
                 const dismissedAlerts = s.alertas_ocultas || [];
                 const carreraAlertIdentity = `carrera-${carrera.id}`;

@@ -108,7 +108,7 @@ export async function exportBackupToZip(tallerId?: string | null): Promise<Expor
     const clientsRows: any[][] = [];
 
     clientsArray.forEach((c: any) => {
-        if (c.isDeleted === true) {
+        if (c.isDeleted === true || c.eliminado_en) {
             skippedClients++;
             return;
         }

@@ -278,6 +278,7 @@ export default function History() {
             // 1. Search Query
             if (searchQuery) {
                 const query = searchQuery.toLowerCase();
+                const normalizedQueryForId = query.replace(/^#/, '').replace(/^0+/, '');
 
                 const notesMatch = (job.rawJob.mechanic_notes || "").toLowerCase().includes(query);
                 const itemsMatch = (job.rawJob.extraItems || []).some((item: any) =>
@@ -287,10 +288,14 @@ export default function History() {
                     .filter(([_, value]) => value === true)
                     .some(([key, _]) => key.toLowerCase().includes(query));
 
+                const formattedOrderId = formatOrdenNumber(job.numero_orden, job.id).toLowerCase();
+                const normalizedOrderId = formattedOrderId.replace(/^#/, '').replace(/^0+/, '');
+                const orderMatch = normalizedOrderId.includes(normalizedQueryForId) || String(job.id).toLowerCase().includes(normalizedQueryForId);
+
                 const matchesSearch =
                     job.clientName.toLowerCase().includes(query) ||
                     job.bikeModel.toLowerCase().includes(query) ||
-                    String(job.id).includes(query) ||
+                    orderMatch ||
                     job.serviceType.toLowerCase().includes(query) ||
                     notesMatch ||
                     itemsMatch ||

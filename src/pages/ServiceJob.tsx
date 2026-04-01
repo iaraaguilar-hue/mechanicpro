@@ -6,7 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { Badge } from '@/components/ui/badge';
 import { printServiceReport } from '@/lib/printServiceBtn';
-import { isExternalItem } from '@/lib/utils';
 
 // URL DEL WEBHOOK (Verificada)
 const MAKE_WEBHOOK_URL = "https://nonlepidopterous-memphis-palaeological.ngrok-free.dev/webhook/generar-orden";
@@ -62,28 +61,28 @@ export default function ServiceJob() {
 
     // --- FUNCIÓN DE DIAGNÓSTICO DEL JSON ---
     const triggerMakeWebhook = async (soldItems: any[]) => {
-        if (!soldItems || soldItems.length === 0) {
-            alert("⚠️ ATENCIÓN: Este service NO tiene productos (categoría 'part'). Agrega un repuesto primero para probar el JSON.");
+        // Filtrar estrictamente solo productos físicos
+        const productosFisicos = soldItems.filter((i: any) => i.category === 'part');
+
+        if (!productosFisicos || productosFisicos.length === 0) {
+            alert("⚠️ ATENCIÓN: Este service NO tiene repuestos (categoría 'part'). No se enviará webhook.");
             return;
         }
 
-        const itemsParaFacturar = soldItems.filter((i: any) => !isExternalItem(i.description));
-
-        const productosListos = itemsParaFacturar.map((i: any) => ({
+        const productosListos = productosFisicos.map((i: any) => ({
             descripcion: i.description,
             precio: Number(i.price) || 0
         }));
 
-        const totalCalculado = Number(job.totalPrice) || 0;
+        const totalProductos = productosListos.reduce((sum: number, p: any) => sum + p.precio, 0);
 
         const payload = {
             dni_cliente: clientData?.dni || "Sin DNI",
-            nombre_cliente: clientData?.name || "Cliente Sin Nombre",
+            nombre_cliente: clientData?.name || "Cliente",
             fecha_finalizacion: new Date().toISOString(),
             nombre_producto: productosListos.map((p: any) => p.descripcion).join(", "),
             productos: productosListos,
-            total_service: totalCalculado,
-            numero_orden: job.numero_orden || job.id
+            total_service: totalProductos
         };
 
         // PASO CRÍTICO: MOSTRAR DATOS ANTES DE ENVIAR

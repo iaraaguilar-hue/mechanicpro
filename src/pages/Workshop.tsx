@@ -307,27 +307,36 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
 
                 // 2. Inmediatamente después del éxito del update, enviamos el Webhook
                 try {
-                    const payload = {
-                        service_id: job.service_id,
-                        numero_orden: service.numero_orden || service.id,
-                        dni_cliente: client?.dni || "Sin DNI",
-                        nombre_cliente: client?.nombre || "Cliente",
-                        telefono_cliente: client?.telefono || "",
-                        fecha_finalizacion: new Date().toISOString(),
-                        total_service: Number(service.precio_total) || 0,
-                        items_utilizados: service.items_extra?.map((p: any) => ({
-                            descripcion: p.descripcion,
-                            precio: Number(p.precio) || 0,
-                            categoria: p.categoria
-                        })) || []
-                    };
+                    // Filtrar solo los ítems que son productos (excluir mano de obra)
+                    const productosFisicos = (service.items_extra || []).filter(
+                        (p: any) => p.categoria === 'part'
+                    );
 
-                    fetch("https://nonlepidopterous-memphis-palaeological.ngrok-free.dev/webhook/generar-orden", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(payload),
-                        keepalive: true
-                    }).catch(e => console.error("Webhook Error (Fetch):", e));
+                    if (productosFisicos.length > 0) {
+                        const totalProductos = productosFisicos.reduce((sum: number, p: any) => sum + (Number(p.precio) || 0), 0);
+                        const nombresConcatenados = productosFisicos.map((p: any) => p.descripcion).join(", ");
+
+                        const payload = {
+                            dni_cliente: client?.dni || "Sin DNI",
+                            nombre_cliente: client?.nombre || "Cliente",
+                            fecha_finalizacion: new Date().toISOString(),
+                            nombre_producto: nombresConcatenados,
+                            productos: productosFisicos.map((p: any) => ({
+                                descripcion: p.descripcion,
+                                precio: Number(p.precio) || 0
+                            })),
+                            total_service: totalProductos
+                        };
+
+                        fetch("https://nonlepidopterous-memphis-palaeological.ngrok-free.dev/webhook/generar-orden", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(payload),
+                            keepalive: true
+                        }).catch(e => console.error("Webhook Error (Fetch):", e));
+                    } else {
+                        console.log("Webhook saltado: El servicio no incluye repuestos físicos.");
+                    }
                 } catch (err) {
                     console.error("Error preparando el Webhook:", err);
                 }

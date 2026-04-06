@@ -613,9 +613,8 @@ function ServiceOption({ selected, onClick, title, desc }: { selected: boolean, 
 // Carrera Selector Component
 // ─────────────────────────────────────────────────────────────
 function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, onSelect: (id: string | null) => void }) {
-    const carreras = useDataStore(s => s.carreras);
-    const createCarrera = useDataStore(s => s.createCarrera);
     const taller_id = useAuthStore(s => s.taller_id);
+    const [carreras, setCarreras] = useState<any[]>([]);
 
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState("");
@@ -623,17 +622,53 @@ function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, 
     const [newDate, setNewDate] = useState("");
     const [isSaving, setIsSaving] = useState(false);
 
+    useEffect(() => {
+        const fetchCarreras = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('carreras')
+                    .select('id, nombre, fecha_evento');
+
+                if (error) {
+                    console.error("ERROR RLS CARRERAS:", error);
+                    return;
+                }
+
+                console.log("CARRERAS DESDE SUPABASE:", data);
+
+                if (!data || data.length === 0) {
+                    console.error("Aviso: La tabla 'carreras' devolvió 0 resultados. Revisa posibles bloqueos de RLS.");
+                }
+
+                setCarreras(data || []);
+            } catch (err: any) {
+                console.error("Catch error in fetchCarreras:", err.message || err);
+            }
+        };
+        fetchCarreras();
+    }, []);
+
     const selectedCarrera = carreras.find(c => c.id === selectedId);
 
-    const normalizeStr = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    const normalizeText = (str: string) => {
+        if (!str) return "";
+        return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+    };
 
     const filteredCarreras = useMemo(() => {
         if (!search) return carreras.slice(0, 5);
-        const normSearch = normalizeStr(search);
-        return carreras.filter(c => normalizeStr(c.nombre).includes(normSearch)).slice(0, 5);
+
+        // Separa la búsqueda en palabras clave (ej: "rio" y "pinto") para que el orden no importe
+        const searchTerms = normalizeText(search).split(" ").filter(Boolean);
+
+        return carreras.filter(c => {
+            const normalizedName = normalizeText(c.nombre);
+            // Verifica que TODAS las palabras buscadas estén incluidas en el nombre normalizado
+            return searchTerms.every(term => normalizedName.includes(term));
+        }).slice(0, 5);
     }, [search, carreras]);
 
-    const exactMatch = carreras.some(c => normalizeStr(c.nombre) === normalizeStr(search));
+    const exactMatch = carreras.some(c => normalizeText(c.nombre) === normalizeText(search));
 
     const handleSelect = (id: string) => {
         if (selectedId === id) onSelect(null);
@@ -646,16 +681,28 @@ function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, 
         if (!taller_id || !search) return;
         setIsSaving(true);
         try {
-            const created = await createCarrera({
-                nombre: search,
-                fecha_evento: newDate || null
-            });
-            onSelect(created.id);
+            const { data, error } = await supabase
+                .from('carreras')
+                .insert({
+                    nombre: search,
+                    fecha_evento: newDate || null
+                })
+                .select()
+                .single();
+
+            if (error) {
+                console.error("Supabase error insertando carrera:", error);
+                throw error;
+            }
+
+            setCarreras(prev => [...prev, data]);
+            onSelect(data.id);
             setIsOpen(false);
             setSearch("");
             setIsCreating(false);
             setNewDate("");
         } catch (e: any) {
+            console.error("Catch error in handleCreate:", e);
             alert(`Error creando carrera: ${e.message}`);
         } finally {
             setIsSaving(false);

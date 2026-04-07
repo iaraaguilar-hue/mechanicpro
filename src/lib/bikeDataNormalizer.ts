@@ -75,6 +75,39 @@ const MODEL_FAMILY_MAP: Array<{ keywords: string[]; family: string }> = [
     { keywords: ['habit'], family: 'Habit' },
     { keywords: ['trail neo'], family: 'Trail Neo (E-MTB)' },
 
+    // Trek (extra)
+    { keywords: ['procaliber'], family: 'Procaliber' },
+    { keywords: ['crockett'], family: 'Crockett (CX)' },
+    { keywords: ['dual sport'], family: 'Dual Sport (Urban)' },
+
+    // Scott (extra)
+    { keywords: ['speedster'], family: 'Speedster' },
+    { keywords: ['solace'], family: 'Solace' },
+
+    // Giant (extra)
+    { keywords: ['cypress'], family: 'Cypress (Urban)' },
+    { keywords: ['escape'], family: 'Escape (Urban)' },
+
+    // Cannondale (extra)
+    { keywords: ['quick'], family: 'Quick (Urban)' },
+    { keywords: ['trail'], family: 'Trail' },
+
+    // BMC
+    { keywords: ['teammachine', 'team machine'], family: 'Teammachine' },
+    { keywords: ['fourstroke', 'four stroke'], family: 'Fourstroke' },
+    { keywords: ['speedfox', 'speed fox'], family: 'Speedfox' },
+    { keywords: ['roadmachine', 'road machine'], family: 'Roadmachine' },
+    { keywords: ['alpenchallenge'], family: 'Alpenchallenge (Urban)' },
+
+    // Orbea
+    { keywords: ['orca'], family: 'Orca' },
+    { keywords: ['alma'], family: 'Alma' },
+    { keywords: ['occam'], family: 'Occam' },
+    { keywords: ['rallon'], family: 'Rallon' },
+    { keywords: ['terra'], family: 'Terra (Gravel)' },
+    { keywords: ['gain'], family: 'Gain (E-Road)' },
+    { keywords: ['wild'], family: 'Wild (E-MTB - Orbea)' },
+
     // Generic / Other
     { keywords: ['fatbike', 'fat bike', 'fat-bike'], family: 'Fat Bike' },
     { keywords: ['bmx'], family: 'BMX' },
@@ -153,10 +186,66 @@ const FAMILY_SEGMENT_MAP: Record<string, string> = {
     'Fixed/Pista': 'Urbana/Paseo',
     'Cargo': 'Urbana/Paseo',
 
+    // Trek (extra)
+    'Procaliber': 'MTB',
+    'Crockett (CX)': 'Gravel',
+    'Dual Sport (Urban)': 'Urbana/Paseo',
+
+    // Scott (extra)
+    'Speedster': 'Ruta',
+    'Solace': 'Ruta',
+
+    // Giant (extra)
+    'Cypress (Urban)': 'Urbana/Paseo',
+    'Escape (Urban)': 'Urbana/Paseo',
+
+    // Cannondale (extra)
+    'Quick (Urban)': 'Urbana/Paseo',
+    'Trail': 'MTB',
+
+    // BMC
+    'Teammachine': 'Ruta',
+    'Fourstroke': 'MTB',
+    'Speedfox': 'MTB',
+    'Roadmachine': 'Gravel',
+    'Alpenchallenge (Urban)': 'Urbana/Paseo',
+
+    // Orbea
+    'Orca': 'Ruta',
+    'Alma': 'MTB',
+    'Occam': 'MTB',
+    'Rallon': 'MTB',
+    'Terra (Gravel)': 'Gravel',
+    'Gain (E-Road)': 'E-Bike',
+    'Wild (E-MTB - Orbea)': 'E-Bike',
+
     // Otros
     'BMX': 'BMX',
     'Balance (Niño)': 'Infantil',
 };
+
+// ─── SERVICE TYPE SANITIZER ───────────────────────────────────────────────────
+/**
+ * Sanitizes raw `tipo_servicio` strings before aggregation.
+ * Business rules:
+ *   - Any string containing "sport" (case-insensitive) → canonical "Sport"
+ *   - Any string containing "expert" (case-insensitive) → canonical "Expert"
+ *   - Any string containing "pro" (word boundary) → canonical "Pro"
+ *   - Otherwise: Title-case the string.
+ * This ensures "Service sport", "sport", "SPORT" all merge into one bar.
+ */
+export function normalizeServiceType(rawType: string): string {
+    if (!rawType?.trim()) return 'General';
+    const lower = rawType.trim().toLowerCase();
+
+    if (lower.includes('sport')) return 'Sport';
+    if (lower.includes('expert')) return 'Expert';
+    if (/\bpro\b/.test(lower)) return 'Pro';
+
+    // Title-case fallback
+    const trimmed = rawType.trim();
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
 
 // ─── MOTOR DE NORMALIZACIÓN ───────────────────────────────────────────────────
 
@@ -186,7 +275,7 @@ export function normalizeBikeModel(rawModel: string): string {
     const firstWord = cleaned.split(' ')[0];
     return firstWord
         ? firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase()
-        : 'Otros';
+        : 'Indefinido';
 }
 
 /**
@@ -196,7 +285,8 @@ export function normalizeBikeModel(rawModel: string): string {
  */
 export function classifyBikeSegment(rawModel: string): string {
     const family = normalizeBikeModel(rawModel);
-    return FAMILY_SEGMENT_MAP[family] ?? 'Otros';
+    // Return 'Indefinido' (not 'Otros') so it never collides with the UI residual bar label "Otras".
+    return FAMILY_SEGMENT_MAP[family] ?? 'Indefinido';
 }
 
 /**

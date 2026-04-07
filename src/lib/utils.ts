@@ -9,6 +9,32 @@ export function cn(...inputs: ClassValue[]) {
 export const cleanItemName = (name: string) => name ? name.replace(/\s*\(ML\)\s*/gi, '') : '';
 export const isExternalItem = (name: string) => name ? /\s*\(ML\)\s*/i.test(name) : false;
 
+// --- AUDIENCE-AWARE DISPLAY FORMATTER ---
+/**
+ * Formats a service type string for INTERNAL operational views only
+ * (History table, BI dashboards, JobCard badges).
+ *
+ * Strips redundant prefixes ("Service ", "Mantenimiento ") that are
+ * meaningful in customer-facing documents but noise in internal UIs.
+ *
+ * Examples:
+ *   "Service Sport"       → "Sport"
+ *   "Service expert"      → "Expert"
+ *   "Mantenimiento Gravel" → "Gravel"
+ *   "General"             → "General"
+ *
+ * ⚠️  DO NOT use in: printServiceBtn.ts, PDF generators, n8n webhooks,
+ *     or any customer-facing output. Those must receive the raw DB string.
+ */
+export function formatInternalServiceName(raw: string | null | undefined): string {
+    if (!raw?.trim()) return 'General';
+    // Strip known redundant prefixes (case-insensitive, greedy whitespace)
+    const cleaned = raw.trim().replace(/^(service|mantenimiento|servicio)\s+/i, '');
+    if (!cleaned) return raw.trim(); // safety: don't return empty string
+    // Title-case the result
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+}
+
 export function hexToHslSpaceSeparated(hex: string): string {
     let r = 0, g = 0, b = 0;
     if (hex.length === 4) {

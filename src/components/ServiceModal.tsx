@@ -307,7 +307,12 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
             if (!taller_id) return;
             const { data } = await supabase.from('catalogo_servicios').select('*').eq('taller_id', taller_id);
             if (data) {
-                const dataConOtro = [...data, { id: 'otro_universal', nombre: 'OTRO', precio: 0 }];
+                // Always guarantee 'OTRO' ($0) is available for every workshop.
+                // Guard against duplication if SuperAdmin already added it to the catalog.
+                const yaHayOtro = data.some((s: any) => s.nombre?.toUpperCase() === 'OTRO');
+                const dataConOtro = yaHayOtro
+                    ? data
+                    : [...data, { id: 'otro_universal', nombre: 'OTRO', precio: 0 }];
                 setCatalogoServicios(dataConOtro);
             }
         };

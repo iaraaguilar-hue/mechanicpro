@@ -21,7 +21,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
-import { Search, FilterX, ChevronUp, FileText, Pencil, Trash2, Calendar, Eye, ClipboardList, Calendar as CalendarIcon, Wrench, Package, Info, Tag, MessageCircle } from "lucide-react";
+import { Search, FilterX, ChevronUp, FileText, Pencil, Trash2, Eye, ClipboardList, Calendar as CalendarIcon, Wrench, Package, Info, Tag, MessageCircle } from "lucide-react";
 import { printServiceReport } from '@/lib/printServiceBtn';
 import { ServiceModal } from '@/components/ServiceModal';
 import { es } from "date-fns/locale";
@@ -40,7 +40,7 @@ export const formatSafeDate = (dateString: string | null | undefined): string =>
     return `${day}/${month}/${year.slice(-2)}`; // Formato DD/MM/YY
 };
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, formatInternalServiceName } from "@/lib/utils";
 type DateRange = {
     from: Date;
     to?: Date;
@@ -519,7 +519,7 @@ export default function History() {
                                             </TableCell>
                                             <TableCell className="py-4">
                                                 <Badge variant="outline" className="text-slate-600 bg-white border-slate-200 font-bold whitespace-nowrap">
-                                                    {(job.serviceType || "OTRO").toUpperCase()}
+                                                    {formatInternalServiceName(job.serviceType).toUpperCase()}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-right pr-6 py-4">
@@ -675,7 +675,7 @@ function ExpandedServiceDetail({ job }: { job: any }) {
                         </h3>
                         <div className="space-y-2 bg-primary/5 p-4 rounded-lg border border-primary/10 w-full">
                             <div className="flex justify-between items-center text-sm p-3 bg-white rounded-md shadow-sm border border-gray-100 gap-4">
-                                <span className="text-slate-700 font-medium break-words">Service Base ({service.service_type})</span>
+                                <span className="text-slate-700 font-medium break-words">{formatInternalServiceName(service.service_type)}</span>
                                 <span className="font-mono font-bold text-slate-700 whitespace-nowrap shrink-0">$ {service.basePrice?.toLocaleString("es-AR") || 0}</span>
                             </div>
                             {laborItems.map((item: any) => (

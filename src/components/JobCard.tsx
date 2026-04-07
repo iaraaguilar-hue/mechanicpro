@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp, Download, CheckCircle, Clock } from 'lucide-react';
 import { useState } from 'react';
 import { printServiceReport } from '@/lib/printServiceBtn';
+import { formatInternalServiceName } from '@/lib/utils';
 
 interface JobCardProps {
     job: any;
@@ -46,7 +47,7 @@ export default function JobCard({ job, client, bikeModel = 'Bicicleta' }: JobCar
                             </CardTitle>
                             <div className="flex gap-2 mt-1">
                                 <Badge variant="outline" className="text-xs font-normal text-slate-500 border-slate-300 bg-slate-900 border-slate-900 text-slate-50 whitespace-nowrap w-fit px-3 py-1">
-                                    {job.serviceType}
+                                    {formatInternalServiceName(job.serviceType)}
                                 </Badge>
                                 <span className="text-xs text-slate-400">ID: #{job.id.slice(-4)}</span>
                             </div>
@@ -82,7 +83,7 @@ export default function JobCard({ job, client, bikeModel = 'Bicicleta' }: JobCar
                             <h4 className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-2">🛠️ Mano de Obra</h4>
                             <div className="bg-white rounded border border-slate-200">
                                 <div className="flex justify-between p-2 text-sm border-b border-slate-100">
-                                    <span>Service Base ({job.serviceType})</span>
+                                    <span>{formatInternalServiceName(job.serviceType)}</span>
                                     <span className="font-mono">$ {(job.basePrice || 0).toLocaleString('es-AR')}</span>
                                 </div>
                                 {labor.map((item: any, idx: number) => (

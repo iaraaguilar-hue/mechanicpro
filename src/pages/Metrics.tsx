@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/authStore';
 import ExpertMetrics from '@/components/ExpertMetrics';
-import { normalizeBikeData } from '@/lib/bikeDataNormalizer';
+import { normalizeBikeData, normalizeServiceType } from '@/lib/bikeDataNormalizer';
 import {
     BarChart3,
     TrendingUp,
@@ -183,8 +183,7 @@ export default function Metrics() {
             totalLabor += precioBase;
             uniqueBikes.add(s.bicicleta_id);
 
-            const rawType = (s.tipo_servicio || 'General').trim();
-            const normalizedType = rawType.length > 1 ? rawType.charAt(0).toUpperCase() + rawType.slice(1).toLowerCase() : rawType.toUpperCase();
+            const normalizedType = normalizeServiceType(s.tipo_servicio || '');
             serviceTypeCounts[normalizedType] = (serviceTypeCounts[normalizedType] || 0) + 1;
 
             const bike = normalizedBikes.find(b => b.id === s.bicicleta_id);
@@ -232,24 +231,25 @@ export default function Metrics() {
             .map(([type, count]) => ({ type, count, percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0 }))
             .sort((a, b) => b.count - a.count);
 
-        // Utility to process TOP 4 + Others
-        const processTop4 = (countsMap: Record<string, number>) => {
+        // Utility to process TOP N + "Otras" residual bar.
+        // Using limit=6 to reduce the inflated "Otras" percentage and show more granular data.
+        const processTopN = (countsMap: Record<string, number>, limit = 6) => {
             const entries = Object.entries(countsMap).sort(([, a], [, b]) => b - a);
-            let finalData: any[] = [];
-            if (entries.length > 4) {
-                const top4 = entries.slice(0, 4);
-                const othersCount = entries.slice(4).reduce((sum, [, count]) => sum + count, 0);
-                finalData = top4.map(([name, count]) => ({ name, count, percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0 }));
-                if (othersCount > 0) finalData.push({ name: 'Otras', count: othersCount, percentage: totalServices > 0 ? Math.round((othersCount / totalServices) * 100) : 0 });
-            } else {
-                finalData = entries.map(([name, count]) => ({ name, count, percentage: totalServices > 0 ? Math.round((count / totalServices) * 100) : 0 }));
+            const total = entries.reduce((sum, [, c]) => sum + c, 0);
+            const pct = (count: number) => total > 0 ? Math.round((count / total) * 100) : 0;
+            if (entries.length > limit) {
+                const topN = entries.slice(0, limit);
+                const othersCount = entries.slice(limit).reduce((sum, [, count]) => sum + count, 0);
+                const finalData = topN.map(([name, count]) => ({ name, count, percentage: pct(count) }));
+                if (othersCount > 0) finalData.push({ name: 'Otras', count: othersCount, percentage: pct(othersCount) });
+                return finalData;
             }
-            return finalData;
+            return entries.map(([name, count]) => ({ name, count, percentage: pct(count) }));
         };
 
-        const finalBrandData = processTop4(brandCounts);
-        const finalModelData = processTop4(modelCounts);
-        const finalCategoryData = processTop4(categoryCounts);
+        const finalBrandData = processTopN(brandCounts);
+        const finalModelData = processTopN(modelCounts);
+        const finalCategoryData = processTopN(categoryCounts);
 
         const totalFacturacion = totalLabor + totalPartsRevenue;
         const avgTicket = uniqueBikes.size > 0 ? Math.round(totalFacturacion / uniqueBikes.size) : 0;
@@ -426,7 +426,7 @@ export default function Metrics() {
                         <Tag className="w-6 h-6 text-primary" />
                         <h3 className="text-lg font-bold text-gray-900">Flota por Marcas</h3>
                     </div>
-                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 4</span>
+                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 6</span>
                 </div>
                 <div className="flex-1">
                     {stats.brandDist.length === 0 ? (
@@ -456,7 +456,7 @@ export default function Metrics() {
                         <Layers className="w-6 h-6 text-fuchsia-600" />
                         <h3 className="text-lg font-bold text-gray-900">Distribución por Modelo</h3>
                     </div>
-                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 4</span>
+                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 6</span>
                 </div>
                 <div className="flex-1">
                     {stats.modelDist.length === 0 ? (
@@ -486,7 +486,7 @@ export default function Metrics() {
                         <Bike className="w-6 h-6 text-sky-600" />
                         <h3 className="text-lg font-bold text-gray-900">Segmento de Bicicletas</h3>
                     </div>
-                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 4</span>
+                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 6</span>
                 </div>
                 <div className="flex-1">
                     {stats.categoryDist.length === 0 ? (

@@ -61,8 +61,9 @@ export default function ServiceJob() {
 
     // --- FUNCIÓN DE DIAGNÓSTICO DEL JSON ---
     const triggerMakeWebhook = async (soldItems: any[]) => {
-        // Filtrar estrictamente solo productos físicos
-        const productosFisicos = soldItems.filter((i: any) => i.category === 'part');
+        // Filtrar estrictamente solo productos físicos (excluir ML/Mercado Libre)
+        const esML = (desc: string) => /\(ml\)|\(mercado libre\)/i.test(desc);
+        const productosFisicos = soldItems.filter((i: any) => i.category === 'part' && !esML(i.description || ''));
 
         if (!productosFisicos || productosFisicos.length === 0) {
             alert("⚠️ ATENCIÓN: Este service NO tiene repuestos (categoría 'part'). No se enviará webhook.");
@@ -82,7 +83,8 @@ export default function ServiceJob() {
             fecha_finalizacion: new Date().toISOString(),
             nombre_producto: productosListos.map((p: any) => p.descripcion).join(", "),
             productos: productosListos,
-            total_service: totalProductos
+            total_service: totalProductos,
+            observacion: `#${String(job?.id ?? 0).padStart(4, '0')}`
         };
 
         // PASO CRÍTICO: MOSTRAR DATOS ANTES DE ENVIAR

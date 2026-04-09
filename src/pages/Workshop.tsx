@@ -303,13 +303,15 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
 
             if (wasJustCompleted) {
                 // 1. UPDATE a Supabase para cambiar el estado
-                await updateServicio(job.service_id, { estado: 'ready', fecha_finalizacion: new Date().toISOString() });
+                const fechaFinalizacion = new Date().toISOString();
+                await updateServicio(job.service_id, { estado: 'ready', fecha_finalizacion: fechaFinalizacion });
 
                 // 2. Inmediatamente después del éxito del update, enviamos el Webhook
                 try {
-                    // Filtrar solo los ítems que son productos (excluir mano de obra)
+                    // Filtrar solo los ítems que son productos (excluir mano de obra y productos ML)
+                    const esML = (desc: string) => /\(ml\)|\(mercado libre\)/i.test(desc);
                     const productosFisicos = (service.items_extra || []).filter(
-                        (p: any) => p.categoria === 'part'
+                        (p: any) => p.categoria === 'part' && !esML(p.descripcion || '')
                     );
 
                     if (productosFisicos.length > 0) {
@@ -319,13 +321,14 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
                         const payload = {
                             dni_cliente: client?.dni || "Sin DNI",
                             nombre_cliente: client?.nombre || "Cliente",
-                            fecha_finalizacion: new Date().toISOString(),
+                            fecha_finalizacion: fechaFinalizacion,
                             nombre_producto: nombresConcatenados,
                             productos: productosFisicos.map((p: any) => ({
                                 descripcion: p.descripcion,
                                 precio: Number(p.precio) || 0
                             })),
-                            total_service: totalProductos
+                            total_service: totalProductos,
+                            observacion: `#${String(service.numero_orden ?? 0).padStart(4, '0')}`
                         };
 
                         fetch("https://nonlepidopterous-memphis-palaeological.ngrok-free.dev/webhook/generar-orden", {

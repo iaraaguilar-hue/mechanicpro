@@ -23,8 +23,11 @@ import { useAuthStore } from "@/store/authStore";
 import { useDataStore } from "@/store/dataStore";
 import { supabase } from "@/lib/supabase";
 import { hexToHslSpaceSeparated } from "@/lib/utils";
+import { useVersionCheck } from "@/hooks/useVersionCheck";
+import { UpdateBanner } from "@/components/UpdateBanner";
 
 function AppContent() {
+  const { updateAvailable } = useVersionCheck();
   const session = useAuthStore((state) => state.session);
   const nombre = useAuthStore((state) => state.nombre);
   const logout = useAuthStore((state) => state.logout);
@@ -133,6 +136,7 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row">
+      {updateAvailable && <UpdateBanner />}
 
       {/* Sidebar / Navigation */}
       <nav className="w-full md:w-28 border-r border-border bg-card flex md:flex-col items-center py-4 space-x-4 md:space-x-0 md:space-y-4 sticky top-0 z-10 h-16 md:h-screen justify-center md:justify-start overflow-x-auto md:overflow-y-auto">

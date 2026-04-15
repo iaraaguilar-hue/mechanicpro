@@ -78,13 +78,13 @@ export default function ServiceJob() {
         const totalProductos = productosListos.reduce((sum: number, p: any) => sum + p.precio, 0);
 
         const payload = {
+            numero_orden: `#${String(job?.id ?? 'S/N').padStart(4, '0')}`,
             dni_cliente: clientData?.dni || "Sin DNI",
             nombre_cliente: clientData?.name || "Cliente",
             fecha_finalizacion: new Date().toISOString(),
             nombre_producto: productosListos.map((p: any) => p.descripcion).join(", "),
             productos: productosListos,
             total_service: totalProductos,
-            observacion: `#${String(job?.id ?? 'S/N').padStart(4, '0')}`
         };
 
         // PASO CRÍTICO: MOSTRAR DATOS ANTES DE ENVIAR

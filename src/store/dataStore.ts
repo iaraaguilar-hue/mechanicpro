@@ -216,12 +216,16 @@ export const useDataStore = create<DataState>((set, get) => ({
             })
             .eq('id', id)
             .select()
-            .single();
+            .maybeSingle(); // .single() crashea si RLS devuelve 0 filas; .maybeSingle() retorna null en ese caso
         if (error) {
             console.error('[DataStore] ❌ Error actualizando cliente en Supabase:', error);
             throw new Error(`Error actualizando cliente: ${error.message}`);
         }
-        // Only update local state after confirmed DB write — no false positives
+        if (!row) {
+            console.error('[DataStore] ❌ updateCliente: 0 filas afectadas. Verifica RLS o el ID:', id);
+            throw new Error('No se pudo actualizar el cliente. Verifica permisos RLS o el ID del registro.');
+        }
+        // Update local state only after DB confirmation using the returned row
         set({
             clientes: get().clientes.map(c => c.id === id ? (row as SupabaseClient) : c),
         });
@@ -301,9 +305,21 @@ export const useDataStore = create<DataState>((set, get) => ({
         // Also strip servicio_items (JOIN artifact) if present
         delete (serviceData as any).servicio_items;
 
-        // Step 1: Update the service (only real columns)
-        const { error } = await supabase.from('servicios').update(serviceData).eq('id', id);
-        if (error) throw new Error(`Error actualizando servicio: ${error.message}`);
+        // Step 1: Update the service — maybeSingle() to avoid crash on 0 rows (RLS or stale ID)
+        const { data: row, error } = await supabase
+            .from('servicios')
+            .update(serviceData)
+            .eq('id', id)
+            .select()
+            .maybeSingle();
+        if (error) {
+            console.error('[DataStore] ❌ Error actualizando servicio en Supabase:', error);
+            throw new Error(`Error actualizando servicio: ${error.message}`);
+        }
+        if (!row) {
+            console.error('[DataStore] ❌ updateServicio: 0 filas afectadas. Verifica RLS o el ID:', id);
+            throw new Error('No se pudo actualizar el servicio. Verifica permisos RLS o el ID del registro.');
+        }
 
         // Step 2: If items were provided, replace them (delete old + insert new)
         if (items_extra !== undefined) {

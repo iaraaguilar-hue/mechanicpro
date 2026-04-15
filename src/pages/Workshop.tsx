@@ -319,6 +319,7 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
                         const nombresConcatenados = productosFisicos.map((p: any) => p.descripcion).join(", ");
 
                         const payload = {
+                            numero_orden: formatOrdenNumber(service.numero_orden, service.id),
                             dni_cliente: client?.dni || "Sin DNI",
                             nombre_cliente: client?.nombre || "Cliente",
                             fecha_finalizacion: fechaFinalizacion,
@@ -328,7 +329,6 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
                                 precio: Number(p.precio) || 0
                             })),
                             total_service: totalProductos,
-                            observacion: formatOrdenNumber(service.numero_orden, service.id)
                         };
 
                         fetch("https://nonlepidopterous-memphis-palaeological.ngrok-free.dev/webhook/generar-orden", {

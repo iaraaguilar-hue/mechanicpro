@@ -206,10 +206,24 @@ export const useDataStore = create<DataState>((set, get) => ({
     },
 
     updateCliente: async (id, data) => {
-        const { error } = await supabase.from('clientes').update(data).eq('id', id);
-        if (error) throw new Error(`Error actualizando cliente: ${error.message}`);
+        const { data: row, error } = await supabase
+            .from('clientes')
+            .update({
+                nombre: data.nombre,
+                dni: data.dni,
+                telefono: data.telefono,
+                tipo_ciclista: data.tipo_ciclista,
+            })
+            .eq('id', id)
+            .select()
+            .single();
+        if (error) {
+            console.error('[DataStore] ❌ Error actualizando cliente en Supabase:', error);
+            throw new Error(`Error actualizando cliente: ${error.message}`);
+        }
+        // Only update local state after confirmed DB write — no false positives
         set({
-            clientes: get().clientes.map(c => c.id === id ? { ...c, ...data } : c),
+            clientes: get().clientes.map(c => c.id === id ? (row as SupabaseClient) : c),
         });
     },
 

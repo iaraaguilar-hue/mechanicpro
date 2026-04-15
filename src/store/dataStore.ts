@@ -106,6 +106,33 @@ interface DataState {
     createCarrera: (data: Omit<SupabaseCarrera, 'id'>) => Promise<SupabaseCarrera>;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AUDIT TRAIL: Helper silencioso — un fallo aquí NUNCA bloquea el flujo principal
+// ─────────────────────────────────────────────────────────────────────────────
+async function logActividad(payload: {
+    taller_id: string;
+    usuario_id: string;
+    usuario_nombre: string;
+    entidad_tipo: 'CLIENTE' | 'BICICLETA';
+    entidad_id: string;
+    antes: object;
+    despues: object;
+}) {
+    try {
+        await supabase.from('registro_actividad').insert({
+            taller_id: payload.taller_id,
+            usuario_id: payload.usuario_id,
+            usuario_nombre: payload.usuario_nombre,
+            accion: 'EDITADO',
+            entidad_tipo: payload.entidad_tipo,
+            entidad_id: payload.entidad_id,
+            detalles: { antes: payload.antes, despues: payload.despues },
+        });
+    } catch (auditErr) {
+        console.warn('[DataStore] ⚠️ Audit log falló (no crítico):', auditErr);
+    }
+}
+
 export const useDataStore = create<DataState>((set, get) => ({
     // ── Initial state ──
     clientes: [],
@@ -206,6 +233,9 @@ export const useDataStore = create<DataState>((set, get) => ({
     },
 
     updateCliente: async (id, data) => {
+        // Snapshot ANTES del update para el audit trail
+        const registroAntes = get().clientes.find(c => c.id === id);
+
         const { data: row, error } = await supabase
             .from('clientes')
             .update({
@@ -216,7 +246,7 @@ export const useDataStore = create<DataState>((set, get) => ({
             })
             .eq('id', id)
             .select()
-            .maybeSingle(); // .single() crashea si RLS devuelve 0 filas; .maybeSingle() retorna null en ese caso
+            .maybeSingle();
         if (error) {
             console.error('[DataStore] ❌ Error actualizando cliente en Supabase:', error);
             throw new Error(`Error actualizando cliente: ${error.message}`);
@@ -229,6 +259,19 @@ export const useDataStore = create<DataState>((set, get) => ({
         set({
             clientes: get().clientes.map(c => c.id === id ? (row as SupabaseClient) : c),
         });
+        // Audit trail — silencioso, no bloquea el flujo
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && registroAntes) {
+            logActividad({
+                taller_id: registroAntes.taller_id,
+                usuario_id: user.id,
+                usuario_nombre: user.user_metadata?.nombre || user.email || 'Desconocido',
+                entidad_tipo: 'CLIENTE',
+                entidad_id: id,
+                antes: { nombre: registroAntes.nombre, dni: registroAntes.dni, telefono: registroAntes.telefono, tipo_ciclista: registroAntes.tipo_ciclista },
+                despues: { nombre: row.nombre, dni: row.dni, telefono: row.telefono, tipo_ciclista: row.tipo_ciclista },
+            });
+        }
     },
 
     deleteCliente: async (id) => {
@@ -250,11 +293,39 @@ export const useDataStore = create<DataState>((set, get) => ({
     },
 
     updateBicicleta: async (id, data) => {
-        const { error } = await supabase.from('bicicletas').update(data).eq('id', id);
-        if (error) throw new Error(`Error actualizando bicicleta: ${error.message}`);
+        // Snapshot ANTES del update para el audit trail
+        const registroAntes = get().bicicletas.find(b => b.id === id);
+
+        const { data: row, error } = await supabase
+            .from('bicicletas')
+            .update(data)
+            .eq('id', id)
+            .select()
+            .maybeSingle();
+        if (error) {
+            console.error('[DataStore] ❌ Error actualizando bicicleta en Supabase:', error);
+            throw new Error(`Error actualizando bicicleta: ${error.message}`);
+        }
+        if (!row) {
+            console.error('[DataStore] ❌ updateBicicleta: 0 filas afectadas. Verifica RLS o el ID:', id);
+            throw new Error('No se pudo actualizar la bicicleta. Verifica permisos RLS o el ID del registro.');
+        }
         set({
-            bicicletas: get().bicicletas.map(b => b.id === id ? { ...b, ...data } : b),
+            bicicletas: get().bicicletas.map(b => b.id === id ? (row as SupabaseBike) : b),
         });
+        // Audit trail — silencioso, no bloquea el flujo
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && registroAntes) {
+            logActividad({
+                taller_id: registroAntes.taller_id,
+                usuario_id: user.id,
+                usuario_nombre: user.user_metadata?.nombre || user.email || 'Desconocido',
+                entidad_tipo: 'BICICLETA',
+                entidad_id: id,
+                antes: { marca: registroAntes.marca, modelo: registroAntes.modelo, transmision: registroAntes.transmision, categoria: registroAntes.categoria },
+                despues: { marca: (row as SupabaseBike).marca, modelo: (row as SupabaseBike).modelo, transmision: (row as SupabaseBike).transmision, categoria: (row as SupabaseBike).categoria },
+            });
+        }
     },
 
     deleteBicicleta: async (id) => {

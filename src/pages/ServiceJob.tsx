@@ -84,7 +84,7 @@ export default function ServiceJob() {
             nombre_producto: productosListos.map((p: any) => p.descripcion).join(", "),
             productos: productosListos,
             total_service: totalProductos,
-            observacion: `#${String(job?.id ?? 0).padStart(4, '0')}`
+            observacion: `#${String(job?.id ?? 'S/N').padStart(4, '0')}`
         };
 
         // PASO CRÍTICO: MOSTRAR DATOS ANTES DE ENVIAR

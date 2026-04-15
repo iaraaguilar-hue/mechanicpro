@@ -328,7 +328,7 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
                                 precio: Number(p.precio) || 0
                             })),
                             total_service: totalProductos,
-                            observacion: `#${String(service.numero_orden ?? 0).padStart(4, '0')}`
+                            observacion: formatOrdenNumber(service.numero_orden, service.id)
                         };
 
                         fetch("https://nonlepidopterous-memphis-palaeological.ngrok-free.dev/webhook/generar-orden", {

@@ -129,25 +129,24 @@ export default function BikeDetail() {
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            if (activeClientId) {
-                await updateCliente(activeClientId, {
-                    nombre: editName,
-                    telefono: editPhone,
-                    email: editEmail,
-                    dni: editDni,
-                });
-            }
-            const targetBikeId = editingBikeId || bike?.id;
-            if (targetBikeId) {
-                await updateBicicleta(targetBikeId, {
+            if (editingBikeId) {
+                // Modo bicicleta: solo actualiza la bici seleccionada
+                await updateBicicleta(editingBikeId, {
                     marca: editBrand,
                     modelo: editModel,
                     transmision: editTransmission,
                 });
-            }
-            if (editingBikeId) {
                 setEditingBikeId(null);
             } else {
+                // Modo cliente: solo actualiza el cliente
+                if (activeClientId) {
+                    await updateCliente(activeClientId, {
+                        nombre: editName,
+                        telefono: editPhone,
+                        email: editEmail,
+                        dni: editDni,
+                    });
+                }
                 setIsEditOpen(false);
             }
         } catch (e: any) {

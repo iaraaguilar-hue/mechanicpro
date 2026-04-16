@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ArrowLeft, Wrench, AlertTriangle, Clock, Pencil, Save, FileDown, Plus, Trash2, User, Bike as BikeIcon, CheckCircle, Info } from "lucide-react";
+import { ArrowLeft, Wrench, AlertTriangle, Clock, Pencil, Save, FileDown, Plus, Trash2, User, Bike as BikeIcon, CheckCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { AddBikeDialog } from "@/components/AddBikeDialog";
@@ -192,10 +192,16 @@ export default function BikeDetail() {
                 <div className="bg-white p-6 rounded-xl border shadow-sm space-y-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
-                            <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+                            <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
                                 {client?.nombre}
-                                <Button variant="ghost" size="icon" className="h-auto w-auto p-1 text-slate-400 hover:text-primary self-center" onClick={handleEditClick}>
-                                    <Info className="h-7 w-7" />
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-auto w-auto p-1.5 rounded-md text-slate-400 hover:text-primary hover:bg-primary/10 transition-colors self-center"
+                                    onClick={handleEditClick}
+                                    title="Editar perfil del cliente"
+                                >
+                                    <Pencil className="w-5 h-5" />
                                 </Button>
                             </h1>
                             <div className="flex items-center gap-3 mt-1 text-muted-foreground">

@@ -111,33 +111,23 @@ export default function Metrics() {
     const taller = useAuthStore(s => s.taller);
     const planActual: string = taller?.plan_actual || 'Sport';
 
-    // ── Local-date helpers (avoid UTC date shift for users in UTC-offset timezones)
-    const getLocalDateStr = (d: Date): string => {
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        return `${y}-${m}-${day}`;
-    };
-    // Returns a full ISO string WITH the local UTC offset (e.g. "2026-02-01T00:00:00-03:00")
-    // so Supabase timestamptz comparisons are timezone-aware.
-    const toLocalISO = (dateStr: string, endOfDay = false): string => {
-        const offsetMin = new Date().getTimezoneOffset(); // e.g. 180 for UTC-3
-        const sign = offsetMin <= 0 ? '+' : '-';
-        const absMin = Math.abs(offsetMin);
-        const hh = String(Math.floor(absMin / 60)).padStart(2, '0');
-        const mm = String(absMin % 60).padStart(2, '0');
-        const time = endOfDay ? 'T23:59:59.999' : 'T00:00:00';
-        return `${dateStr}${time}${sign}${hh}:${mm}`;
-    };
-
     const today = new Date();
-    const [dateStart, setDateStart] = useState<string>(getLocalDateStr(new Date(today.getFullYear(), 0, 1)));
-    const [dateEnd, setDateEnd] = useState<string>(getLocalDateStr(today));
+    const [dateStart, setDateStart] = useState<string>(
+        `${today.getFullYear()}-01-01`
+    );
+    const [dateEnd, setDateEnd] = useState<string>(
+        // Build local YYYY-MM-DD without toISOString() to avoid UTC day shift.
+        `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+    );
 
-    const [servicios, setServicios] = useState<any[]>([]);
+    // allServicios holds the complete, unfiltered dataset for this taller.
+    // Date filtering is done client-side (see filteredServicios) using numeric
+    // timestamps so it is immune to ISO string parsing and UTC offset issues.
+    const [allServicios, setAllServicios] = useState<any[]>([]);
     const [bicicletas, setBicicletas] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
+    // Fetch once per tallerId — NO date filter in the query.
     useEffect(() => {
         const fetchMetricsData = async () => {
             if (!tallerId) return;
@@ -150,39 +140,50 @@ export default function Metrics() {
 
                 if (bData) setBicicletas(bData);
 
-                // ── Timezone-aware ISO boundaries.
-                // fecha_ingreso is stored as UTC via new Date().toISOString().
-                // Sending a bare string (no offset) to Supabase .gte()/.lte() would be
-                // treated as UTC, creating a ±3h gap for Argentina (UTC-3) that silently
-                // excludes entire days at month boundaries (the "February ghost" bug).
-                // toLocalISO() appends the runtime UTC offset so the comparison is exact.
-                const isoStart = toLocalISO(dateStart, false);
-                const isoEnd = toLocalISO(dateEnd, true);
-
-                // ── All non-deleted services in the intake window (no status filter).
+                // Fetch all non-deleted services. Date windowing is done locally
+                // in filteredServicios to avoid UTC offset bugs in Supabase string
+                // comparisons (the "February ghost" bug).
                 const { data: sData, error: sError } = await supabase
                     .from('servicios')
                     .select('*, servicio_items(*)')
                     .eq('taller_id', tallerId)
-                    .is('eliminado_en', null)
-                    .gte('fecha_ingreso', isoStart)
-                    .lte('fecha_ingreso', isoEnd);
+                    .is('eliminado_en', null);
 
-                if (sError) console.error("Error fetching services:", sError);
-                else setServicios(sData || []);
+                if (sError) console.error("[Metrics] Error fetching services:", sError);
+                else setAllServicios(sData || []);
             } catch (err) {
-                console.error("Data fetch error in Metrics:", err);
+                console.error("[Metrics] Data fetch error:", err);
             } finally {
                 setIsLoading(false);
             }
         };
 
         fetchMetricsData();
-    }, [tallerId, dateStart, dateEnd]);
+        // Only re-fetch when the taller changes — date range is filtered locally.
+    }, [tallerId]);
+
+    // ── Client-side date filter (numeric timestamps, immune to locale/UTC issues) ──
+    const filteredServicios = useMemo(() => {
+        if (!dateStart || !dateEnd) return allServicios;
+
+        // setHours uses the LOCAL clock, so boundaries are always in local time
+        // regardless of the UTC offset stored in fecha_ingreso.
+        const startTs = new Date(dateStart).setHours(0, 0, 0, 0);
+        const endTs = new Date(dateEnd).setHours(23, 59, 59, 999);
+
+        return allServicios.filter(s => {
+            // Prefer fecha_ingreso; fall back to created_at. Skip if neither.
+            const rawDate = s.fecha_ingreso || s.created_at;
+            if (!rawDate) return false;
+            const serviceTs = new Date(rawDate).getTime();
+            if (isNaN(serviceTs)) return false;
+            return serviceTs >= startTs && serviceTs <= endTs;
+        });
+    }, [allServicios, dateStart, dateEnd]);
 
     // --- ANALYTICS ENGINE ---
     const stats = useMemo(() => {
-        const filtered = servicios;
+        const filtered = filteredServicios;
         // Normalize bikes ONCE before aggregating
         const normalizedBikes = normalizeBikeData(bicicletas);
         let totalRevenue = 0;
@@ -287,7 +288,7 @@ export default function Metrics() {
             brandDist: finalBrandData, modelDist: finalModelData, categoryDist: finalCategoryData,
             avgTicket, laborPerc, partsPerc
         };
-    }, [servicios, bicicletas]);
+    }, [filteredServicios, bicicletas]);
 
     // ─── Shared Header ────────────────────────────────────────────────────────
     const header = (
@@ -572,7 +573,7 @@ export default function Metrics() {
                 dateStart={dateStart}
                 dateEnd={dateEnd}
                 stats={stats}
-                servicios={servicios}
+                servicios={filteredServicios}
                 isLoading={isLoading}
             />
         </div>

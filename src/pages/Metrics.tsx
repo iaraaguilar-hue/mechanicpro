@@ -130,19 +130,23 @@ export default function Metrics() {
 
                 if (bData) setBicicletas(bData);
 
-                const startDate = new Date(`${dateStart}T00:00:00`);
-                const endDate = new Date(`${dateEnd}T23:59:59.999`);
-                const isoStart = startDate.toISOString();
-                const isoEnd = endDate.toISOString();
+                // ── TZ-safe date range: build the ISO string directly from the
+                // local date string to avoid the UTC offset shift that toISOString() produces.
+                // Example: dateStart = "2025-04-01" → "2025-04-01T00:00:00"
+                const isoStart = `${dateStart}T00:00:00`;
+                const isoEnd = `${dateEnd}T23:59:59.999`;
 
+                // ── FIX: removed .in('estado', [...]) filter.
+                // History counts ALL non-deleted services; Metrics must do the same.
+                // ── FIX: filter on fecha_ingreso (always set) instead of fecha_entrega
+                // (null for in-progress services), which was silently excluding them.
                 const { data: sData, error: sError } = await supabase
                     .from('servicios')
                     .select('*, servicio_items(*)')
                     .eq('taller_id', tallerId)
                     .is('eliminado_en', null)
-                    .in('estado', ['Completed', 'completed', 'finalizado', 'entregado', 'ready', 'Ready'])
-                    .gte('fecha_entrega', isoStart)
-                    .lte('fecha_entrega', isoEnd);
+                    .gte('fecha_ingreso', isoStart)
+                    .lte('fecha_ingreso', isoEnd);
 
                 if (sError) console.error("Error fetching services:", sError);
                 else setServicios(sData || []);

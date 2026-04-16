@@ -111,8 +111,28 @@ export default function Metrics() {
     const taller = useAuthStore(s => s.taller);
     const planActual: string = taller?.plan_actual || 'Sport';
 
-    const [dateStart, setDateStart] = useState<string>(new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]);
-    const [dateEnd, setDateEnd] = useState<string>(new Date().toISOString().split('T')[0]);
+    // ── Local-date helpers (avoid UTC date shift for users in UTC-offset timezones)
+    const getLocalDateStr = (d: Date): string => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    };
+    // Returns a full ISO string WITH the local UTC offset (e.g. "2026-02-01T00:00:00-03:00")
+    // so Supabase timestamptz comparisons are timezone-aware.
+    const toLocalISO = (dateStr: string, endOfDay = false): string => {
+        const offsetMin = new Date().getTimezoneOffset(); // e.g. 180 for UTC-3
+        const sign = offsetMin <= 0 ? '+' : '-';
+        const absMin = Math.abs(offsetMin);
+        const hh = String(Math.floor(absMin / 60)).padStart(2, '0');
+        const mm = String(absMin % 60).padStart(2, '0');
+        const time = endOfDay ? 'T23:59:59.999' : 'T00:00:00';
+        return `${dateStr}${time}${sign}${hh}:${mm}`;
+    };
+
+    const today = new Date();
+    const [dateStart, setDateStart] = useState<string>(getLocalDateStr(new Date(today.getFullYear(), 0, 1)));
+    const [dateEnd, setDateEnd] = useState<string>(getLocalDateStr(today));
 
     const [servicios, setServicios] = useState<any[]>([]);
     const [bicicletas, setBicicletas] = useState<any[]>([]);
@@ -130,16 +150,16 @@ export default function Metrics() {
 
                 if (bData) setBicicletas(bData);
 
-                // ── TZ-safe date range: build the ISO string directly from the
-                // local date string to avoid the UTC offset shift that toISOString() produces.
-                // Example: dateStart = "2025-04-01" → "2025-04-01T00:00:00"
-                const isoStart = `${dateStart}T00:00:00`;
-                const isoEnd = `${dateEnd}T23:59:59.999`;
+                // ── Timezone-aware ISO boundaries.
+                // fecha_ingreso is stored as UTC via new Date().toISOString().
+                // Sending a bare string (no offset) to Supabase .gte()/.lte() would be
+                // treated as UTC, creating a ±3h gap for Argentina (UTC-3) that silently
+                // excludes entire days at month boundaries (the "February ghost" bug).
+                // toLocalISO() appends the runtime UTC offset so the comparison is exact.
+                const isoStart = toLocalISO(dateStart, false);
+                const isoEnd = toLocalISO(dateEnd, true);
 
-                // ── FIX: removed .in('estado', [...]) filter.
-                // History counts ALL non-deleted services; Metrics must do the same.
-                // ── FIX: filter on fecha_ingreso (always set) instead of fecha_entrega
-                // (null for in-progress services), which was silently excluding them.
+                // ── All non-deleted services in the intake window (no status filter).
                 const { data: sData, error: sError } = await supabase
                     .from('servicios')
                     .select('*, servicio_items(*)')

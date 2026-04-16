@@ -24,11 +24,14 @@ import { useDataStore } from "@/store/dataStore";
 import { supabase } from "@/lib/supabase";
 import { hexToHslSpaceSeparated } from "@/lib/utils";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
+import { useIdleTimeout } from "@/hooks/useIdleTimeout";
 import { UpdateBanner } from "@/components/UpdateBanner";
 
 function AppContent() {
   const { updateAvailable } = useVersionCheck();
   const session = useAuthStore((state) => state.session);
+
+
   const nombre = useAuthStore((state) => state.nombre);
   const logout = useAuthStore((state) => state.logout);
   const rol = useAuthStore((state) => state.rol);
@@ -136,6 +139,8 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row">
+      {/* 🔒 Idle-timeout guardian — active only when session exists */}
+      <IdleGuard />
       {updateAvailable && <UpdateBanner />}
 
       {/* Sidebar / Navigation */}
@@ -222,6 +227,14 @@ function AppContent() {
       </main>
     </div>
   );
+}
+
+/** Thin wrapper so useIdleTimeout is called unconditionally at a fixed
+ *  component level, but the component itself is only mounted when the
+ *  user is authenticated (rendered inside the protected layout above). */
+function IdleGuard() {
+  useIdleTimeout();
+  return null;
 }
 
 function App() {

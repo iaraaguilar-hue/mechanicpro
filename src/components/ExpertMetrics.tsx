@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { getSemanticCategory } from '@/pages/Metrics';
 import { Loader2, PieChart as PieIcon, TrendingUp } from 'lucide-react';
 import {
     PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
@@ -21,12 +21,13 @@ const CHART_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#1
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface TrendItem {
     categoria: string;
-    conteo: number;
+    conteo: number; // For Rentabilidad this actually means ARS revenue amount
 }
 
 interface TimelineStat {
     fecha: string;
-    ingresos: number;
+    labor: number;
+    parts: number;
 }
 
 interface Props {
@@ -42,10 +43,15 @@ interface Props {
 const CustomPieTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
         const d = payload[0];
+        // Calculate percentage from payload's internal percent value
+        const pct = d.payload?.percent != null
+            ? `(${(d.payload.percent * 100).toFixed(1)}%)`
+            : '';
+
         return (
             <div className="bg-white border border-gray-100 shadow-sm rounded-xl px-4 py-2 text-sm">
                 <p className="font-bold text-gray-900">{d.name}</p>
-                <p className="text-gray-600">{d.value} ítems registrados</p>
+                <p className="text-emerald-600 font-medium">Facturación: ${d.value.toLocaleString('es-AR')} {pct}</p>
             </div>
         );
     }
@@ -55,12 +61,26 @@ const CustomPieTooltip = ({ active, payload }: any) => {
 // ─── Custom Tooltip for AreaChart ─────────────────────────────────────────────
 const CustomAreaTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
+        const parts = payload.find((p: any) => p.dataKey === 'parts')?.value || 0;
+        const labor = payload.find((p: any) => p.dataKey === 'labor')?.value || 0;
+        const total = parts + labor;
         return (
-            <div className="bg-white border border-gray-100 shadow-sm rounded-xl px-4 py-3 text-sm">
-                <p className="font-bold text-gray-900 mb-1">{label}</p>
-                <p className="font-medium text-emerald-600">
-                    Facturación: ${payload[0].value.toLocaleString('es-AR')}
-                </p>
+            <div className="bg-white border border-gray-100 shadow-sm rounded-xl px-4 py-3 text-sm min-w-[160px]">
+                <p className="font-bold text-gray-900 mb-2 border-b border-gray-100 pb-1">{label}</p>
+                <div className="space-y-1">
+                    <div className="flex justify-between items-center gap-4">
+                        <span className="text-gray-500 font-medium text-xs flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-[#f59e0b]"></div>Repuestos:</span>
+                        <span className="font-bold text-gray-900">${parts.toLocaleString('es-AR')}</span>
+                    </div>
+                    <div className="flex justify-between items-center gap-4">
+                        <span className="text-gray-500 font-medium text-xs flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-[#10b981]"></div>Mano de Obra:</span>
+                        <span className="font-bold text-gray-900">${labor.toLocaleString('es-AR')}</span>
+                    </div>
+                    <div className="flex justify-between items-center gap-4 pt-1 mt-1 border-t border-gray-50">
+                        <span className="text-gray-800 font-bold text-xs uppercase tracking-wider">Total Día:</span>
+                        <span className="font-black text-primary">${total.toLocaleString('es-AR')}</span>
+                    </div>
+                </div>
             </div>
         );
     }
@@ -68,59 +88,89 @@ const CustomAreaTooltip = ({ active, payload, label }: any) => {
 };
 
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
-export default function ExpertMetrics({ tallerId, servicios, isLoading }: Props) {
+export default function ExpertMetrics({ servicios, isLoading }: Props) {
     const [trends, setTrends] = useState<TrendItem[]>([]);
     const [revenueTimeline, setRevenueTimeline] = useState<TimelineStat[]>([]);
     const [loadingTrends, setLoadingTrends] = useState(true);
 
-    // ── Load trend data from RPC ──────────────────────────────────────────────
+    // ── Compute both charts strictly from passed servicios ────────────────────────
     useEffect(() => {
-        if (!tallerId) return;
+        if (!servicios.length) {
+            setRevenueTimeline([]);
+            setTrends([]);
+            setLoadingTrends(false);
+            return;
+        }
 
-        const fetchTrends = async () => {
-            setLoadingTrends(true);
-            try {
-                const { data, error } = await supabase.rpc('analizar_tendencias_regex', {
-                    p_taller_id: tallerId,
-                });
-                if (error) throw error;
-                setTrends((data as TrendItem[]) || []);
-            } catch (err) {
-                console.error('[ExpertMetrics] RPC trend error:', err);
-            } finally {
-                setLoadingTrends(false);
-            }
+        const timelineMap: Record<string, { labor: number; parts: number }> = {};
+        const systemRevenueMap: Record<string, number> = {
+            'Transmisión': 0, 'Frenos': 0, 'Neumáticos y Ruedas': 0,
+            'Suspensión': 0, 'Cockpit y Componentes': 0, 'Mantenimiento General': 0, 'Otros': 0
         };
-
-        fetchTrends();
-    }, [tallerId]);
-
-    // ── Compute revenue timeline from servicios ───────────────────────────
-    useEffect(() => {
-        if (!servicios.length) { setRevenueTimeline([]); return; }
-
-        const timelineMap: Record<string, number> = {};
 
         servicios.forEach((s: any) => {
             const dateStr = s.fecha_entrega || s.created_at || new Date().toISOString();
             const dateKey = dateStr.split('T')[0]; // YYYY-MM-DD
 
-            const revenue = Number(s.precio_total) || Number(s.precio_base) || 0;
-            timelineMap[dateKey] = (timelineMap[dateKey] || 0) + revenue;
+            if (!timelineMap[dateKey]) timelineMap[dateKey] = { labor: 0, parts: 0 };
+
+            let serviceLabor = Number(s.precio_base) || 0;
+            let serviceParts = 0;
+
+            const items = Array.isArray(s.servicio_items) ? s.servicio_items : (Array.isArray(s.items_extra) ? s.items_extra : []);
+
+            items.forEach((item: any) => {
+                const itemPrecio = Number(item.precio) || 0;
+                if (item.categoria === 'part' || item.categoria === 'producto' || item.categoria === 'repuesto') {
+                    serviceParts += itemPrecio;
+                    const cat = getSemanticCategory(item.descripcion || '');
+                    if (systemRevenueMap[cat] !== undefined) {
+                        systemRevenueMap[cat] += itemPrecio;
+                    } else {
+                        systemRevenueMap['Otros'] += itemPrecio;
+                    }
+                } else {
+                    serviceLabor += itemPrecio;
+                }
+            });
+
+            // Allocate labor to a category (heuristic using service type)
+            if (serviceLabor > 0) {
+                const catLabel = getSemanticCategory(s.tipo_servicio || 'Mantenimiento General');
+                if (systemRevenueMap[catLabel] !== undefined) {
+                    systemRevenueMap[catLabel] += serviceLabor;
+                } else {
+                    systemRevenueMap['Mantenimiento General'] += serviceLabor;
+                }
+            }
+
+            timelineMap[dateKey].labor += serviceLabor;
+            timelineMap[dateKey].parts += serviceParts;
         });
 
-        const computed: TimelineStat[] = Object.entries(timelineMap)
+        // Compute Revenue Timeline
+        const computedTimeline: TimelineStat[] = Object.entries(timelineMap)
             .sort((a, b) => a[0].localeCompare(b[0]))
-            .map(([dateKey, ingresos]) => {
-                const parts = dateKey.split('-');
-                const shortDate = `${parts[2]}/${parts[1]}`;
+            .map(([dateKey, vals]) => {
+                const partsStr = dateKey.split('-');
+                const shortDate = `${partsStr[2]}/${partsStr[1]}`;
                 return {
                     fecha: shortDate,
-                    ingresos
+                    labor: vals.labor,
+                    parts: vals.parts
                 };
             });
 
-        setRevenueTimeline(computed);
+        setRevenueTimeline(computedTimeline);
+
+        // Compute semantic profitability (calculate total first for percentages handled by Recharts natively, or we can just send amounts)
+        const computedTrends: TrendItem[] = Object.entries(systemRevenueMap)
+            .filter(([, sum]) => sum > 0)
+            .map(([categoria, sum]) => ({ categoria, conteo: sum }))
+            .sort((a, b) => b.conteo - a.conteo);
+
+        setTrends(computedTrends);
+        setLoadingTrends(false);
     }, [servicios]);
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -136,14 +186,14 @@ export default function ExpertMetrics({ tallerId, servicios, isLoading }: Props)
             {/* ── Trends Donut + Revenue Area ───────────────────────────────────── */}
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
-                {/* Análisis Categórico Semántico (Donut) */}
+                {/* Rentabilidad por Sistema (Pie/Donut of volume) */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
                     <div className="flex items-center justify-between mb-5">
                         <div className="flex items-center gap-2">
                             <PieIcon className="w-6 h-6 text-primary" />
-                            <h3 className="text-lg font-bold text-gray-900">Análisis Categórico Semántico</h3>
+                            <h3 className="text-lg font-bold text-gray-900">Rentabilidad por Sistema</h3>
                         </div>
-                        <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Motor Regex</span>
+                        <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Volumen en ARS</span>
                     </div>
 
                     <div className="flex-1 flex flex-col justify-center">
@@ -193,14 +243,14 @@ export default function ExpertMetrics({ tallerId, servicios, isLoading }: Props)
                     </div>
                 </div>
 
-                {/* Evolución de Ingresos (Area) */}
+                {/* Composición de Ingresos (Stacked Area) */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
                     <div className="flex items-center justify-between mb-5">
                         <div className="flex items-center gap-2">
                             <TrendingUp className="w-6 h-6 text-primary" />
-                            <h3 className="text-lg font-bold text-gray-900">Evolución de Ingresos</h3>
+                            <h3 className="text-lg font-bold text-gray-900">Composición de Ingresos</h3>
                         </div>
-                        <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Facturación Total</span>
+                        <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">MO vs Repuestos</span>
                     </div>
 
                     <div className="flex-1 flex flex-col justify-center">
@@ -216,9 +266,13 @@ export default function ExpertMetrics({ tallerId, servicios, isLoading }: Props)
                             <ResponsiveContainer width="100%" height={300}>
                                 <AreaChart data={revenueTimeline} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                                     <defs>
-                                        <linearGradient id="colorIngresos" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                                        <linearGradient id="colorLabor" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
                                             <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                        </linearGradient>
+                                        <linearGradient id="colorParts" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.4} />
+                                            <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
                                         </linearGradient>
                                     </defs>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -239,12 +293,25 @@ export default function ExpertMetrics({ tallerId, servicios, isLoading }: Props)
                                     <Tooltip content={<CustomAreaTooltip />} />
                                     <Area
                                         type="monotone"
-                                        dataKey="ingresos"
-                                        stroke="#10b981"
-                                        strokeWidth={3}
+                                        dataKey="parts"
+                                        stackId="1"
+                                        stroke="#f59e0b"
+                                        strokeWidth={2}
                                         fillOpacity={1}
-                                        fill="url(#colorIngresos)"
+                                        fill="url(#colorParts)"
+                                        name="Repuestos"
                                     />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="labor"
+                                        stackId="1"
+                                        stroke="#10b981"
+                                        strokeWidth={2}
+                                        fillOpacity={1}
+                                        fill="url(#colorLabor)"
+                                        name="Mano de Obra"
+                                    />
+                                    <Legend verticalAlign="bottom" wrapperStyle={{ paddingTop: 10 }} iconType="circle" iconSize={8} />
                                 </AreaChart>
                             </ResponsiveContainer>
                         )}

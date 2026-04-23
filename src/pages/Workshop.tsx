@@ -7,7 +7,7 @@ import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle } from "lucide-react";
+import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -126,7 +126,23 @@ export default function Workshop() {
                 </Card>
             </div>
 
-            <div className="rounded-md border bg-card">
+            {/* ── MOBILE: Compact horizontal cards (hidden on md+) ── */}
+            <div className="block md:hidden">
+                {jobs.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-12">No hay bicicletas en el taller.</p>
+                ) : (
+                    jobs.map((job) => (
+                        <MobileJobCard
+                            key={job.service_id}
+                            job={job}
+                            onClick={() => setEditingJob(job)}
+                        />
+                    ))
+                )}
+            </div>
+
+            {/* ── DESKTOP: Full table (hidden on mobile) ── */}
+            <div className="hidden md:block rounded-md border bg-card">
                 <Table>
                     <TableHeader>
                         <TableRow className="bg-muted/50 hover:bg-muted/50">
@@ -175,6 +191,40 @@ export default function Workshop() {
                     onClose={() => { setFinalizingJob(null); handleRefresh(); }}
                 />
             )}
+        </div>
+    );
+}
+
+function MobileJobCard({ job, onClick }: { job: DashboardJob; onClick: () => void }) {
+    return (
+        <div
+            onClick={onClick}
+            className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 mb-3 flex items-center justify-between active:scale-[0.98] transition-transform cursor-pointer"
+        >
+            <div className="flex flex-col gap-1 flex-1 min-w-0 pr-3">
+                <div className="flex items-center gap-2">
+                    <span className="bg-slate-100 text-slate-600 text-[11px] font-bold px-1.5 py-0.5 rounded-md">
+                        #{job.numero_orden ? String(job.numero_orden).padStart(4, '0') : job.service_id.slice(-4)}
+                    </span>
+                    <h3 className="font-semibold text-slate-800 text-sm truncate">{job.client_name}</h3>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                    <Wrench size={12} className="flex-shrink-0" />
+                    <span className="truncate">{job.bike_brand} {job.bike_model}</span>
+                </div>
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0">
+                <div className="flex flex-col items-end gap-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#03adef] bg-sky-50 px-2 py-0.5 rounded-full border border-sky-100">
+                        {job.status}
+                    </span>
+                    <span className="text-xs text-slate-400 flex items-center gap-1">
+                        <Clock size={10} />
+                        {job.date_out ? formatSafeDate(job.date_out) : formatSafeDate(job.date_in)}
+                    </span>
+                </div>
+                <ChevronRight size={18} className="text-slate-300" />
+            </div>
         </div>
     );
 }

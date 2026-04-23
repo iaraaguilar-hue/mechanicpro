@@ -5,7 +5,7 @@ import { RapidIntakeWizard } from "@/components/RapidIntakeWizard";
 
 import { Input } from "@/components/ui/input";
 
-import { Search, PlusCircle, Trash2, Clock, CheckCircle } from "lucide-react";
+import { Search, PlusCircle, Trash2, Clock, CheckCircle, ChevronDown, ChevronUp, CreditCard, Phone } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/authStore";
@@ -133,18 +133,44 @@ export default function Home() {
             </div>
 
             {/* Grid */}
+            {/* ── MOBILE: Accordion list (hidden on md+) ── */}
+            {!isHydrating && (
+                <div className="block md:hidden bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                    {clientList.length === 0 ? (
+                        <p className="text-center py-12 text-slate-400">No se encontraron resultados</p>
+                    ) : (
+                        clientList.map((client) => {
+                            const rawClient = clientes.find(c => c.id === client.clientId);
+                            const firstBike = client.bikes[0];
+                            return (
+                                <MobileClientAccordion
+                                    key={client.clientId}
+                                    clientName={client.clientName}
+                                    bikeModelo={firstBike?.modelo}
+                                    bikeGrupo={firstBike?.transmission_display}
+                                    dni={rawClient?.dni}
+                                    telefono={rawClient?.telefono}
+                                    clientId={client.clientId}
+                                />
+                            );
+                        })
+                    )}
+                </div>
+            )}
+
+            {/* ── DESKTOP: Grid cards (hidden on mobile) ── */}
             {isHydrating ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className="hidden md:grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     {Array.from({ length: 8 }).map((_, i) => (
                         <Skeleton key={i} className="h-32 w-full rounded-lg" />
                     ))}
                 </div>
             ) : clientList.length === 0 ? (
-                <div className="text-center py-20 text-slate-400">
+                <div className="hidden md:flex text-center py-20 text-slate-400 justify-center">
                     <p className="text-lg">No se encontraron resultados</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="hidden md:grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {clientList.map((client, index) => (
                         <div key={client.clientId} className="relative group">
                             <Link
@@ -213,6 +239,60 @@ export default function Home() {
                             </Link>
                         </div>
                     ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+interface MobileClientAccordionProps {
+    clientName: string;
+    bikeModelo?: string;
+    bikeGrupo?: string;
+    dni?: string | null;
+    telefono?: string | null;
+    clientId: string;
+}
+
+function MobileClientAccordion({ clientName, bikeModelo, bikeGrupo, dni, telefono, clientId }: MobileClientAccordionProps) {
+    const [isExpanded, setIsExpanded] = useState(false);
+    return (
+        <div className="bg-white border-b border-slate-100 last:border-0">
+            <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="w-full flex items-center justify-between p-4 text-left focus:outline-none hover:bg-slate-50"
+            >
+                <div className="flex flex-col min-w-0">
+                    <span className="font-semibold text-slate-800 text-sm truncate">{clientName}</span>
+                    <span className="text-xs text-slate-500 truncate mt-0.5">
+                        {bikeModelo || 'Sin bicicleta'}{bikeGrupo ? ` • ${bikeGrupo}` : ''}
+                    </span>
+                </div>
+                {isExpanded
+                    ? <ChevronUp size={18} className="text-slate-400 ml-2 flex-shrink-0" />
+                    : <ChevronDown size={18} className="text-slate-400 ml-2 flex-shrink-0" />
+                }
+            </button>
+            {isExpanded && (
+                <div className="px-4 pb-4 pt-2 bg-slate-50/80 flex flex-col gap-2.5 text-sm border-t border-slate-100">
+                    {dni && (
+                        <div className="flex items-center gap-2 text-slate-600">
+                            <CreditCard size={14} className="text-slate-400 flex-shrink-0" />
+                            <span className="truncate text-xs">DNI: {dni}</span>
+                        </div>
+                    )}
+                    {telefono && (
+                        <div className="flex items-center gap-2 text-slate-600">
+                            <Phone size={14} className="text-slate-400 flex-shrink-0" />
+                            <span className="truncate text-xs">Tel: {telefono}</span>
+                        </div>
+                    )}
+                    <a
+                        href={`/clients/${clientId}`}
+                        className="mt-1 text-xs font-semibold text-[#03adef] hover:underline"
+                    >
+                        Ver perfil completo →
+                    </a>
                 </div>
             )}
         </div>

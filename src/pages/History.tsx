@@ -21,7 +21,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
-import { Search, FilterX, ChevronUp, FileText, Pencil, Trash2, Eye, ClipboardList, Calendar as CalendarIcon, Wrench, Package, Info, Tag, MessageCircle } from "lucide-react";
+import { Search, FilterX, ChevronUp, ChevronDown, FileText, Pencil, Trash2, Eye, ClipboardList, Calendar as CalendarIcon, Wrench, Package, Info, Tag, MessageCircle } from "lucide-react";
 import { printServiceReport } from '@/lib/printServiceBtn';
 import { ServiceModal } from '@/components/ServiceModal';
 import { es } from "date-fns/locale";
@@ -466,8 +466,29 @@ export default function History() {
                 </div>
             </div>
 
-            {/* Main Content Card */}
-            <Card className="border-none shadow-md bg-white overflow-hidden">
+            {/* ── MOBILE: History Cards (hidden on md+) ── */}
+            <div className="block md:hidden space-y-0">
+                {filteredJobs.length === 0 ? (
+                    <div className="flex flex-col items-center gap-3 py-16 text-slate-400">
+                        <div className="bg-slate-100 p-4 rounded-full"><Search className="h-7 w-7 text-slate-400" /></div>
+                        <p className="font-medium text-slate-600">No se encontraron resultados</p>
+                        <button onClick={clearFilters} className="text-sm text-primary underline">Limpiar filtros</button>
+                    </div>
+                ) : filteredJobs.map((job) => (
+                    <MobileHistoryCard
+                        key={job.uniqueId}
+                        job={job}
+                        isExpanded={expandedIds.includes(job.id)}
+                        onToggle={() => toggleExpand(job.id)}
+                        onEdit={() => setEditingServiceId(job.id)}
+                        onDelete={() => handleDelete(job.id)}
+                        onPrint={() => printServiceReport(job.rawJob, job.clientName, job.bikeModel, job.clientDni, job.clientPhone)}
+                    />
+                ))}
+            </div>
+
+            {/* ── DESKTOP: Full table card (hidden on mobile) ── */}
+            <Card className="hidden md:block border-none shadow-md bg-white overflow-hidden">
                 <CardContent className="p-0">
                     <Table>
                         <TableHeader className="bg-slate-50/80">
@@ -614,6 +635,70 @@ export default function History() {
     );
 }
 
+// ── Mobile-only History Card ──────────────────────────────────────────────────
+interface MobileHistoryCardProps {
+    job: any;
+    isExpanded: boolean;
+    onToggle: () => void;
+    onEdit: () => void;
+    onDelete: () => void;
+    onPrint: () => void;
+}
+
+function MobileHistoryCard({ job, isExpanded, onToggle, onEdit, onDelete, onPrint }: MobileHistoryCardProps) {
+    return (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-3 active:scale-[0.99] transition-transform">
+            {/* Top row: Status badge + Date */}
+            <div className="flex items-center justify-between mb-2.5">
+                <StatusBadge status={job.status} />
+                <span className="text-xs text-slate-400 font-medium">{job.displayDateIn}</span>
+            </div>
+
+            {/* Middle row: Client name (big) */}
+            <h3 className="text-slate-800 font-bold text-base leading-tight mb-2 truncate">
+                {job.clientName}
+            </h3>
+
+            {/* Bottom row: Order ID (brand orange) + Bike model */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                        {formatOrdenNumber(job.numero_orden, job.id)}
+                    </span>
+                    <span className="text-xs text-slate-500 truncate max-w-[140px]">{job.bikeModel}</span>
+                </div>
+                {/* Expand toggle */}
+                <button
+                    onClick={onToggle}
+                    className="p-1.5 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                    aria-label={isExpanded ? 'Contraer' : 'Expandir'}
+                >
+                    {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+            </div>
+
+            {/* Action bar */}
+            <div className="flex items-center gap-1 mt-3 pt-3 border-t border-slate-100">
+                <button onClick={onPrint} className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-slate-600 hover:text-primary hover:bg-primary/5 rounded-lg transition-colors">
+                    <FileText size={13} /> PDF
+                </button>
+                <button onClick={onEdit} className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                    <Pencil size={13} /> Editar
+                </button>
+                <button onClick={onDelete} className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                    <Trash2 size={13} /> Borrar
+                </button>
+            </div>
+
+            {/* Expanded detail */}
+            {isExpanded && (
+                <div className="mt-4 pt-4 border-t border-slate-100">
+                    <ExpandedServiceDetail job={job} />
+                </div>
+            )}
+        </div>
+    );
+}
 // Sub-component for the expanded view
 function ExpandedServiceDetail({ job }: { job: any }) {
     const service = job.rawJob;

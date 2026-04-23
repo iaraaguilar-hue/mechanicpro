@@ -135,7 +135,7 @@ export default function Home() {
             {/* Grid */}
             {/* ── MOBILE: Accordion list (hidden on md+) ── */}
             {!isHydrating && (
-                <div className="block md:hidden bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                <div className="block md:hidden">
                     {clientList.length === 0 ? (
                         <p className="text-center py-12 text-slate-400">No se encontraron resultados</p>
                     ) : (
@@ -151,6 +151,7 @@ export default function Home() {
                                     dni={rawClient?.dni}
                                     telefono={rawClient?.telefono}
                                     clientId={client.clientId}
+                                    clientNumber={client.numero_cliente}
                                 />
                             );
                         })
@@ -252,44 +253,64 @@ interface MobileClientAccordionProps {
     dni?: string | null;
     telefono?: string | null;
     clientId: string;
+    clientNumber?: number | null;
 }
 
-function MobileClientAccordion({ clientName, bikeModelo, bikeGrupo, dni, telefono, clientId }: MobileClientAccordionProps) {
+function MobileClientAccordion({ clientName, bikeModelo, bikeGrupo, dni, telefono, clientId, clientNumber }: MobileClientAccordionProps) {
     const [isExpanded, setIsExpanded] = useState(false);
     return (
-        <div className="bg-white border-b border-slate-100 last:border-0">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 mb-3 overflow-hidden active:scale-[0.99] transition-transform">
+            {/* Card header — always visible */}
             <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="w-full flex items-center justify-between p-4 text-left focus:outline-none hover:bg-slate-50"
+                className="w-full flex items-center gap-3 px-4 py-3.5 text-left focus:outline-none"
             >
-                <div className="flex flex-col min-w-0">
-                    <span className="font-semibold text-slate-800 text-sm truncate">{clientName}</span>
-                    <span className="text-xs text-slate-500 truncate mt-0.5">
-                        {bikeModelo || 'Sin bicicleta'}{bikeGrupo ? ` • ${bikeGrupo}` : ''}
-                    </span>
+                {/* Number badge */}
+                <span className="flex-shrink-0 bg-primary text-primary-foreground rounded-full w-7 h-7 flex items-center justify-center text-xs font-bold shadow-sm">
+                    {clientNumber ?? '?'}
+                </span>
+
+                {/* Name + bike pill */}
+                <div className="flex-1 min-w-0">
+                    <p className="font-bold text-slate-800 text-sm truncate leading-tight">{clientName}</p>
+                    {bikeModelo && (
+                        <span className="inline-flex items-center mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 truncate max-w-full">
+                            {bikeModelo}{bikeGrupo ? ` · ${bikeGrupo}` : ''}
+                        </span>
+                    )}
                 </div>
-                {isExpanded
-                    ? <ChevronUp size={18} className="text-slate-400 ml-2 flex-shrink-0" />
-                    : <ChevronDown size={18} className="text-slate-400 ml-2 flex-shrink-0" />
-                }
+
+                {/* Chevron */}
+                <span className="flex-shrink-0 p-1.5 rounded-lg bg-slate-100 text-slate-400">
+                    {isExpanded
+                        ? <ChevronUp size={15} />
+                        : <ChevronDown size={15} />
+                    }
+                </span>
             </button>
+
+            {/* Expanded: contact details + CTA */}
             {isExpanded && (
-                <div className="px-4 pb-4 pt-2 bg-slate-50/80 flex flex-col gap-2.5 text-sm border-t border-slate-100">
+                <div className="border-t border-slate-100 bg-slate-50/70 px-4 pb-4 pt-3 flex flex-col gap-2.5 animate-in slide-in-from-top-1 duration-150">
                     {dni && (
-                        <div className="flex items-center gap-2 text-slate-600">
-                            <CreditCard size={14} className="text-slate-400 flex-shrink-0" />
-                            <span className="truncate text-xs">DNI: {dni}</span>
+                        <div className="flex items-center gap-2">
+                            <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-slate-200 rounded-md">
+                                <CreditCard size={12} className="text-slate-500" />
+                            </span>
+                            <span className="text-xs text-slate-600 font-medium">DNI: <span className="font-semibold text-slate-800">{dni}</span></span>
                         </div>
                     )}
                     {telefono && (
-                        <div className="flex items-center gap-2 text-slate-600">
-                            <Phone size={14} className="text-slate-400 flex-shrink-0" />
-                            <span className="truncate text-xs">Tel: {telefono}</span>
+                        <div className="flex items-center gap-2">
+                            <span className="flex-shrink-0 w-6 h-6 flex items-center justify-center bg-slate-200 rounded-md">
+                                <Phone size={12} className="text-slate-500" />
+                            </span>
+                            <span className="text-xs text-slate-600 font-medium">Tel: <span className="font-semibold text-slate-800">{telefono}</span></span>
                         </div>
                     )}
                     <a
                         href={`/clients/${clientId}`}
-                        className="mt-1 text-xs font-semibold text-[#03adef] hover:underline"
+                        className="mt-1 self-start text-xs font-bold text-white bg-primary hover:bg-primary/90 px-3 py-1.5 rounded-lg transition-colors"
                     >
                         Ver perfil completo →
                     </a>

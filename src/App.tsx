@@ -29,6 +29,8 @@ import { UpdateBanner } from "@/components/UpdateBanner";
 
 function AppContent() {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { updateAvailable } = useVersionCheck();
   const session = useAuthStore((state) => state.session);
 
@@ -163,13 +165,67 @@ function AppContent() {
           )}
         </div>
         <div className="flex items-center gap-1 -mr-2">
-          <button className="p-2 text-slate-600 relative" aria-label="Notificaciones">
-            <Bell size={20} />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#f25a30] rounded-full border border-white"></span>
-          </button>
-          <button className="p-2 text-slate-600" aria-label="Perfil">
-            <User size={20} />
-          </button>
+          {/* Bell dropdown */}
+          <div className="relative">
+            <button
+              className="p-2 text-slate-600 relative"
+              aria-label="Notificaciones"
+              onClick={() => { setBellOpen(o => !o); setUserMenuOpen(false); }}
+            >
+              <Bell size={20} />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#f25a30] rounded-full border border-white"></span>
+            </button>
+            {bellOpen && (
+              <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-100 z-[60] py-3 px-4 animate-in fade-in slide-in-from-top-1 duration-150">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Notificaciones</p>
+                <div className="flex flex-col items-center py-4 text-slate-400 gap-1">
+                  <Bell size={22} className="opacity-30" />
+                  <p className="text-xs">No hay notificaciones nuevas</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* User dropdown */}
+          <div className="relative">
+            <button
+              className="p-2 text-slate-600"
+              aria-label="Perfil"
+              onClick={() => { setUserMenuOpen(o => !o); setBellOpen(false); }}
+            >
+              <User size={20} />
+            </button>
+            {userMenuOpen && (
+              <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-slate-100 z-[60] py-2 animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="px-4 py-2 border-b border-slate-100">
+                  <p className="text-xs font-bold text-slate-800 truncate">{displayName}</p>
+                  <p className="text-[10px] text-slate-400 truncate">{session?.user?.email}</p>
+                </div>
+                <Link
+                  to="/admin"
+                  onClick={() => setUserMenuOpen(false)}
+                  className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  <User size={15} className="text-slate-400" /> Mi Perfil
+                </Link>
+                <Link
+                  to="/admin"
+                  onClick={() => setUserMenuOpen(false)}
+                  className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  <Settings size={15} className="text-slate-400" /> Ajustes del Taller
+                </Link>
+                <div className="border-t border-slate-100 mt-1 pt-1">
+                  <button
+                    onClick={() => { setUserMenuOpen(false); handleLogout(); }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors"
+                  >
+                    <LogOut size={15} /> Cerrar Sesión
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 

@@ -249,7 +249,7 @@ function AppContent() {
                 {taller?.logo_url ? (
                   <img src={taller.logo_url} alt="Logo Taller" className="h-8 object-contain mb-1" />
                 ) : (
-                  <span className="font-bold text-slate-900 text-lg">Mechanic Pro</span>
+                  <img src="/logo-mechanic-pro.png" alt="MechanicPro" className="h-8 object-contain mb-1" />
                 )}
                 {displayName && <span className="text-xs text-muted-foreground font-mono uppercase tracking-widest">{displayName}</span>}
               </div>
@@ -301,7 +301,9 @@ function AppContent() {
                 <img src={taller.logo_url} alt="Logo Taller" className="max-h-full max-w-full object-contain" />
               </div>
             ) : (
-              <Wrench className="h-8 w-8 text-primary mb-2" />
+              <div className="h-14 w-full flex justify-center items-center mb-2 px-2">
+                <img src="/logo-mechanic-pro.png" alt="MechanicPro" className="max-h-full max-w-full object-contain" />
+              </div>
             )}
             <span className="font-bold text-gray-900 text-sm tracking-wide">Mechanic Pro</span>
           </div>

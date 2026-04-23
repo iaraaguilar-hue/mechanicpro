@@ -12,13 +12,19 @@ const MODEL_FAMILY_MAP: Array<{ keywords: string[]; family: string }> = [
     { keywords: ['epic evo', 'epicevo'], family: 'Epic EVO' },
     { keywords: ['epic'], family: 'Epic' },
     { keywords: ['chisel'], family: 'Chisel' },
-    { keywords: ['rockhopper'], family: 'Rockhopper' },
+    { keywords: ['rockhopper', 'rh '], family: 'Rockhopper' },
     { keywords: ['stumpjumper', 'stump jumper'], family: 'Stumpjumper' },
     { keywords: ['enduro'], family: 'Enduro' },
     { keywords: ['fuse'], family: 'Fuse' },
-    { keywords: ['tarmac'], family: 'Tarmac' },
+    { keywords: ['pitch'], family: 'Pitch' },
+    { keywords: ['hardrock'], family: 'Hardrock' },
+    { keywords: ['tarmac', 'sl7', 'sl6'], family: 'Tarmac' },
     { keywords: ['venge'], family: 'Venge' },
     { keywords: ['roubaix'], family: 'Roubaix' },
+    { keywords: ['allez'], family: 'Allez' },
+    { keywords: ['aethos'], family: 'Aethos' },
+    { keywords: ['shiv'], family: 'Shiv (Triatlón)' },
+    { keywords: ['sirrus'], family: 'Sirrus (Urbana)' },
     { keywords: ['crux'], family: 'Crux' },
     { keywords: ['diverge'], family: 'Diverge' },
     { keywords: ['turbo levo', 'tubolevo', 'levo'], family: 'Levo (E-MTB)' },
@@ -70,10 +76,28 @@ const MODEL_FAMILY_MAP: Array<{ keywords: string[]; family: string }> = [
 
     // Cannondale
     { keywords: ['supersix', 'super six'], family: 'SuperSix EVO' },
+    { keywords: ['synapse'], family: 'Synapse' },
+    { keywords: ['caad'], family: 'CAAD' },
     { keywords: ['topstone'], family: 'Topstone' },
     { keywords: ['scalpel'], family: 'Scalpel' },
     { keywords: ['habit'], family: 'Habit' },
     { keywords: ['trail neo'], family: 'Trail Neo (E-MTB)' },
+
+    // Cervelo / Triatlón Genéricos
+    { keywords: ['p5', 'p-series'], family: 'Cervélo P-Series (Triatlón)' },
+    { keywords: ['trinity'], family: 'Trinity (Triatlón)' },
+    { keywords: ['tria'], family: 'Bicicleta de Triatlón' },
+
+    // Otras Marcas y Modelos Genéricos Detectados
+    { keywords: ['aggressor'], family: 'Aggressor (GT)' },
+    { keywords: ['matts'], family: 'Matts (Merida)' },
+    { keywords: ['reaction'], family: 'Reaction (Cube)' },
+    { keywords: ['aim'], family: 'Aim (Cube)' },
+    { keywords: ['mojave'], family: 'Mojave (Raleigh)' },
+    { keywords: ['xr 3', 'xr 4', 'xr 2'], family: 'XR (Raleigh)' },
+    { keywords: ['nicasio'], family: 'Nicasio (Urban/Gravel)' },
+    { keywords: ['gravel'], family: 'Gravel (Genérica)' },
+    { keywords: ['mtb', 'mountain'], family: 'MTB (Genérica)' },
 
     // Trek (extra)
     { keywords: ['procaliber'], family: 'Procaliber' },
@@ -113,6 +137,7 @@ const MODEL_FAMILY_MAP: Array<{ keywords: string[]; family: string }> = [
     { keywords: ['bmx'], family: 'BMX' },
     { keywords: ['fixie', 'fixed'], family: 'Fixed/Pista' },
     { keywords: ['cargo'], family: 'Cargo' },
+    { keywords: ['paseo', 'playera', 'inglesa', 'retro', 'vintage', 'townie'], family: 'Paseo' },
     { keywords: ['balance', 'equilibrio'], family: 'Balance (Niño)' },
 ];
 
@@ -147,6 +172,15 @@ const FAMILY_SEGMENT_MAP: Record<string, string> = {
     'Scalpel': 'MTB',
     'Habit': 'MTB',
     'Fat Bike': 'MTB',
+    'Hardrock': 'MTB',
+    'Pitch': 'MTB',
+    'Aggressor (GT)': 'MTB',
+    'Matts (Merida)': 'MTB',
+    'Reaction (Cube)': 'MTB',
+    'Aim (Cube)': 'MTB',
+    'Mojave (Raleigh)': 'MTB',
+    'XR (Raleigh)': 'MTB',
+    'MTB (Genérica)': 'MTB',
 
     // Ruta
     'Tarmac': 'Ruta',
@@ -162,6 +196,10 @@ const FAMILY_SEGMENT_MAP: Record<string, string> = {
     'Ultimate CF': 'Ruta',
     'Addict': 'Ruta',
     'Foil': 'Ruta',
+    'Allez': 'Ruta',
+    'Aethos': 'Ruta',
+    'Synapse': 'Ruta',
+    'CAAD': 'Ruta',
 
     // Gravel / CX
     'Crux': 'Gravel',
@@ -172,6 +210,14 @@ const FAMILY_SEGMENT_MAP: Record<string, string> = {
     'Domane': 'Gravel',
     'Grail': 'Gravel',
     'Inflite CF (CX)': 'Gravel',
+    'Nicasio (Urban/Gravel)': 'Gravel',
+    'Gravel (Genérica)': 'Gravel',
+
+    // Triatlón
+    'Shiv (Triatlón)': 'Triatlón',
+    'Trinity (Triatlón)': 'Triatlón',
+    'Cervélo P-Series (Triatlón)': 'Triatlón',
+    'Bicicleta de Triatlón': 'Triatlón',
 
     // E-Bike
     'Levo (E-MTB)': 'E-Bike',
@@ -181,34 +227,19 @@ const FAMILY_SEGMENT_MAP: Record<string, string> = {
     'Trail Neo (E-MTB)': 'E-Bike',
     'Vado (E-Urban)': 'E-Bike',
 
-    // Urbana / Paseo
-    'FX (Urban)': 'Urbana/Paseo',
-    'Fixed/Pista': 'Urbana/Paseo',
-    'Cargo': 'Urbana/Paseo',
+    // Urbana
+    'FX (Urban)': 'Urbana',
+    'Fixed/Pista': 'Urbana',
+    'Cargo': 'Urbana',
+    'Sirrus (Urbana)': 'Urbana',
+    'Dual Sport (Urban)': 'Urbana',
+    'Cypress (Urban)': 'Urbana',
+    'Escape (Urban)': 'Urbana',
+    'Quick (Urban)': 'Urbana',
+    'Alpenchallenge (Urban)': 'Urbana',
 
-    // Trek (extra)
-    'Procaliber': 'MTB',
-    'Crockett (CX)': 'Gravel',
-    'Dual Sport (Urban)': 'Urbana/Paseo',
-
-    // Scott (extra)
-    'Speedster': 'Ruta',
-    'Solace': 'Ruta',
-
-    // Giant (extra)
-    'Cypress (Urban)': 'Urbana/Paseo',
-    'Escape (Urban)': 'Urbana/Paseo',
-
-    // Cannondale (extra)
-    'Quick (Urban)': 'Urbana/Paseo',
-    'Trail': 'MTB',
-
-    // BMC
-    'Teammachine': 'Ruta',
-    'Fourstroke': 'MTB',
-    'Speedfox': 'MTB',
-    'Roadmachine': 'Gravel',
-    'Alpenchallenge (Urban)': 'Urbana/Paseo',
+    // Paseo
+    'Paseo': 'Paseo',
 
     // Orbea
     'Orca': 'Ruta',

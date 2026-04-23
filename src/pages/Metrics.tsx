@@ -69,7 +69,7 @@ export function normalizeItemName(rawName: string): string {
     if (lower.includes('nx') && lower.includes('cadena')) return 'Cadena SRAM NX';
 
     // 2. Remove Noise Words
-    const noiseWords = ['de resina', 'mtb', 'ruta', 'compatible con'];
+    const noiseWords = ['de resina', 'mtb', 'ruta', 'compatible con', 'para bicicleta', 'delantero', 'trasero', 'derecho', 'izquierdo'];
     noiseWords.forEach(word => {
         lower = lower.replace(new RegExp(word, 'gi'), '');
     });
@@ -89,12 +89,12 @@ export function getSemanticCategory(rawDesc: string): string {
     const lower = rawDesc.toLowerCase();
 
     const dic = {
-        'Transmisión': ['piñon', 'piñón', 'cadena', 'plato', 'palanca', 'caja pedalera', 'cambio', 'fusible', 'descarrilador', 'polea', 'hg', 'sram', 'shimano', 'cassette', 'shifter'],
-        'Frenos': ['pastilla', 'patin', 'disco', 'freno', 'purgado', 'ducto', 'liquido de freno', 'avid', 'cable'],
-        'Neumáticos y Ruedas': ['tubeless', 'tubelizado', 'camara', 'cámara', 'cubierta', 'aro', 'maza', 'centrado', 'rayo', 'roval', 'parche'],
-        'Suspensión': ['horquilla', 'shock', 'brain', 'rockshox', 'reten', 'retén'],
-        'Cockpit y Componentes': ['stem', 'manubrio', 'asiento', 'tija', 'pedal', 'cinta'],
-        'Mantenimiento General': ['lubricante', 'm.o.', 'limpieza', 'service', 'ajuste']
+        'Transmisión': ['piñon', 'piñón', 'cadena', 'plato', 'palanca', 'caja pedalera', 'cambio', 'fusible', 'descarrilador', 'polea', 'hg', 'sram', 'shimano', 'cassette', 'shifter', 'crank', 'bottom bracket', 'bb'],
+        'Frenos': ['pastilla', 'patin', 'disco', 'freno', 'purgado', 'ducto', 'liquido de freno', 'avid', 'cable', 'caliper', 'maneta', 'rotor', 'b05s', 'hidráulico'],
+        'Neumáticos y Ruedas': ['tubeless', 'tubelizado', 'camara', 'cámara', 'cubierta', 'aro', 'maza', 'centrado', 'rayo', 'roval', 'parche', 'valvula', 'válvula', 'cinta tubeless', 'maxxis', 'schwalbe', 'fast trak', 'neumático', 'llanta'],
+        'Suspensión': ['horquilla', 'shock', 'brain', 'rockshox', 'reten', 'retén', 'fox', 'suspensión', 'suspension', 'resorte', 'aire'],
+        'Cockpit y Componentes': ['stem', 'manubrio', 'asiento', 'tija', 'pedal', 'cinta', 'puño', 'grip', 'sillín', 'saddle', 'vela', 'dropper'],
+        'Mantenimiento General': ['lubricante', 'm.o.', 'limpieza', 'service', 'ajuste', 'lavado', 'engrase', 'grasa', 'aceite', 'mano de obra', 'mantenimiento']
     };
 
     for (const [category, keywords] of Object.entries(dic)) {

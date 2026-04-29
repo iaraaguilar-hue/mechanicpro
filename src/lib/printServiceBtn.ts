@@ -230,8 +230,9 @@ export const printServiceReport = async (
   // Evitamos que flexbox y los márgenes colapsen forzando un wrapper estático.
   const container = document.createElement('div');
   container.style.position = 'absolute';
-  container.style.left = '-9999px';
+  container.style.left = '0'; // Cambiado de -9999px a 0 para que html2canvas no lo recorte
   container.style.top = '0';
+  container.style.zIndex = '-9999'; // Lo ocultamos detrás del resto de la app
   container.style.width = '800px'; // Ancho fijo estricto para simular resolución A4
   container.style.backgroundColor = '#FFFFFF';
   
@@ -246,8 +247,10 @@ export const printServiceReport = async (
   });
 
   return new Promise<Blob>((resolve, reject) => {
-    try {
-      doc.html(container, {
+    // Damos tiempo al DOM para que pinte (layouts, fonts, base64) antes de que jsPDF lo capture
+    setTimeout(() => {
+      try {
+        doc.html(container, {
         callback: function (pdf) {
           // 1. Descarga local temporal
           pdf.save(`${printFileName}.pdf`);
@@ -278,5 +281,6 @@ export const printServiceReport = async (
       console.error("Error crítico renderizando PDF:", error);
       reject(error);
     }
+    }, 500); // 500ms de delay para asegurar el pintado
   });
 };

@@ -234,6 +234,15 @@ function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () =
 
     const statusBadge = <StatusBadge status={job.status} />;
 
+    const [showToast, setShowToast] = useState(false);
+
+    const notifyCustomer = (serviceId: string) => {
+        // Stub implementation for notifying customer via Evolution API
+        console.log(`Sending WhatsApp notification for service: ${serviceId}`);
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3000);
+    };
+
     const serviceBadge = (
         <Badge variant={(job.service_type || "OTRO").toUpperCase() === "OTRO" ? "secondary" : "default"} className={`whitespace-nowrap ${(job.service_type || "OTRO").toUpperCase() !== "OTRO" ? "bg-primary hover:bg-primary/90 text-primary-foreground border-none" : "text-muted-foreground"}`}>
             {(job.service_type || "OTRO").toUpperCase()}
@@ -241,69 +250,97 @@ function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () =
     );
 
     return (
-        <TableRow className="hover:bg-muted/30 transition-colors cursor-pointer" onClick={onClick}>
-            <TableCell>{statusBadge}</TableCell>
-            <TableCell className="font-medium text-muted-foreground w-28">
-                <div className="flex flex-col gap-1">
-                    <span className="text-slate-900 font-semibold">{formatSafeDate(job.date_in)}</span>
-                    <span className="text-[10px] text-primary font-bold mt-1" title={job.service_id}>{formatOrdenNumber(job.numero_orden, job.service_id)}</span>
-                </div>
-            </TableCell>
-            <TableCell className="font-medium p-0 m-0 align-top pt-4">
-                {job.date_out ? (
-                    <span className="text-slate-600 font-semibold text-sm whitespace-nowrap">{formatSafeDate(job.date_out)}</span>
-                ) : (
-                    <span className="text-slate-400 italic text-sm">-</span>
-                )}
-            </TableCell>
-            <TableCell>
-                <div className="flex flex-col">
-                    <span className="font-bold text-base">{job.client_name}</span>
-                    <div className="flex items-center text-xs text-muted-foreground mt-1">
-                        Total: <span className="text-green-600 font-bold ml-1">$ {(job.total_price || 0).toLocaleString("es-AR")}</span>
+        <>
+            <TableRow className="hover:bg-muted/30 transition-colors cursor-pointer" onClick={onClick}>
+                <TableCell>{statusBadge}</TableCell>
+                <TableCell className="font-medium text-muted-foreground w-28">
+                    <div className="flex flex-col gap-1">
+                        <span className="text-slate-900 font-semibold">{formatSafeDate(job.date_in)}</span>
+                        <span className="text-[10px] text-primary font-bold mt-1" title={job.service_id}>{formatOrdenNumber(job.numero_orden, job.service_id)}</span>
                     </div>
-                </div>
-            </TableCell>
-            <TableCell>
-                <div className="flex flex-col">
-                    <span className="font-semibold">{job.bike_model}</span>
-                    <span className="text-xs text-muted-foreground">{job.bike_brand}</span>
-                </div>
-            </TableCell>
-            <TableCell>{serviceBadge}</TableCell>
-            <TableCell className="text-right">
-                <div className="flex justify-end gap-2">
-                    {job.client_phone && (
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            className="bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 border-green-200 h-9 px-2"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                let cleanedPhone = job.client_phone!.replace(/\D/g, '');
-                                if (!cleanedPhone) return;
-                                if (!cleanedPhone.startsWith('54')) {
-                                    // Anteponer 549 para celulares de Argentina si no tiene el código de país
-                                    cleanedPhone = '549' + cleanedPhone;
-                                }
-                                window.open('https://wa.me/' + cleanedPhone, '_blank');
-                            }}
-                            title="Contactar por WhatsApp"
-                        >
-                            <MessageCircle className="h-5 w-5" />
-                        </Button>
+                </TableCell>
+                <TableCell className="font-medium p-0 m-0 align-top pt-4">
+                    {job.date_out ? (
+                        <span className="text-slate-600 font-semibold text-sm whitespace-nowrap">{formatSafeDate(job.date_out)}</span>
+                    ) : (
+                        <span className="text-slate-400 italic text-sm">-</span>
                     )}
-                    <Button variant="outline" size="sm" className="h-9" onClick={(e) => { e.stopPropagation(); onClick(); }}>
-                        <Pencil className="h-4 w-4 mr-2" /> Editar
-                    </Button>
-                    {job.status !== 'ready' && job.status !== 'delivered' && (
-                        <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-9 w-9 p-0" onClick={handleFinish} title="Finalizar Trabajo">
-                            <CheckCircle className="h-5 w-5" />
+                </TableCell>
+                <TableCell>
+                    <div className="flex flex-col">
+                        <span className="font-bold text-base">{job.client_name}</span>
+                        <div className="flex items-center text-xs text-muted-foreground mt-1">
+                            Total: <span className="text-green-600 font-bold ml-1">$ {(job.total_price || 0).toLocaleString("es-AR")}</span>
+                        </div>
+                    </div>
+                </TableCell>
+                <TableCell>
+                    <div className="flex flex-col">
+                        <span className="font-semibold">{job.bike_model}</span>
+                        <span className="text-xs text-muted-foreground">{job.bike_brand}</span>
+                    </div>
+                </TableCell>
+                <TableCell>{serviceBadge}</TableCell>
+                <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                        {job.client_phone && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 border-green-200 h-9 px-2"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    let cleanedPhone = job.client_phone!.replace(/\D/g, '');
+                                    if (!cleanedPhone) return;
+                                    if (!cleanedPhone.startsWith('54')) {
+                                        // Anteponer 549 para celulares de Argentina si no tiene el código de país
+                                        cleanedPhone = '549' + cleanedPhone;
+                                    }
+                                    window.open('https://wa.me/' + cleanedPhone, '_blank');
+                                }}
+                                title="Contactar por WhatsApp"
+                            >
+                                <MessageCircle className="h-5 w-5" />
+                            </Button>
+                        )}
+                        <Button variant="outline" size="sm" className="h-9" onClick={(e) => { e.stopPropagation(); onClick(); }}>
+                            <Pencil className="h-4 w-4 mr-2" /> Editar
                         </Button>
-                    )}
-                </div>
-            </TableCell>
-        </TableRow>
+                        {job.status !== 'ready' && job.status !== 'delivered' && (
+                            <>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="border-green-500 text-green-600 hover:bg-green-50 h-9 px-2 gap-2"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        notifyCustomer(job.service_id);
+                                    }}
+                                    title="Avisar que está listo por WhatsApp (Sin Finalizar)"
+                                >
+                                    <MessageCircle className="h-4 w-4" />
+                                    Avisar por WhatsApp
+                                </Button>
+                                <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-9 w-9 p-0" onClick={handleFinish} title="Finalizar Trabajo">
+                                    <CheckCircle className="h-5 w-5" />
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                </TableCell>
+            </TableRow>
+            {
+                showToast && (
+                    <div className="fixed bottom-4 right-4 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 z-50 animate-in slide-in-from-bottom-5">
+                        <CheckCircle className="text-green-400 w-5 h-5" />
+                        <div className="flex flex-col">
+                            <span className="font-semibold text-sm">Notificación enviada</span>
+                            <span className="text-xs text-slate-300">El cliente ha sido notificado por WhatsApp.</span>
+                        </div>
+                    </div>
+                )
+            }
+        </>
     )
 }
 

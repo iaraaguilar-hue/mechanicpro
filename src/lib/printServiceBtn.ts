@@ -1,4 +1,4 @@
-import html2pdf from 'html2pdf.js';
+import { jsPDF } from 'jspdf';
 import { formatOrdenNumber } from '@/lib/formatId';
 import { cleanItemName } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
@@ -226,13 +226,57 @@ export const printServiceReport = async (
   const safeClientName = clientName.trim().replace(/\s+/g, '_');
   const printFileName = `${safeClientName}_#${formatOrdenNumber(job.numero_orden, job.id)}_Informe_Service`;
 
-  const opt = {
-    margin: 0,
-    filename: `${printFileName}.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, logging: false },
-    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-  };
+  // === PROTECCIÓN CSS Y CONTENEDOR TEMPORAL ===
+  // Evitamos que flexbox y los márgenes colapsen forzando un wrapper estático.
+  const container = document.createElement('div');
+  container.style.position = 'absolute';
+  container.style.left = '-9999px';
+  container.style.top = '0';
+  container.style.width = '800px'; // Ancho fijo estricto para simular resolución A4
+  container.style.backgroundColor = '#FFFFFF';
+  
+  element.style.width = '100%';
+  container.appendChild(element);
+  document.body.appendChild(container);
 
-  html2pdf().set(opt as any).from(element).save();
+  const doc = new jsPDF({
+    unit: 'pt',
+    format: 'a4',
+    orientation: 'portrait'
+  });
+
+  return new Promise<Blob>((resolve, reject) => {
+    try {
+      doc.html(container, {
+        callback: function (pdf) {
+          // 1. Descarga local temporal
+          pdf.save(`${printFileName}.pdf`);
+          
+          // 2. Extracción programática del archivo (Preparando n8n)
+          const pdfBlob = pdf.output('blob');
+          
+          // 3. Limpieza de memoria
+          document.body.removeChild(container);
+          
+          resolve(pdfBlob);
+        },
+        x: 0,
+        y: 0,
+        width: 595.28,    // Ancho matemático de A4 en pt
+        windowWidth: 800, // Coincide con nuestro wrapper fijo
+        autoPaging: 'text', 
+        html2canvas: {
+          scale: 2,         
+          useCORS: true,    
+          logging: false
+        }
+      });
+    } catch (error) {
+      if (document.body.contains(container)) {
+        document.body.removeChild(container);
+      }
+      console.error("Error crítico renderizando PDF:", error);
+      reject(error);
+    }
+  });
 };

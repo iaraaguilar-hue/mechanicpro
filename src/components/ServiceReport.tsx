@@ -95,7 +95,7 @@ export const ServiceReport = ({ service, bike, clientName }: ServiceReportProps)
                         )}
                         <View>
                             <Text style={[styles.title, { color: taller?.color_primario || '#000' }]}>
-                                {taller?.nombre_taller || 'MechanicPro'}
+                                {taller?.nombre || 'MechanicPro'}
                             </Text>
                             <Text style={styles.subtitle}>Informe de Servicio Técnico</Text>
                         </View>
@@ -146,7 +146,7 @@ export const ServiceReport = ({ service, bike, clientName }: ServiceReportProps)
                     </View>
                 )}
 
-                <Text style={styles.footer}>Gracias por confiar en {taller?.nombre_taller || 'MechanicPro'}. Mantenga su bicicleta rodando.</Text>
+                <Text style={styles.footer}>Gracias por confiar en {taller?.nombre || 'MechanicPro'}. Mantenga su bicicleta rodando.</Text>
             </Page>
         </Document>
     );

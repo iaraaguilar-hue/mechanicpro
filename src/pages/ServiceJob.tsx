@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { Badge } from '@/components/ui/badge';
 import { printServiceReport } from '@/lib/printServiceBtn';
+import { formatOrdenNumber } from '@/lib/formatId';
 
 const MAKE_WEBHOOK_URL = import.meta.env.VITE_N8N_ORDEN_WEBHOOK_URL;
 
@@ -77,7 +78,7 @@ export default function ServiceJob() {
         const totalProductos = productosListos.reduce((sum: number, p: any) => sum + p.precio, 0);
 
         const payload = {
-            numero_orden: `#${String(job?.id ?? 'S/N').padStart(4, '0')}`,
+            numero_orden: formatOrdenNumber(job?.numero_orden, job?.id),
             dni_cliente: clientData?.dni || "Sin DNI",
             nombre_cliente: clientData?.name || "Cliente",
             fecha_finalizacion: new Date().toISOString(),

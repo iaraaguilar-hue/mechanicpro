@@ -16,7 +16,7 @@ const HTTPS_URL_REGEX = /^https:\/\/.+/;
 
 interface Taller {
     id: string;
-    nombre_taller: string;
+    nombre: string;
     logo_url: string;
     color_primario: string;
     color_secundario: string;
@@ -350,7 +350,7 @@ export default function SuperAdmin() {
                                 <TableBody>
                                     {talleres.map((taller) => (
                                         <TableRow key={taller.id}>
-                                            <TableCell className="font-medium">{taller.nombre_taller}</TableCell>
+                                            <TableCell className="font-medium">{taller.nombre}</TableCell>
                                             <TableCell>
                                                 {taller.logo_url ? (
                                                     <img src={taller.logo_url} alt="Logo" className="h-8 w-auto object-contain rounded bg-gray-50 p-1 border" crossOrigin="anonymous" />
@@ -395,7 +395,7 @@ export default function SuperAdmin() {
             <Dialog open={!!editingTaller} onOpenChange={(open) => !open && setEditingTaller(null)}>
                 <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
                     <DialogHeader>
-                        <DialogTitle>Editar Taller: {editingTaller?.nombre_taller}</DialogTitle>
+                        <DialogTitle>Editar Taller: {editingTaller?.nombre}</DialogTitle>
                     </DialogHeader>
                     {editingTaller && (
                         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col mt-4">

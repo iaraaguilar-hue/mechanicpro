@@ -9,6 +9,7 @@ import { es } from "date-fns/locale";
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { useNavigate } from 'react-router-dom';
+import { formatOrdenNumber } from '@/lib/formatId';
 
 export default function DeletedServices() {
     const rol = useAuthStore((state) => state.rol);
@@ -48,6 +49,7 @@ export default function DeletedServices() {
             if (data) {
                 const mappedData = data.map((item: any) => ({
                     id: item.id,
+                    numero_orden: item.numero_orden,
                     deletedAt: item.eliminado_en,
                     dateIn: item.fecha_ingreso || item.created_at,
                     serviceType: item.tipo_servicio || 'General',
@@ -286,7 +288,7 @@ export default function DeletedServices() {
                                             </TableCell>
                                             <TableCell className="py-4">
                                                 <div className="flex flex-col">
-                                                    <span className="font-bold text-slate-500 text-sm line-through decoration-slate-300">#{job.id.slice(0, 8)}</span>
+                                                    <span className="font-bold text-slate-500 text-sm line-through decoration-slate-300" title={job.id}>{formatOrdenNumber(job.numero_orden, job.id)}</span>
                                                     <span className="text-xs text-slate-400 flex items-center gap-1">
                                                         <CalendarIcon className="w-3 h-3" />
                                                         {inDate ? format(inDate, "dd/MM/yy") : '-'}

@@ -12,8 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Pencil, Loader2, Save, UploadCloud, Plus, Trash2, Edit2, Check, X, AlertCircle } from 'lucide-react';
 import { RichTextEditor } from '@/components/RichTextEditor';
 
-/** Regex: must start with https:// and contain a valid domain */
-const HTTPS_URL_REGEX = /^https:\/\/[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+(\/[^\s]*)?$/;
+const HTTPS_URL_REGEX = /^https:\/\/.+/;
 
 interface Taller {
     id: string;

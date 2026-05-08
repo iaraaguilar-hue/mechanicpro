@@ -113,7 +113,7 @@ export default function DeletedServices() {
     };
 
     useEffect(() => {
-        if (rol === 'admin') {
+        if (rol === 'admin' && taller_id) {
             if (activeTab === 'services') {
                 fetchDeletedServices();
             } else if (activeTab === 'clients') {
@@ -122,12 +122,16 @@ export default function DeletedServices() {
                 fetchActivityLog();
             }
         }
-    }, [rol, activeTab]);
+    }, [rol, activeTab, taller_id]);
 
     const handleRestoreService = async (id: string) => {
         try {
             setRestoringId(id);
-            const { error } = await supabase.from('servicios').update({ eliminado_en: null }).eq('id', id);
+            const { error } = await supabase
+                .from('servicios')
+                .update({ eliminado_en: null })
+                .eq('id', id)
+                .eq('taller_id', taller_id);
             if (error) throw error;
             await fetchDeletedServices();
         } catch (err: any) {
@@ -140,7 +144,11 @@ export default function DeletedServices() {
     const handleRestoreClient = async (id: string) => {
         try {
             setRestoringId(id);
-            const { error } = await supabase.from('clientes').update({ eliminado_en: null }).eq('id', id);
+            const { error } = await supabase
+                .from('clientes')
+                .update({ eliminado_en: null })
+                .eq('id', id)
+                .eq('taller_id', taller_id);
             if (error) throw error;
             await fetchDeletedClients();
         } catch (err: any) {

@@ -112,13 +112,12 @@ export default function SuperAdmin() {
             setLoadingWebhook(true);
             const { data, error } = await supabase
                 .from('taller_configuraciones')
-                .select('valor')
+                .select('webhook_erp_url')
                 .eq('taller_id', tallerId)
-                .eq('clave', 'webhook_erp_url')
                 .maybeSingle();
 
             if (error) throw error;
-            setWebhookErpUrl(data?.valor || '');
+            setWebhookErpUrl(data?.webhook_erp_url || '');
             setWebhookErpUrlError(null);
         } catch (err: any) {
             console.error('Error fetching webhook_erp_url:', err.message);
@@ -216,30 +215,20 @@ export default function SuperAdmin() {
 
             if (error) throw error;
 
-            // Upsert webhook_erp_url in taller_configuraciones
+            // Upsert webhook_erp_url in taller_configuraciones (schema flat: una fila por taller).
             const trimmedUrl = webhookErpUrl.trim();
-            if (trimmedUrl) {
-                const { error: cfgError } = await supabase
-                    .from('taller_configuraciones')
-                    .upsert(
-                        {
-                            taller_id: editingTaller.id,
-                            clave: 'webhook_erp_url',
-                            valor: trimmedUrl,
-                        },
-                        { onConflict: 'taller_id,clave' }
-                    );
-                if (cfgError) {
-                    console.error('Error guardando webhook_erp_url:', cfgError.message);
-                    alert('Error guardando webhook ERP URL: ' + cfgError.message);
-                }
-            } else {
-                // If cleared, delete the row
-                await supabase
-                    .from('taller_configuraciones')
-                    .delete()
-                    .eq('taller_id', editingTaller.id)
-                    .eq('clave', 'webhook_erp_url');
+            const { error: cfgError } = await supabase
+                .from('taller_configuraciones')
+                .upsert(
+                    {
+                        taller_id: editingTaller.id,
+                        webhook_erp_url: trimmedUrl || null,
+                    },
+                    { onConflict: 'taller_id' }
+                );
+            if (cfgError) {
+                console.error('Error guardando webhook_erp_url:', cfgError.message);
+                alert('Error guardando webhook ERP URL: ' + cfgError.message);
             }
 
             setTalleres(talleres.map(t => t.id === editingTaller.id ? editingTaller : t));

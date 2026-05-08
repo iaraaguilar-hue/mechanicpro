@@ -7,8 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { printServiceReport } from '@/lib/printServiceBtn';
 
-// URL DEL WEBHOOK (Verificada)
-const MAKE_WEBHOOK_URL = "https://nonlepidopterous-memphis-palaeological.ngrok-free.dev/webhook/generar-orden";
+const MAKE_WEBHOOK_URL = import.meta.env.VITE_N8N_ORDEN_WEBHOOK_URL;
 
 export default function ServiceJob() {
     const { id } = useParams();

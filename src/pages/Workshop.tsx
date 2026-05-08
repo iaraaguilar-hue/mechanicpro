@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useDataStore, type SupabaseService } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
+import { supabase } from "@/lib/supabase";
 import { formatOrdenNumber } from "@/lib/formatId";
 import { printServiceReport } from "@/lib/printServiceBtn";
 import { ServiceModal } from "@/components/ServiceModal";
@@ -234,13 +235,117 @@ function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () =
 
     const statusBadge = <StatusBadge status={job.status} />;
 
-    const [showToast, setShowToast] = useState(false);
+    const [showToast, setShowToast] = useState<{type: 'success' | 'error', message: string} | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const taller_id = useAuthStore(s => s.taller_id);
+    const servicios = useDataStore(s => s.servicios);
 
-    const notifyCustomer = (serviceId: string) => {
-        // Stub implementation for notifying customer via Evolution API
-        console.log(`Sending WhatsApp notification for service: ${serviceId}`);
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
+    const notifyCustomer = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+
+        let rawPhone = job.client_phone || "";
+        let cleanedPhone = rawPhone.replace(/\D/g, '');
+
+        if (cleanedPhone.length !== 10) {
+            setShowToast({
+                type: 'error',
+                message: "Error: El número de teléfono parece incorrecto. Verifica si le falta el '11' al principio o si tiene números de más."
+            });
+            setTimeout(() => setShowToast(null), 5000);
+            return;
+        }
+
+        setIsLoading(true);
+        setShowToast(null);
+
+        try {
+            // 1. Obtener los datos completos del servicio
+            const serviceData = servicios.find(s => s.id === job.service_id);
+            if (!serviceData) throw new Error("No se encontró el servicio en el store local.");
+
+            // 2. Construir objeto de servicio para generar PDF
+            const fullJobForPdf = {
+                id: serviceData.id,
+                numero_orden: serviceData.numero_orden,
+                bike_id: serviceData.bicicleta_id,
+                status: serviceData.estado || '',
+                service_type: serviceData.tipo_servicio,
+                date_in: serviceData.fecha_ingreso,
+                date_out: serviceData.fecha_entrega,
+                basePrice: serviceData.precio_base,
+                totalPrice: serviceData.precio_total,
+                extraItems: serviceData.items_extra?.map((i: any) => ({
+                    id: i.id || crypto.randomUUID(),
+                    description: i.descripcion,
+                    price: i.precio,
+                    category: i.categoria,
+                })),
+                mechanic_notes: serviceData.notas_mecanico,
+            };
+
+            // 3. Generar el PDF en formato Blob sin descargarlo localmente
+            const pdfBlob = await printServiceReport(
+                fullJobForPdf, 
+                job.client_name, 
+                job.bike_model, 
+                "", 
+                job.client_phone || "", 
+                false
+            );
+
+            if (!pdfBlob) throw new Error("No se pudo generar el PDF internamente.");
+
+            // 4. Subir a Supabase Storage (bucket público: ordenes_trabajo)
+            const fileName = `orden_${job.service_id}_${Date.now()}.pdf`;
+            const { error: uploadError } = await supabase.storage
+                .from('ordenes_trabajo')
+                .upload(fileName, pdfBlob, { contentType: 'application/pdf' });
+
+            if (uploadError) {
+                console.error("Supabase Upload Error:", uploadError);
+                throw new Error("Error al generar y guardar el PDF en la nube. Intenta nuevamente.");
+            }
+
+            // 5. Obtener URL pública
+            const { data: { publicUrl } } = supabase.storage
+                .from('ordenes_trabajo')
+                .getPublicUrl(fileName);
+
+            // 6. Preparar y enviar mensaje
+            const messageText = `Hola ${job.client_name}, te avisamos que tu bicicleta ${job.bike_model} ya está lista. El total del service es de $${job.total_price || 0}. Te recordamos que la mano de obra se abona únicamente en efectivo o transferencia. Los repuestos podés abonarlos en efectivo, transferencia o tarjeta. ¡Te esperamos!`;
+
+            const payload = {
+                taller_id: taller_id,
+                telefono: cleanedPhone,
+                mensaje: messageText,
+                pdf_url: publicUrl
+            };
+
+            const response = await fetch(import.meta.env.VITE_N8N_WHATSAPP_WEBHOOK_URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                setShowToast({
+                    type: 'success',
+                    message: "¡Mensaje y orden de trabajo enviados por WhatsApp correctamente!"
+                });
+            } else {
+                throw new Error("Error HTTP del webhook de n8n.");
+            }
+        } catch (error: any) {
+            setShowToast({
+                type: 'error',
+                message: error.message || "Error de conexión con el servidor de WhatsApp. Intenta nuevamente."
+            });
+        } finally {
+            setIsLoading(false);
+            setTimeout(() => setShowToast(null), 4000);
+        }
     };
 
     const serviceBadge = (
@@ -312,13 +417,11 @@ function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () =
                                     size="sm"
                                     variant="outline"
                                     className="border-green-500 text-green-600 hover:bg-green-50 h-9 px-2 gap-2"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        notifyCustomer(job.service_id);
-                                    }}
+                                    onClick={notifyCustomer}
+                                    disabled={isLoading}
                                     title="Avisar que está listo por WhatsApp (Sin Finalizar)"
                                 >
-                                    <MessageCircle className="h-4 w-4" />
+                                    {isLoading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
                                     Avisar por WhatsApp
                                 </Button>
                                 <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-9 w-9 p-0" onClick={handleFinish} title="Finalizar Trabajo">
@@ -331,11 +434,11 @@ function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () =
             </TableRow>
             {
                 showToast && (
-                    <div className="fixed bottom-4 right-4 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 z-50 animate-in slide-in-from-bottom-5">
-                        <CheckCircle className="text-green-400 w-5 h-5" />
+                    <div className={`fixed bottom-4 right-4 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 z-50 animate-in slide-in-from-bottom-5 ${showToast.type === 'error' ? 'bg-red-600' : 'bg-slate-800'}`}>
+                        {showToast.type === 'error' ? <div className="text-white w-5 h-5 flex items-center justify-center font-bold text-xl">!</div> : <CheckCircle className="text-green-400 w-5 h-5" />}
                         <div className="flex flex-col">
-                            <span className="font-semibold text-sm">Notificación enviada</span>
-                            <span className="text-xs text-slate-300">El cliente ha sido notificado por WhatsApp.</span>
+                            <span className="font-semibold text-sm">{showToast.type === 'error' ? 'Atención' : 'Notificación enviada'}</span>
+                            <span className="text-xs text-white/90">{showToast.message}</span>
                         </div>
                     </div>
                 )
@@ -418,7 +521,7 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
                             total_service: totalProductos,
                         };
 
-                        fetch("https://nonlepidopterous-memphis-palaeological.ngrok-free.dev/webhook/generar-orden", {
+                        fetch(import.meta.env.VITE_N8N_ORDEN_WEBHOOK_URL, {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify(payload),

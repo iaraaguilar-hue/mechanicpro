@@ -181,6 +181,42 @@ export default function Metrics() {
         });
     }, [allServicios, dateStart, dateEnd]);
 
+    // ── Revenue del período anterior (misma duración, ventana inmediatamente anterior) ──
+    const previousPeriodRevenue = useMemo(() => {
+        if (!dateStart || !dateEnd) return null;
+
+        const startMs = new Date(dateStart).setHours(0, 0, 0, 0);
+        const endMs = new Date(dateEnd).setHours(23, 59, 59, 999);
+        const periodDuration = endMs - startMs;
+
+        // Previous period: same duration, ending right before the current start
+        const prevEndMs = startMs - 1;
+        const prevStartMs = prevEndMs - periodDuration;
+
+        let prevRevenue = 0;
+        allServicios.forEach(s => {
+            const rawDate = s.fecha_ingreso || s.created_at;
+            if (!rawDate) return;
+            const serviceTs = new Date(rawDate).getTime();
+            if (isNaN(serviceTs)) return;
+            if (serviceTs >= prevStartMs && serviceTs <= prevEndMs) {
+                const precioTotal = Number(s.precio_total) || 0;
+                const precioBase = Number(s.precio_base) || 0;
+                prevRevenue += precioTotal > 0 ? precioTotal : precioBase;
+
+                // Include item-level revenue to match the stats engine logic
+                const items = Array.isArray(s.servicio_items) ? s.servicio_items : (Array.isArray(s.items_extra) ? s.items_extra : []);
+                items.forEach((item: any) => {
+                    const itemPrecio = Number(item.precio) || 0;
+                    prevRevenue += itemPrecio;
+                });
+            }
+        });
+
+        return prevRevenue;
+    }, [allServicios, dateStart, dateEnd]);
+
+
     // --- ANALYTICS ENGINE ---
     const stats = useMemo(() => {
         const filtered = filteredServicios;
@@ -290,6 +326,20 @@ export default function Metrics() {
         };
     }, [filteredServicios, bicicletas]);
 
+    // ── Cálculo de crecimiento dinámico ─────────────────────────────────────────
+    const revenueGrowth = useMemo(() => {
+        // Si no hay período anterior calculable o es 0 → estado neutro
+        if (previousPeriodRevenue === null || previousPeriodRevenue === 0) {
+            // Si el revenue actual también es 0, no hay nada que mostrar
+            if (stats.revenue === 0) return null;
+            // Taller nuevo: tiene revenue actual pero sin histórico previo
+            return { label: 'N/A', isUp: null as boolean | null };
+        }
+        const pct = Math.round(((stats.revenue - previousPeriodRevenue) / previousPeriodRevenue) * 100);
+        const sign = pct >= 0 ? '+' : '';
+        return { label: `${sign}${pct}%`, isUp: pct >= 0 };
+    }, [stats.revenue, previousPeriodRevenue]);
+
     // ─── Shared Header ────────────────────────────────────────────────────────
     const header = (
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -318,7 +368,7 @@ export default function Metrics() {
     // ─── Shared KPI cards ─────────────────────────────────────────────────────
     const kpiCards = (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <KPICard title="Facturación Total" value={`$ ${stats.revenue.toLocaleString('es-AR')}`} icon={<DollarSign className="w-5 h-5 text-green-600" />} trend="+12%" trendUp={true} className="bg-green-50 border-green-100" />
+            <KPICard title="Facturación Total" value={`$ ${stats.revenue.toLocaleString('es-AR')}`} icon={<DollarSign className="w-5 h-5 text-green-600" />} trend={revenueGrowth?.label ?? null} trendUp={revenueGrowth?.isUp ?? null} className="bg-green-50 border-green-100" />
             <KPICard title="Mano de Obra" value={`$ ${stats.labor.toLocaleString('es-AR')}`} icon={<Wrench className="w-5 h-5 text-primary" />} sublabel={`${stats.count} Servicios realizados`} />
             <KPICard title="Venta Repuestos" value={`$ ${stats.parts.toLocaleString('es-AR')}`} icon={<Package className="w-5 h-5 text-secondary" />} sublabel={`${stats.partsCount} Productos vendidos`} />
             <KPICard title="Ticket Promedio" value={`$ ${stats.avgTicket.toLocaleString('es-AR')}`} icon={<Ticket className="w-5 h-5 text-primary" />} sublabel="Por visita de cliente" />
@@ -588,8 +638,15 @@ function KPICard({ title, value, icon, sublabel, trend, trendUp, className }: an
                 <div className="flex justify-between items-start mb-2">
                     <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-100">{icon}</div>
                     {trend && (
-                        <div className={`flex items-center text-xs font-bold ${trendUp ? 'text-green-600 bg-green-100' : 'text-red-600 bg-red-100'} px-2 py-1 rounded-full`}>
-                            {trendUp ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
+                        <div className={`flex items-center text-xs font-bold ${
+                            trendUp === null
+                                ? 'text-slate-500 bg-slate-100'
+                                : trendUp
+                                    ? 'text-green-600 bg-green-100'
+                                    : 'text-red-600 bg-red-100'
+                        } px-2 py-1 rounded-full`}>
+                            {trendUp === true && <ArrowUpRight className="w-3 h-3 mr-1" />}
+                            {trendUp === false && <ArrowDownRight className="w-3 h-3 mr-1" />}
                             {trend}
                         </div>
                     )}

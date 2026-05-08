@@ -47,12 +47,12 @@ export function useIdleTimeout() {
     const performLogout = useCallback(async () => {
         console.warn('[useIdleTimeout] ⏱️ Session expired due to inactivity. Logging out…');
 
-        // 1. Server-side: invalidate the Supabase JWT / refresh token.
-        await supabase.auth.signOut();
-
-        // 2. Client-side: wipe Zustand stores so no stale data lingers.
+        // 1. CRITICAL: Wipe Zustand stores BEFORE signOut to prevent cross-tenant data leakage.
         logout();
         invalidate();
+
+        // 2. Server-side: invalidate the Supabase JWT / refresh token.
+        await supabase.auth.signOut();
 
         // 3. Redirect to login — window.location.href guarantees a full React
         //    state reset even if navigate() would be intercepted by a guard.

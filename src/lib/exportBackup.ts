@@ -1,22 +1,14 @@
 import JSZip from 'jszip';
 
 /**
- * UUID de producción de ProBikes — fallback cuando el usuario
- * no está autenticado y no se encuentra taller_id en localStorage.
- */
-const PROBIKES_PRODUCTION_TALLER_ID = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
-
-/**
- * Intenta resolver el taller_id desde múltiples fuentes,
- * en orden de prioridad:
- * 1. El parámetro explícito (desde authStore, si está logueado)
- * 2. localStorage legacy (configuración vieja del taller)
- * 3. UUID hardcodeado de producción de ProBikes
+ * Resuelve el taller_id desde el token de autenticación del usuario.
+ * Si no se encuentra un ID válido, la ejecución se corta inmediatamente.
+ * Bajo ningún concepto se debe asumir un Tenant por defecto.
  */
 function resolveTallerId(explicitTallerId?: string | null): string {
     if (explicitTallerId) return explicitTallerId;
 
-    // Intentar leer de localStorage legacy
+    // Último intento: localStorage (migración legacy)
     try {
         const authStorage = localStorage.getItem('auth-storage');
         if (authStorage) {
@@ -26,8 +18,8 @@ function resolveTallerId(explicitTallerId?: string | null): string {
         }
     } catch { /* ignore parse errors */ }
 
-    // Fallback final: UUID fijo de producción
-    return PROBIKES_PRODUCTION_TALLER_ID;
+    // Sin taller_id → cortar ejecución. No se asume ningún tenant.
+    throw new Error('No authorized workshop ID found for this session.');
 }
 
 // ─────────────────────────────────────────────────────────────

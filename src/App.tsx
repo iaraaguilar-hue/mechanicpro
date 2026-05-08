@@ -119,9 +119,10 @@ function AppContent() {
   }, []);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    // CRITICAL: Wipe stores BEFORE signOut to prevent cross-tenant data leakage
     logout();
     invalidateData();
+    await supabase.auth.signOut();
     navigate("/");
   };
 

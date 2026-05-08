@@ -24,7 +24,8 @@ export const printServiceReport = async (
   clientName: string = 'Cliente',
   bikeModel: string = 'Bicicleta',
   clientDni: string = '',
-  clientPhone: string = ''
+  clientPhone: string = '',
+  shouldDownload: boolean = true
 ): Promise<Blob | undefined> => {
   if (!job) return;
 
@@ -121,7 +122,8 @@ export const printServiceReport = async (
     totalLabor,
     totalProducts,
     grandTotal,
-    notes: job.notes || job.mechanic_notes || ''
+    notes: job.notes || job.mechanic_notes || '',
+    tallerName: taller?.nombre || '',
   };
 
   // Generate the PDF
@@ -132,18 +134,20 @@ export const printServiceReport = async (
     const blob = await asPdf.toBlob();
 
     // Descarga local temporal
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${printFileName}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    
-    // Limpieza
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
+    if (shouldDownload) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${printFileName}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Limpieza
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 100);
+    }
 
     // Preparado para enviar por n8n: se retorna el blob
     return blob;

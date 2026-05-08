@@ -86,9 +86,9 @@ export default function LoginScreen() {
     };
 
     // ─────────────────────────────────────────────────────────────
-    // ESCAPE HATCH: Descarga de backup sin autenticación
-    // taller_id = null aquí; exportBackupToZip lo resuelve desde
-    // localStorage o el UUID de producción de ProBikes.
+    // ESCAPE HATCH: Descarga de backup de datos locales (legacy).
+    // Si no se resuelve un taller_id válido desde localStorage,
+    // exportBackupToZip lanzará un error que se muestra al usuario.
     // ─────────────────────────────────────────────────────────────
     const handleDownloadBackup = async () => {
         const rawData = localStorage.getItem('mechanicPro_db');
@@ -98,7 +98,7 @@ export default function LoginScreen() {
         }
         setIsLoadingBackup(true);
         try {
-            const result = await exportBackupToZip(null); // null = no autenticado
+            const result = await exportBackupToZip(null);
             const cascadeMsg = result.skippedTotal > 0
                 ? `\n\n⚠️ ${result.skippedTotal} filas descartadas (clientes eliminados y sus dependencias).`
                 : '';
@@ -114,7 +114,7 @@ export default function LoginScreen() {
             );
         } catch (err: any) {
             console.error("❌ Error generando backup:", err);
-            alert(`Error al generar el backup:\n\n${err.message}`);
+            alert(`⚠️ No se pudo generar el backup:\n\n${err.message}\n\nPor favor, inicia sesión primero para vincular tus datos a un taller.`);
         } finally {
             setIsLoadingBackup(false);
         }

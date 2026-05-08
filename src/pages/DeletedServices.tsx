@@ -39,6 +39,7 @@ export default function DeletedServices() {
             const { data, error: supaError } = await supabase
                 .from('servicios')
                 .select('*, bicicletas(id, marca, modelo, clientes(id, nombre, dni))')
+                .eq('taller_id', taller_id)
                 .not('eliminado_en', 'is', null)
                 .order('eliminado_en', { ascending: false });
 
@@ -74,6 +75,7 @@ export default function DeletedServices() {
             const { data, error: supaError } = await supabase
                 .from('clientes')
                 .select('*')
+                .eq('taller_id', taller_id)
                 .not('eliminado_en', 'is', null)
                 .order('eliminado_en', { ascending: false });
 

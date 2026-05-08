@@ -9,8 +9,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Pencil, Loader2, Save, UploadCloud, Plus, Trash2, Edit2, Check, X } from 'lucide-react';
+import { Pencil, Loader2, Save, UploadCloud, Plus, Trash2, Edit2, Check, X, AlertCircle } from 'lucide-react';
 import { RichTextEditor } from '@/components/RichTextEditor';
+
+/** Regex: must start with https:// and contain a valid domain */
+const HTTPS_URL_REGEX = /^https:\/\/[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z]{2,})+(\/[^\s]*)?$/;
 
 interface Taller {
     id: string;
@@ -49,6 +52,11 @@ export default function SuperAdmin() {
     const [nuevoServicio, setNuevoServicio] = useState({ nombre: '', descripcion: '', precio: '' });
     const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState({ nombre: '', descripcion: '', precio: '' });
+
+    // Webhook ERP URL state
+    const [webhookErpUrl, setWebhookErpUrl] = useState('');
+    const [webhookErpUrlError, setWebhookErpUrlError] = useState<string | null>(null);
+    const [loadingWebhook, setLoadingWebhook] = useState(false);
 
     useEffect(() => {
         const fetchTalleres = async () => {
@@ -99,9 +107,30 @@ export default function SuperAdmin() {
         }
     }, [editingTaller?.id, activeTab]);
 
+    const fetchWebhookErpUrl = async (tallerId: string) => {
+        try {
+            setLoadingWebhook(true);
+            const { data, error } = await supabase
+                .from('taller_configuraciones')
+                .select('valor')
+                .eq('taller_id', tallerId)
+                .eq('clave', 'webhook_erp_url')
+                .maybeSingle();
+
+            if (error) throw error;
+            setWebhookErpUrl(data?.valor || '');
+            setWebhookErpUrlError(null);
+        } catch (err: any) {
+            console.error('Error fetching webhook_erp_url:', err.message);
+        } finally {
+            setLoadingWebhook(false);
+        }
+    };
+
     const handleEditClick = (taller: Taller) => {
         setEditingTaller({ ...taller });
         setActiveTab('general');
+        fetchWebhookErpUrl(taller.id);
     };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -165,6 +194,13 @@ export default function SuperAdmin() {
 
     const handleSave = async () => {
         if (!editingTaller) return;
+
+        // Validate webhook_erp_url if provided
+        if (webhookErpUrl.trim() && !HTTPS_URL_REGEX.test(webhookErpUrl.trim())) {
+            setWebhookErpUrlError('La URL debe comenzar con https:// y ser válida.');
+            return;
+        }
+
         try {
             setSaving(true);
             const { error } = await supabase
@@ -180,8 +216,36 @@ export default function SuperAdmin() {
 
             if (error) throw error;
 
+            // Upsert webhook_erp_url in taller_configuraciones
+            const trimmedUrl = webhookErpUrl.trim();
+            if (trimmedUrl) {
+                const { error: cfgError } = await supabase
+                    .from('taller_configuraciones')
+                    .upsert(
+                        {
+                            taller_id: editingTaller.id,
+                            clave: 'webhook_erp_url',
+                            valor: trimmedUrl,
+                        },
+                        { onConflict: 'taller_id,clave' }
+                    );
+                if (cfgError) {
+                    console.error('Error guardando webhook_erp_url:', cfgError.message);
+                    alert('Error guardando webhook ERP URL: ' + cfgError.message);
+                }
+            } else {
+                // If cleared, delete the row
+                await supabase
+                    .from('taller_configuraciones')
+                    .delete()
+                    .eq('taller_id', editingTaller.id)
+                    .eq('clave', 'webhook_erp_url');
+            }
+
             setTalleres(talleres.map(t => t.id === editingTaller.id ? editingTaller : t));
             setEditingTaller(null);
+            setWebhookErpUrl('');
+            setWebhookErpUrlError(null);
         } catch (error: any) {
             console.error("Error guardando taller:", error.message);
             alert("Error guardando taller: " + error.message);
@@ -449,6 +513,32 @@ export default function SuperAdmin() {
                                             onChange={handleChange as any}
                                             placeholder="MANO DE OBRA SOLO EFECTIVO O TRANSFERENCIA"
                                         />
+                                    </div>
+
+                                    {/* Webhook ERP URL */}
+                                    <div className="space-y-2">
+                                        <Label htmlFor="webhook_erp_url">Webhook ERP URL</Label>
+                                        <p className="text-xs text-muted-foreground -mt-1">
+                                            URL del endpoint ERP para sincronización. Solo se aceptan URLs HTTPS.
+                                        </p>
+                                        <Input
+                                            id="webhook_erp_url"
+                                            name="webhook_erp_url"
+                                            value={webhookErpUrl}
+                                            onChange={(e) => {
+                                                setWebhookErpUrl(e.target.value);
+                                                if (webhookErpUrlError) setWebhookErpUrlError(null);
+                                            }}
+                                            placeholder="https://erp.example.com/webhook/ingest"
+                                            className={`font-mono text-sm ${webhookErpUrlError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+                                            disabled={loadingWebhook}
+                                        />
+                                        {webhookErpUrlError && (
+                                            <div className="flex items-center gap-1.5 text-red-600 text-xs font-medium">
+                                                <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                                                {webhookErpUrlError}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </TabsContent>

@@ -212,6 +212,7 @@ export interface ServiceTicketPDFProps {
     totalProducts: number;
     grandTotal: number;
     notes: string;
+    tallerName?: string;
   };
 }
 
@@ -341,7 +342,7 @@ export const ServiceTicketPDF: React.FC<ServiceTicketPDFProps> = ({ data }) => {
         )}
 
         {/* Footer */}
-        <Text style={styles.footer}>PROBIKES SERVICE CENTER</Text>
+        <Text style={styles.footer}>{(data.tallerName || 'SERVICE CENTER').toUpperCase()}</Text>
 
       </Page>
     </Document>

@@ -216,9 +216,7 @@ function MobileJobCard({ job, onClick }: { job: DashboardJob; onClick: () => voi
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
                 <div className="flex flex-col items-end gap-1">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-[#03adef] bg-sky-50 px-2 py-0.5 rounded-full border border-sky-100">
-                        {job.status}
-                    </span>
+                    <StatusBadge status={job.status} />
                     <span className="text-xs text-slate-400 flex items-center gap-1">
                         <Clock size={10} />
                         {job.date_out ? formatSafeDate(job.date_out) : formatSafeDate(job.date_in)}

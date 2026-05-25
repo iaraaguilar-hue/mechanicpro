@@ -1,8 +1,8 @@
-import { useMemo, useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/authStore';
+import { useDataStore } from '@/store/dataStore';
 import ExpertMetrics from '@/components/ExpertMetrics';
 import { normalizeBikeData, normalizeServiceType } from '@/lib/bikeDataNormalizer';
 import {
@@ -120,47 +120,12 @@ export default function Metrics() {
         `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
     );
 
-    // allServicios holds the complete, unfiltered dataset for this taller.
-    // Date filtering is done client-side (see filteredServicios) using numeric
-    // timestamps so it is immune to ISO string parsing and UTC offset issues.
-    const [allServicios, setAllServicios] = useState<any[]>([]);
-    const [bicicletas, setBicicletas] = useState<any[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-
-    // Fetch once per tallerId — NO date filter in the query.
-    useEffect(() => {
-        const fetchMetricsData = async () => {
-            if (!tallerId) return;
-            setIsLoading(true);
-            try {
-                const { data: bData } = await supabase
-                    .from('bicicletas')
-                    .select('*')
-                    .eq('taller_id', tallerId);
-
-                if (bData) setBicicletas(bData);
-
-                // Fetch all non-deleted services. Date windowing is done locally
-                // in filteredServicios to avoid UTC offset bugs in Supabase string
-                // comparisons (the "February ghost" bug).
-                const { data: sData, error: sError } = await supabase
-                    .from('servicios')
-                    .select('*, servicio_items(*)')
-                    .eq('taller_id', tallerId)
-                    .is('eliminado_en', null);
-
-                if (sError) console.error("[Metrics] Error fetching services:", sError);
-                else setAllServicios(sData || []);
-            } catch (err) {
-                console.error("[Metrics] Data fetch error:", err);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchMetricsData();
-        // Only re-fetch when the taller changes — date range is filtered locally.
-    }, [tallerId]);
+    // Consume the global store directly — already filtered (eliminado_en IS NULL)
+    // and reactive to any CRUD action (create / update / delete) without a local fetch.
+    // Date windowing is applied client-side in filteredServicios below.
+    const allServicios: any[] = useDataStore(s => s.servicios);
+    const bicicletas: any[]   = useDataStore(s => s.bicicletas);
+    const isLoading            = useDataStore(s => s.isHydrating);
 
     // ── Client-side date filter (numeric timestamps, immune to locale/UTC issues) ──
     const filteredServicios = useMemo(() => {

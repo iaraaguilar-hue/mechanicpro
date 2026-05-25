@@ -209,6 +209,7 @@ export default function SuperAdmin() {
                     color_secundario: editingTaller.color_secundario,
                     mensaje_informe: editingTaller.mensaje_informe,
                     politica_pago: editingTaller.politica_pago,
+                    plan_actual: editingTaller.plan_actual,
                 })
                 .eq('id', editingTaller.id);
 
@@ -341,6 +342,7 @@ export default function SuperAdmin() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Nombre</TableHead>
+                                        <TableHead>Plan</TableHead>
                                         <TableHead>Logo</TableHead>
                                         <TableHead>Color Primario</TableHead>
                                         <TableHead>Color Secundario</TableHead>
@@ -351,6 +353,15 @@ export default function SuperAdmin() {
                                     {talleres.map((taller) => (
                                         <TableRow key={taller.id}>
                                             <TableCell className="font-medium">{taller.nombre}</TableCell>
+                                            <TableCell>
+                                                <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                                                    taller.plan_actual === 'Expert' ? 'bg-purple-100 text-purple-700' :
+                                                    taller.plan_actual === 'Pro' ? 'bg-blue-100 text-blue-700' :
+                                                    'bg-gray-100 text-gray-600'
+                                                }`}>
+                                                    {taller.plan_actual || 'Sport'}
+                                                </span>
+                                            </TableCell>
                                             <TableCell>
                                                 {taller.logo_url ? (
                                                     <img src={taller.logo_url} alt="Logo" className="h-8 w-auto object-contain rounded bg-gray-50 p-1 border" crossOrigin="anonymous" />
@@ -501,6 +512,22 @@ export default function SuperAdmin() {
                                             onChange={handleChange as any}
                                             placeholder="MANO DE OBRA SOLO EFECTIVO O TRANSFERENCIA"
                                         />
+                                    </div>
+
+                                    {/* Plan */}
+                                    <div className="space-y-2">
+                                        <Label htmlFor="plan_actual">Plan</Label>
+                                        <select
+                                            id="plan_actual"
+                                            name="plan_actual"
+                                            className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                            value={editingTaller.plan_actual || 'Sport'}
+                                            onChange={(e) => setEditingTaller({ ...editingTaller, plan_actual: e.target.value })}
+                                        >
+                                            <option value="Sport">Sport</option>
+                                            <option value="Pro">Pro</option>
+                                            <option value="Expert">Expert</option>
+                                        </select>
                                     </div>
 
                                     {/* Webhook ERP URL */}

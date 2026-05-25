@@ -41,7 +41,7 @@ export default function Home() {
                 next_due_component: string | null;
                 transmission_display: string;
             })[] = clientBikes.map(bike => {
-                const bikeServices = servicios.filter(s => s.bicicleta_id === bike.id);
+                const bikeServices = servicios.filter(s => s.bicicleta_id === bike.id && !s.eliminado_en);
                 const bikeReminders = recordatorios
                     .filter(r => r.bicicleta_id === bike.id)
                     .sort((a, b) => new Date(a.fecha_vencimiento || 0).getTime() - new Date(b.fecha_vencimiento || 0).getTime());

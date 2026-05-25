@@ -319,38 +319,42 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
         fetchCatalogo();
     }, [taller_id]);
 
+    // Hydrates form fields from DB when opening an existing service for editing.
+    // catalogoServicios is intentionally excluded from deps — it belongs only to the
+    // creation flow (Effect 2 below) and must never overwrite a loaded value.
     useEffect(() => {
-        if (serviceId) {
-            const existing = servicios.find(s => s.id === serviceId);
-            if (existing) {
-                setServiceType(existing.tipo_servicio || "");
-                setNotes(existing.notas_mecanico || "");
-                setBasePrice(existing.precio_base || 0);
-                setExtraItems(
-                    existing.items_extra?.map((i: any) => ({
-                        id: i.id || crypto.randomUUID(),
-                        description: i.descripcion || i.description || "",
-                        price: i.precio || i.price || 0,
-                        category: i.categoria || i.category || 'part',
-                    })) || []
-                );
+        if (!serviceId) return;
+        const existing = servicios.find(s => s.id === serviceId);
+        if (!existing) return;
 
-                if (existing.fecha_entrega && typeof existing.fecha_entrega === "string") {
-                    // Truncate timestamp to YYYY-MM-DD if needed
-                    setFechaEntrega(existing.fecha_entrega.split('T')[0]);
-                } else {
-                    setFechaEntrega("");
-                }
+        setServiceType(existing.tipo_servicio || "");
+        setNotes(existing.notas_mecanico || "");
+        setBasePrice(existing.precio_base || 0);
+        setExtraItems(
+            existing.items_extra?.map((i: any) => ({
+                id: i.id || crypto.randomUUID(),
+                description: i.descripcion || i.description || "",
+                price: i.precio || i.price || 0,
+                category: i.categoria || i.category || 'part',
+            })) || []
+        );
 
-                setSelectedCarreraId(existing.carrera_id || null);
-                // Set default if creating
-                if (catalogoServicios.length > 0) {
-                    setServiceType(catalogoServicios[0].nombre);
-                    setBasePrice(catalogoServicios[0].precio);
-                }
-            }
+        if (existing.fecha_entrega && typeof existing.fecha_entrega === "string") {
+            setFechaEntrega(existing.fecha_entrega.split('T')[0]);
+        } else {
+            setFechaEntrega("");
         }
-    }, [serviceId, servicios, catalogoServicios]);
+
+        setSelectedCarreraId(existing.carrera_id || null);
+    }, [serviceId, servicios]);
+
+    // Pre-selects the first catalog item ONLY when creating a new service (not editing).
+    useEffect(() => {
+        if (serviceId) return;
+        if (catalogoServicios.length === 0) return;
+        setServiceType(catalogoServicios[0].nombre);
+        setBasePrice(catalogoServicios[0].precio);
+    }, [catalogoServicios, serviceId]);
 
     const totalPrice = basePrice + extraItems.reduce((acc, item) => acc + item.price, 0);
 

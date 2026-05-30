@@ -8,11 +8,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ArrowLeft, Wrench, AlertTriangle, Clock, Pencil, Save, FileDown, Plus, Trash2, User, Bike as BikeIcon, CheckCircle } from "lucide-react";
+import { ArrowLeft, Wrench, AlertTriangle, Clock, Pencil, Save, FileDown, Plus, Trash2, User, Bike as BikeIcon, CheckCircle, Info } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { AddBikeDialog } from "@/components/AddBikeDialog";
@@ -103,6 +104,7 @@ export default function BikeDetail() {
     const [editBrand, setEditBrand] = useState("");
     const [editModel, setEditModel] = useState("");
     const [editTransmission, setEditTransmission] = useState("");
+    const [editNotes, setEditNotes] = useState("");
     const [editingBikeId, setEditingBikeId] = useState<string | null>(null);
 
     const handleEditClick = () => {
@@ -115,6 +117,7 @@ export default function BikeDetail() {
             setEditBrand("");
             setEditModel("");
             setEditTransmission("");
+            setEditNotes("");
             setIsEditOpen(true);
         }
     };
@@ -124,6 +127,7 @@ export default function BikeDetail() {
         setEditBrand(b.marca);
         setEditModel(b.modelo);
         setEditTransmission(b.transmision || "");
+        setEditNotes(b.notas || "");
     };
 
     const handleSave = async () => {
@@ -135,6 +139,7 @@ export default function BikeDetail() {
                     marca: editBrand,
                     modelo: editModel,
                     transmision: editTransmission,
+                    notas: editNotes || undefined,
                 });
                 setEditingBikeId(null);
             } else {
@@ -242,13 +247,21 @@ export default function BikeDetail() {
 
                     {/* Active Bike Actions Bar */}
                     {activeBike && (
-                        <div className="flex justify-between items-center pt-2">
-                            <div className="text-sm text-slate-500">
-                                Transmisión: <span className="font-medium text-slate-900">{activeBike.transmision || "N/A"}</span>
+                        <div className="pt-2 space-y-2">
+                            <div className="flex justify-between items-center">
+                                <div className="text-sm text-slate-500">
+                                    Transmisión: <span className="font-medium text-slate-900">{activeBike.transmision || "N/A"}</span>
+                                </div>
+                                <Button size="default" className="shadow-sm bg-blue-600 hover:bg-blue-700" onClick={() => setIsServiceDialogOpen(true)}>
+                                    <Wrench className="mr-2 h-4 w-4" /> Iniciar Service
+                                </Button>
                             </div>
-                            <Button size="default" className="shadow-sm bg-blue-600 hover:bg-blue-700" onClick={() => setIsServiceDialogOpen(true)}>
-                                <Wrench className="mr-2 h-4 w-4" /> Iniciar Service
-                            </Button>
+                            {activeBike.notas && (
+                                <div className="flex items-start gap-1.5 text-sm italic text-slate-500">
+                                    <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-slate-400" />
+                                    <span>{activeBike.notas}</span>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
@@ -583,6 +596,10 @@ export default function BikeDetail() {
                                         <div className="space-y-1">
                                             <Label htmlFor="transmission">Transmisión</Label>
                                             <Input id="transmission" value={editTransmission} onChange={(e) => setEditTransmission(e.target.value)} placeholder="Ej: Shimano 105" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label htmlFor="notes">Notas Generales</Label>
+                                            <Textarea id="notes" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} placeholder="Detalles extra..." />
                                         </div>
                                         <div className="pt-4 border-t mt-4">
                                             <Button variant="destructive" size="sm" className="w-full gap-2"

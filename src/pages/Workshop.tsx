@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
 import { isExternalItem } from "@/lib/utils";
+import { shouldFireOrdenWebhook } from "@/lib/ordenWebhook";
 
 export const formatSafeDate = (dateString: string | null | undefined): string => {
     if (!dateString) return '-';
@@ -519,12 +520,19 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
                             total_service: totalProductos,
                         };
 
-                        fetch(import.meta.env.VITE_N8N_ORDEN_WEBHOOK_URL, {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify(payload),
-                            keepalive: true
-                        }).catch(e => console.error("Webhook Error (Fetch):", e));
+                        // Guard multi-taller: solo Probikes dispara la baja de stock / orden ERP
+                        // desde el frontend. Otros talleres (ej: Once a Fondo) son autosuficientes
+                        // y no deben tocar la automatización de Probikes. Ver lib/ordenWebhook.ts.
+                        if (shouldFireOrdenWebhook(taller_id)) {
+                            fetch(import.meta.env.VITE_N8N_ORDEN_WEBHOOK_URL, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify(payload),
+                                keepalive: true
+                            }).catch(e => console.error("Webhook Error (Fetch):", e));
+                        } else {
+                            console.log("Webhook de orden NO disparado: taller autosuficiente (no es Probikes).");
+                        }
                     } else {
                         console.log("Webhook saltado: El servicio no incluye repuestos físicos.");
                     }

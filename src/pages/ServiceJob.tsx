@@ -7,12 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { printServiceReport } from '@/lib/printServiceBtn';
 import { formatOrdenNumber } from '@/lib/formatId';
+import { useAuthStore } from '@/store/authStore';
+import { shouldFireOrdenWebhook } from '@/lib/ordenWebhook';
 
 const MAKE_WEBHOOK_URL = import.meta.env.VITE_N8N_ORDEN_WEBHOOK_URL;
 
 export default function ServiceJob() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const taller_id = useAuthStore(s => s.taller_id);
 
     const [job, setJob] = useState<any>(null);
     const [clientData, setClientData] = useState<any>(null);
@@ -94,6 +97,13 @@ export default function ServiceJob() {
         );
 
         if (!confirmacion) return;
+
+        // Guard multi-taller: solo Probikes dispara la baja de stock / orden ERP desde
+        // el frontend. Otros talleres son autosuficientes. Ver lib/ordenWebhook.ts.
+        if (!shouldFireOrdenWebhook(taller_id)) {
+            alert("Este taller es autosuficiente: no se envía la orden a la automatización de Probikes.");
+            return;
+        }
 
         setIsSending(true); // START LOADING
 

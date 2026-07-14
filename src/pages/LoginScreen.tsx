@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Loader2, Wrench, Download, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/authStore";
+import { useDataStore } from "@/store/dataStore";
 import { exportBackupToZip } from "@/lib/exportBackup";
 
 export default function LoginScreen() {
@@ -22,6 +23,7 @@ export default function LoginScreen() {
 
     const navigate = useNavigate();
     const setAuth = useAuthStore((state) => state.setAuth);
+    const fetchDashboardData = useDataStore((state) => state.fetchDashboardData);
 
     const taller = useAuthStore((state) => state.taller);
 
@@ -69,6 +71,11 @@ export default function LoginScreen() {
 
             // Setear estado global y navegar
             setAuth(authData.session, userData.taller_id, userData.rol, userData.nombre, tallerData);
+
+            // ── HIDRATACIÓN: disparar la carga de datos ANTES de navegar ──
+            // Espeja el arranque por recarga (App.tsx). Sin esto, el primer
+            // login mostraba el dashboard vacío hasta refrescar la página.
+            if (userData.taller_id) fetchDashboardData(userData.taller_id);
 
             console.log("PASO 6: Navegando al Dashboard...");
             navigate('/');

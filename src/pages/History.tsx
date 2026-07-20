@@ -39,6 +39,26 @@ export const formatSafeDate = (dateString: string | null | undefined): string =>
     // Devolver literal sin pasar por new Date()
     return `${day}/${month}/${year.slice(-2)}`; // Formato DD/MM/YY
 };
+
+// fecha_finalizacion es un timestamp real (el momento exacto en que el mecánico
+// apretó el botón verde "Finalizar"). A diferencia de las fechas "solo día", acá
+// SÍ pasamos por new Date() y lo mostramos en hora local de Argentina, para que
+// un service cerrado de noche no aparezca con la fecha del día siguiente (UTC).
+const AR_TZ = "America/Argentina/Buenos_Aires";
+
+export const formatFinalizacion = (iso: string | null | undefined): string => {
+    if (!iso) return "-";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "-";
+    return d.toLocaleDateString("es-AR", { timeZone: AR_TZ, day: "2-digit", month: "2-digit", year: "2-digit" });
+};
+
+export const formatFinalizacionHora = (iso: string | null | undefined): string => {
+    if (!iso) return "-";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "-";
+    return d.toLocaleString("es-AR", { timeZone: AR_TZ, day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+};
 import { format } from "date-fns";
 import { cn, formatInternalServiceName } from "@/lib/utils";
 type DateRange = {
@@ -198,6 +218,8 @@ export default function History() {
                     rawDateOut,
                     rawDate: rawDateIn,
                     rawFechaFinalizacion: service.fecha_finalizacion,
+                    displayFinalizacion: formatFinalizacion(service.fecha_finalizacion),
+                    displayFinalizacionHora: formatFinalizacionHora(service.fecha_finalizacion),
                     dateObj,
                     clientName: client?.nombre || "Cliente Desconocido",
                     clientDni: client?.dni || "",
@@ -496,6 +518,7 @@ export default function History() {
                                 <TableHead className="py-4 pl-6 w-[140px]">Estado</TableHead>
                                 <TableHead className="py-4">Ingreso</TableHead>
                                 <TableHead className="py-4">Entrega</TableHead>
+                                <TableHead className="py-4">Finalizado</TableHead>
                                 <TableHead className="py-4">Cliente</TableHead>
                                 <TableHead className="py-4">Bicicleta</TableHead>
                                 <TableHead className="py-4">Tipo</TableHead>
@@ -526,6 +549,13 @@ export default function History() {
                                             <TableCell className="py-4 w-28">
                                                 {job.rawDateOut ? (
                                                     <span className="font-semibold text-slate-600">{job.displayDateOut}</span>
+                                                ) : (
+                                                    <span className="text-slate-400 italic text-sm">-</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="py-4 w-28">
+                                                {job.rawFechaFinalizacion ? (
+                                                    <span className="font-semibold text-slate-700" title={job.displayFinalizacionHora}>{job.displayFinalizacion}</span>
                                                 ) : (
                                                     <span className="text-slate-400 italic text-sm">-</span>
                                                 )}
@@ -583,7 +613,7 @@ export default function History() {
                                         {/* EXPANDABLE DETAIL ROW */}
                                         {isExpanded && (
                                             <TableRow className="bg-slate-50/80 hover:bg-slate-50/80 border-t-0">
-                                                <TableCell colSpan={6} className="p-0">
+                                                <TableCell colSpan={8} className="p-0">
                                                     <div className="px-6 pb-6 pt-2">
                                                         <ExpandedServiceDetail job={job} />
                                                     </div>
@@ -596,7 +626,7 @@ export default function History() {
 
                             {filteredJobs.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center py-20 text-muted-foreground">
+                                    <TableCell colSpan={8} className="text-center py-20 text-muted-foreground">
                                         <div className="flex flex-col items-center gap-3">
                                             <div className="bg-slate-100 p-4 rounded-full">
                                                 <Search className="h-8 w-8 text-slate-400" />
@@ -648,10 +678,15 @@ interface MobileHistoryCardProps {
 function MobileHistoryCard({ job, isExpanded, onToggle, onEdit, onDelete, onPrint }: MobileHistoryCardProps) {
     return (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-3 active:scale-[0.99] transition-transform">
-            {/* Top row: Status badge + Date */}
+            {/* Top row: Status badge + Dates (ingreso + finalizado) */}
             <div className="flex items-center justify-between mb-2.5">
                 <StatusBadge status={job.status} />
-                <span className="text-xs text-slate-400 font-medium">{job.displayDateIn}</span>
+                <div className="flex flex-col items-end leading-tight">
+                    <span className="text-[10px] text-slate-400 font-medium">Ing. {job.displayDateIn}</span>
+                    {job.rawFechaFinalizacion && (
+                        <span className="text-xs text-slate-600 font-semibold" title={job.displayFinalizacionHora}>Fin. {job.displayFinalizacion}</span>
+                    )}
+                </div>
             </div>
 
             {/* Middle row: Client name (big) */}
@@ -727,6 +762,16 @@ function ExpandedServiceDetail({ job }: { job: any }) {
                     <h3 className="text-primary flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
                         <Info className="w-4 h-4" /> Resumen del Trabajo
                     </h3>
+                    <div className="flex flex-col gap-1.5 text-xs bg-slate-50 rounded-lg p-3 border border-slate-100 mb-4">
+                        <div className="flex justify-between items-center gap-2">
+                            <span className="text-slate-500">Ingreso</span>
+                            <span className="font-semibold text-slate-700">{job.displayDateIn}</span>
+                        </div>
+                        <div className="flex justify-between items-center gap-2">
+                            <span className="text-slate-500">Finalizado</span>
+                            <span className="font-semibold text-slate-700">{job.rawFechaFinalizacion ? job.displayFinalizacionHora : "-"}</span>
+                        </div>
+                    </div>
                     <div className="grid grid-cols-2 gap-4 mb-4">
                         <div className="bg-primary/10 p-4 rounded-lg border border-primary/20 flex flex-col justify-center">
                             <span className="text-xs text-primary font-medium block mb-1">Mano de Obra</span>

@@ -162,9 +162,9 @@ function AppContent() {
         </button>
         <div className="flex-1 flex justify-center">
           {taller?.logo_url ? (
-            <img src={taller.logo_url} alt="MechanicPro" className="h-7 object-contain" />
+            <img src={taller.logo_url} alt="MechanicPro" className="h-8 object-contain" />
           ) : (
-            <img src="/logo-mechanic-pro.png" alt="MechanicPro" className="h-7 object-contain" />
+            <img src="/logo-mechanic-pro-trim.png" alt="MechanicPro" className="h-8 object-contain" />
           )}
         </div>
         <div className="flex items-center gap-1 -mr-2">
@@ -250,9 +250,9 @@ function AppContent() {
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <div className="flex flex-col">
                 {taller?.logo_url ? (
-                  <img src={taller.logo_url} alt="Logo Taller" className="h-8 object-contain mb-1" />
+                  <img src={taller.logo_url} alt="Logo Taller" className="h-10 object-contain mb-1" />
                 ) : (
-                  <img src="/logo-mechanic-pro.png" alt="MechanicPro" className="h-8 object-contain mb-1" />
+                  <img src="/logo-mechanic-pro-trim.png" alt="MechanicPro" className="h-10 object-contain mb-1" />
                 )}
                 {displayName && <span className="text-xs text-muted-foreground font-mono uppercase tracking-widest">{displayName}</span>}
               </div>
@@ -302,15 +302,19 @@ function AppContent() {
         <div className="mb-6 text-center w-full px-2 shrink-0">
           <div className="flex flex-col items-center justify-center mb-2 mt-2 w-full">
             {taller?.logo_url ? (
-              <div className="h-16 w-full flex justify-center items-center mb-2 px-2">
-                <img src={taller.logo_url} alt="Logo Taller" className="max-h-full max-w-full object-contain" />
-              </div>
+              <>
+                <div className="h-16 w-full flex justify-center items-center mb-2 px-2">
+                  <img src={taller.logo_url} alt="Logo Taller" className="max-h-full max-w-full object-contain" />
+                </div>
+                <span className="font-bold text-gray-900 text-sm tracking-wide">Mechanic Pro</span>
+              </>
             ) : (
-              <div className="h-14 w-full flex justify-center items-center mb-2 px-2">
-                <img src="/logo-mechanic-pro.png" alt="MechanicPro" className="max-h-full max-w-full object-contain" />
+              /* Logo recortado (sin el aire blanco del PNG original) → la marca se ve GRANDE.
+                 El wordmark ya dice MechanicPro, no hace falta repetirlo en texto. */
+              <div className="w-full flex justify-center items-center mb-1 px-1">
+                <img src="/logo-mechanic-pro-trim.png" alt="MechanicPro" className="w-full object-contain" />
               </div>
             )}
-            <span className="font-bold text-gray-900 text-sm tracking-wide">Mechanic Pro</span>
           </div>
           {displayName && <div className="text-[10px] text-muted-foreground mt-1 font-mono uppercase tracking-widest break-all px-1">{displayName}</div>}
         </div>

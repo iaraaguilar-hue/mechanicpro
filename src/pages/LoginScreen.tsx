@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Loader2, Wrench, Download, Eye, EyeOff } from "lucide-react";
+import { Loader2, Download, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/authStore";
 import { useDataStore } from "@/store/dataStore";
@@ -135,15 +135,14 @@ export default function LoginScreen() {
 
                 {/* Encabezado y Textos */}
                 <div className="text-center mb-8">
-                    <div className="text-2xl font-bold text-gray-900 flex items-center justify-center gap-2">
+                    <div className="flex items-center justify-center">
                         {taller?.logo_url ? (
                             <div className="h-24 w-full flex justify-center items-center">
                                 <img src={taller.logo_url} alt="Logo" className="max-h-full max-w-full object-contain" />
                             </div>
                         ) : (
-                            <Wrench className="h-6 w-6 text-primary" />
+                            <img src="/logo-mechanic-pro-trim.png" alt="Mechanic Pro" className="w-64 max-w-full object-contain" />
                         )}
-                        Mechanic Pro
                     </div>
                     <h2 className="text-2xl font-semibold text-gray-900 mt-4 tracking-tight">
                         {isResetting ? "Recuperar contraseña" : "CRM de talleres especializados"}

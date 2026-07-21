@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { useDataStore } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
 import { supabase } from "@/lib/supabase";
@@ -8,7 +9,7 @@ import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck } from "lucide-react";
+import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -133,9 +134,17 @@ export default function Workshop() {
                     </h1>
                     <p className="text-muted-foreground mt-1">Trabajos en curso y bicis listas para entregar.</p>
                 </div>
-                <Button variant="outline" size="icon" onClick={handleRefresh} title="Recargar datos" className="shrink-0">
-                    <RefreshCcw className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
-                </Button>
+                <div className="flex items-center gap-2 shrink-0">
+                    {/* Acceso rápido (feedback 11 a Fondo): Recepción salió del menú lateral */}
+                    <Link to="/reception">
+                        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
+                            <ClipboardList className="h-4 w-4" /> Recibir Bici
+                        </Button>
+                    </Link>
+                    <Button variant="outline" size="icon" onClick={handleRefresh} title="Recargar datos">
+                        <RefreshCcw className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
+                    </Button>
+                </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 w-full">

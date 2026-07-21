@@ -16,7 +16,7 @@ import Metrics from "./pages/Metrics";
 import SuperAdmin from "./pages/SuperAdmin";
 import Configuracion from "./pages/Configuracion";
 import { Button } from "@/components/ui/button";
-import { ClipboardList, Settings, Wrench, History, Bell, LogOut, BarChart3, Trash2, Menu, User, X, MessageSquare, Users } from "lucide-react";
+import { Settings, Wrench, History, Bell, LogOut, BarChart3, Trash2, Menu, User, X, MessageSquare, Users } from "lucide-react";
 import { tieneFeature } from "@/lib/planFeatures";
 
 
@@ -269,7 +269,6 @@ function AppContent() {
             <nav className="flex-1 py-4 flex flex-col gap-1 px-3">
               <DrawerLink to="/" icon={<Wrench size={20} />} label="Taller Activo" onClick={closeDrawer} />
               <DrawerLink to="/clientes" icon={<Users size={20} />} label="Clientes" onClick={closeDrawer} />
-              <DrawerLink to="/reception" icon={<ClipboardList size={20} />} label="Recepción" onClick={closeDrawer} />
               <DrawerLink to="/history" icon={<History size={20} />} label="Historial" onClick={closeDrawer} />
               <DrawerLink to="/reminders" icon={<Bell size={20} />} label="Motor Retención" onClick={closeDrawer} />
               <DrawerLink to="/metrics" icon={<BarChart3 size={20} />} label="Métricas" onClick={closeDrawer} />
@@ -319,7 +318,6 @@ function AppContent() {
         <div className="flex-1 flex flex-col items-center space-y-4 justify-start">
           <Link to="/"><NavButton icon={<Wrench />} label="Taller Activo" /></Link>
           <Link to="/clientes"><NavButton icon={<Users />} label="Clientes" /></Link>
-          <Link to="/reception"><NavButton icon={<ClipboardList />} label="Recepción" /></Link>
           <Link to="/history"><NavButton icon={<History />} label="Historial" /></Link>
           <Link to="/reminders"><NavButton icon={<Bell />} label="Retención" /></Link>
           <Link to="/metrics"><NavButton icon={<BarChart3 />} label="Métricas" /></Link>

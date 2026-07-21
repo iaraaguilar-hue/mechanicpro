@@ -16,7 +16,7 @@ import Metrics from "./pages/Metrics";
 import SuperAdmin from "./pages/SuperAdmin";
 import Configuracion from "./pages/Configuracion";
 import { Button } from "@/components/ui/button";
-import { Home, ClipboardList, Settings, Wrench, History, Bell, LogOut, BarChart3, Trash2, Menu, User, X, MessageSquare } from "lucide-react";
+import { ClipboardList, Settings, Wrench, History, Bell, LogOut, BarChart3, Trash2, Menu, User, X, MessageSquare, Users } from "lucide-react";
 import { tieneFeature } from "@/lib/planFeatures";
 
 
@@ -267,9 +267,9 @@ function AppContent() {
 
             {/* Nav links */}
             <nav className="flex-1 py-4 flex flex-col gap-1 px-3">
-              <DrawerLink to="/" icon={<Home size={20} />} label="Inicio" onClick={closeDrawer} />
+              <DrawerLink to="/" icon={<Wrench size={20} />} label="Taller Activo" onClick={closeDrawer} />
+              <DrawerLink to="/clientes" icon={<Users size={20} />} label="Clientes" onClick={closeDrawer} />
               <DrawerLink to="/reception" icon={<ClipboardList size={20} />} label="Recepción" onClick={closeDrawer} />
-              <DrawerLink to="/workshop" icon={<Wrench size={20} />} label="Mesa de Trabajo" onClick={closeDrawer} />
               <DrawerLink to="/history" icon={<History size={20} />} label="Historial" onClick={closeDrawer} />
               <DrawerLink to="/reminders" icon={<Bell size={20} />} label="Motor Retención" onClick={closeDrawer} />
               <DrawerLink to="/metrics" icon={<BarChart3 size={20} />} label="Métricas" onClick={closeDrawer} />
@@ -317,18 +317,18 @@ function AppContent() {
         </div>
 
         <div className="flex-1 flex flex-col items-center space-y-4 justify-start">
-          <Link to="/"><NavButton icon={<Home />} label="Inicio" /></Link>
+          <Link to="/"><NavButton icon={<Wrench />} label="Taller Activo" /></Link>
+          <Link to="/clientes"><NavButton icon={<Users />} label="Clientes" /></Link>
           <Link to="/reception"><NavButton icon={<ClipboardList />} label="Recepción" /></Link>
-          <Link to="/workshop"><NavButton icon={<Wrench />} label="Taller" /></Link>
           <Link to="/history"><NavButton icon={<History />} label="Historial" /></Link>
-          <Link to="/reminders"><NavButton icon={<Bell />} label="Motor Retención" /></Link>
+          <Link to="/reminders"><NavButton icon={<Bell />} label="Retención" /></Link>
           <Link to="/metrics"><NavButton icon={<BarChart3 />} label="Métricas" /></Link>
           <Link to="/admin"><NavButton icon={<MessageSquare />} label="Contactar" /></Link>
           {rol?.toLowerCase()?.trim() !== 'super_admin' && (
             <Link to="/configuracion"><NavButton icon={<Settings />} label="Configuración" /></Link>
           )}
           {rol?.toLowerCase()?.trim() === 'admin' && tieneFeature(taller, 'auditoria') && (
-            <Link to="/auditoria"><NavButton icon={<Trash2 />} label="Auditoría (Admin)" /></Link>
+            <Link to="/auditoria"><NavButton icon={<Trash2 />} label="Auditoría" /></Link>
           )}
           {rol?.toLowerCase()?.trim() === 'super_admin' && (
             <Link to="/superadmin"><NavButton icon={<Settings />} label="Super Admin" /></Link>
@@ -351,7 +351,10 @@ function AppContent() {
       {/* Main Content */}
       <main className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
         <Routes>
-          <Route path="/" element={<HomePage />} />
+          {/* Feedback 11 a Fondo (jul-2026): la página principal es el Taller Activo.
+              /workshop se mantiene como alias (IntakeWizard y hábitos navegan ahí). */}
+          <Route path="/" element={<Workshop />} />
+          <Route path="/clientes" element={<HomePage />} />
           <Route path="/update-password" element={<UpdatePasswordScreen />} />
           <Route path="/reception" element={<Reception />} />
           <Route path="/workshop" element={<Workshop />} />
@@ -400,10 +403,13 @@ function DrawerLink({ to, icon, label, onClick }: { to: string; icon: React.Reac
   );
 }
 
+// Feedback 11 a Fondo (jul-2026): nombre visible debajo del ícono — Alejo no
+// asociaba los íconos y pasaba por todos hasta encontrar el que buscaba.
 function NavButton({ icon, label }: { icon: any, label: string }) {
   return (
-    <Button variant="ghost" size="icon" className="h-12 w-12 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10" title={label}>
+    <Button variant="ghost" className="h-auto w-24 py-2 px-1 flex flex-col items-center gap-1 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10" title={label}>
       {icon}
+      <span className="text-[10px] font-semibold leading-tight text-center whitespace-normal">{label}</span>
     </Button>
   )
 }

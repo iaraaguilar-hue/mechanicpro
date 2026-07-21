@@ -16,7 +16,17 @@ export function StatusBadge({ status }: StatusBadgeProps) {
         );
     }
 
-    if (normalized === 'completed' || normalized === 'completado' || normalized === 'terminado' || normalized === 'ready') {
+    // 'ready' = el mecánico terminó pero la bici sigue en el taller esperando al cliente
+    if (normalized === 'ready') {
+        return (
+            <div className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border border-amber-100/50 w-fit whitespace-nowrap">
+                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></span>
+                Listo p/ entregar
+            </div>
+        );
+    }
+
+    if (normalized === 'completed' || normalized === 'completado' || normalized === 'terminado') {
         return (
             <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border border-emerald-100/50 w-fit whitespace-nowrap">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>

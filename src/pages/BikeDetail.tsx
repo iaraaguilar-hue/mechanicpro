@@ -187,8 +187,8 @@ export default function BikeDetail() {
             {/* 1. Header & Breadcrumb */}
             <div className="flex flex-col gap-4">
                 <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                    <Link to="/" className="hover:text-primary flex items-center gap-1">
-                        <ArrowLeft className="h-4 w-4" /> Volver al Inicio
+                    <Link to="/clientes" className="hover:text-primary flex items-center gap-1">
+                        <ArrowLeft className="h-4 w-4" /> Volver a Clientes
                     </Link>
                     <span>/</span>
                     <span className="font-semibold text-foreground">{client?.nombre}</span>

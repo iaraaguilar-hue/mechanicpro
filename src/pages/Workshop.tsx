@@ -8,7 +8,7 @@ import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock } from "lucide-react";
+import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -57,6 +57,7 @@ export default function Workshop() {
     const clientes = useDataStore(s => s.clientes);
     const isHydrating = useDataStore(s => s.isHydrating);
     const fetchDashboardData = useDataStore(s => s.fetchDashboardData);
+    const updateServicio = useDataStore(s => s.updateServicio);
     const taller_id = useAuthStore(s => s.taller_id);
 
     const [editingJob, setEditingJob] = useState<DashboardJob | null>(null);
@@ -64,8 +65,10 @@ export default function Workshop() {
     const [isRefetching, setIsRefetching] = useState(false);
 
     // Compute active jobs from store (replaces getDashboardJobs)
+    // 'ready' NO está acá: la bici finalizada queda en el Taller Activo como
+    // "Listo para entregar" hasta que se aprieta "Entregar Bici" (feedback 11 a Fondo).
     const jobs = useMemo(() => {
-        const completedStatuses = ['completed', 'finalizado', 'entregado', 'old_completed', 'ready', 'delivered'];
+        const completedStatuses = ['completed', 'finalizado', 'entregado', 'old_completed', 'delivered'];
         const mapped = servicios
             .filter(s => !completedStatuses.includes((s.estado || '').toLowerCase()) && !s.eliminado_en)
             .map(s => {
@@ -101,6 +104,23 @@ export default function Workshop() {
         setIsRefetching(false);
     };
 
+    // Paso 2 del flujo: el cliente retiró la bici → recién ahí pasa al historial
+    const handleDeliver = async (job: DashboardJob) => {
+        if (!window.confirm(`¿Confirmás que ${job.client_name} retiró la bici?`)) return;
+        try {
+            await updateServicio(job.service_id, {
+                estado: 'delivered',
+                fecha_entregado: new Date().toISOString(),
+            });
+        } catch (e: any) {
+            console.error("Error entregando:", e);
+            alert(`Error al registrar la entrega: ${e.message}`);
+        }
+    };
+
+    const paraEntregar = jobs.filter(j => (j.status || '').toLowerCase() === 'ready');
+    const enProceso = jobs.length - paraEntregar.length;
+
     if (isHydrating) return <div className="p-8 text-center text-muted-foreground">Cargando taller...</div>;
 
     return (
@@ -111,19 +131,27 @@ export default function Workshop() {
                         <Wrench className="h-8 w-8 text-primary" />
                         Taller Activo
                     </h1>
-                    <p className="text-muted-foreground mt-1">Gestión de trabajos en curso.</p>
+                    <p className="text-muted-foreground mt-1">Trabajos en curso y bicis listas para entregar.</p>
                 </div>
                 <Button variant="outline" size="icon" onClick={handleRefresh} title="Recargar datos" className="shrink-0">
                     <RefreshCcw className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
                 </Button>
             </div>
 
-            <div className="w-full">
-                <Card className="bg-primary border-none shadow-md text-primary-foreground w-full">
+            <div className="grid grid-cols-2 gap-4 w-full">
+                <Card className="bg-primary border-none shadow-md text-primary-foreground">
                     <CardContent className="p-6 flex flex-col gap-1">
                         <p className="text-xs font-bold text-white/90 uppercase tracking-widest">En Proceso</p>
                         <div className="flex items-baseline gap-2">
-                            <p className="text-4xl font-black">{jobs.length}</p>
+                            <p className="text-4xl font-black">{enProceso}</p>
+                        </div>
+                    </CardContent>
+                </Card>
+                <Card className="bg-amber-500 border-none shadow-md text-white">
+                    <CardContent className="p-6 flex flex-col gap-1">
+                        <p className="text-xs font-bold text-white/90 uppercase tracking-widest">Listas para Entregar</p>
+                        <div className="flex items-baseline gap-2">
+                            <p className="text-4xl font-black">{paraEntregar.length}</p>
                         </div>
                     </CardContent>
                 </Card>
@@ -139,6 +167,7 @@ export default function Workshop() {
                             key={job.service_id}
                             job={job}
                             onClick={() => setEditingJob(job)}
+                            onDeliver={() => handleDeliver(job)}
                         />
                     ))
                 )}
@@ -165,6 +194,7 @@ export default function Workshop() {
                                 job={job}
                                 onClick={() => setEditingJob(job)}
                                 onFinalize={() => setFinalizingJob(job)}
+                                onDeliver={() => handleDeliver(job)}
                             />
                         ))}
                         {jobs.length === 0 && (
@@ -198,43 +228,55 @@ export default function Workshop() {
     );
 }
 
-function MobileJobCard({ job, onClick }: { job: DashboardJob; onClick: () => void }) {
+function MobileJobCard({ job, onClick, onDeliver }: { job: DashboardJob; onClick: () => void; onDeliver: () => void }) {
     const taller = useAuthStore(s => s.taller);
     const mostrarEtapas = avancesActivos(taller);
+    const isReady = (job.status || '').toLowerCase() === 'ready';
     return (
         <div
             onClick={onClick}
-            className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 mb-3 flex items-center justify-between active:scale-[0.98] transition-transform cursor-pointer"
+            className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 mb-3 active:scale-[0.98] transition-transform cursor-pointer"
         >
-            <div className="flex flex-col gap-1 flex-1 min-w-0 pr-3">
-                <div className="flex items-center gap-2">
-                    <span className="bg-slate-100 text-slate-600 text-[11px] font-bold px-1.5 py-0.5 rounded-md">
-                        #{job.numero_orden ? String(job.numero_orden).padStart(4, '0') : job.service_id.slice(-4)}
-                    </span>
-                    <h3 className="font-semibold text-slate-800 text-sm truncate">{job.client_name}</h3>
+            <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-1 flex-1 min-w-0 pr-3">
+                    <div className="flex items-center gap-2">
+                        <span className="bg-slate-100 text-slate-600 text-[11px] font-bold px-1.5 py-0.5 rounded-md">
+                            #{job.numero_orden ? String(job.numero_orden).padStart(4, '0') : job.service_id.slice(-4)}
+                        </span>
+                        <h3 className="font-semibold text-slate-800 text-sm truncate">{job.client_name}</h3>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                        <Wrench size={12} className="flex-shrink-0" />
+                        <span className="truncate">{job.bike_brand} {job.bike_model}</span>
+                    </div>
+                    {mostrarEtapas && <EtapasChecklist serviceId={job.service_id} />}
                 </div>
-                <div className="flex items-center gap-1.5 text-xs text-slate-500">
-                    <Wrench size={12} className="flex-shrink-0" />
-                    <span className="truncate">{job.bike_brand} {job.bike_model}</span>
+                <div className="flex items-center gap-3 flex-shrink-0">
+                    <div className="flex flex-col items-end gap-1">
+                        <StatusBadge status={job.status} />
+                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                            <Clock size={10} />
+                            {job.date_out ? formatSafeDate(job.date_out) : formatSafeDate(job.date_in)}
+                        </span>
+                    </div>
+                    <ChevronRight size={18} className="text-slate-300" />
                 </div>
-                {mostrarEtapas && <EtapasChecklist serviceId={job.service_id} />}
             </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
-                <div className="flex flex-col items-end gap-1">
-                    <StatusBadge status={job.status} />
-                    <span className="text-xs text-slate-400 flex items-center gap-1">
-                        <Clock size={10} />
-                        {job.date_out ? formatSafeDate(job.date_out) : formatSafeDate(job.date_in)}
-                    </span>
-                </div>
-                <ChevronRight size={18} className="text-slate-300" />
-            </div>
+            {isReady && (
+                <button
+                    onClick={(e) => { e.stopPropagation(); onDeliver(); }}
+                    className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 active:bg-amber-600 rounded-lg transition-colors"
+                >
+                    <PackageCheck size={16} /> Entregar Bici
+                </button>
+            )}
         </div>
     );
 }
 
-function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () => void, onFinalize: () => void }) {
+function JobRow({ job, onClick, onFinalize, onDeliver }: { job: DashboardJob, onClick: () => void, onFinalize: () => void, onDeliver: () => void }) {
     const handleFinish = (e: React.MouseEvent) => { e.stopPropagation(); onFinalize(); };
+    const isReady = (job.status || '').toLowerCase() === 'ready';
 
     const statusBadge = <StatusBadge status={job.status} />;
 
@@ -419,7 +461,29 @@ function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () =
                         <Button variant="outline" size="sm" className="h-9" onClick={(e) => { e.stopPropagation(); onClick(); }}>
                             <Pencil className="h-4 w-4 mr-2" /> Editar
                         </Button>
-                        {job.status !== 'ready' && job.status !== 'delivered' && (
+                        {isReady ? (
+                            <>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="border-green-500 text-green-600 hover:bg-green-50 h-9 px-2 gap-2"
+                                    onClick={notifyCustomer}
+                                    disabled={isLoading}
+                                    title="Avisar que está lista por WhatsApp"
+                                >
+                                    {isLoading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                                    Avisar por WhatsApp
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    className="bg-amber-500 hover:bg-amber-600 text-white h-9 gap-2"
+                                    onClick={(e) => { e.stopPropagation(); onDeliver(); }}
+                                    title="El cliente retiró la bici: pasa al historial"
+                                >
+                                    <PackageCheck className="h-4 w-4" /> Entregar Bici
+                                </Button>
+                            </>
+                        ) : job.status !== 'delivered' && (
                             <>
                                 <Button
                                     size="sm"

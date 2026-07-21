@@ -41,6 +41,7 @@ export interface SupabaseService {
     notas_mecanico?: string;
     fecha_entrega?: string | null;
     fecha_finalizacion?: string;
+    fecha_entregado?: string | null;
     eliminado_en?: string | null;
     checklist_data?: Record<string, boolean>;
     etapas_data?: Record<string, boolean> | null;

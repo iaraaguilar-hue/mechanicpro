@@ -9,7 +9,7 @@ import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList } from "lucide-react";
+import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -119,6 +119,21 @@ export default function Workshop() {
         }
     };
 
+    // Deshacer un "Finalizar Service" apretado por error: vuelve a En curso.
+    // El webhook ERP NO se re-dispara al re-finalizar (marca webhook_erp_disparado).
+    const handleReopen = async (job: DashboardJob) => {
+        if (!window.confirm(`¿Reabrir el service de ${job.client_name}? Vuelve a "En curso" para seguir trabajándolo.`)) return;
+        try {
+            await updateServicio(job.service_id, {
+                estado: 'in_progress',
+                fecha_finalizacion: null,
+            });
+        } catch (e: any) {
+            console.error("Error reabriendo:", e);
+            alert(`Error al reabrir el service: ${e.message}`);
+        }
+    };
+
     const paraEntregar = jobs.filter(j => (j.status || '').toLowerCase() === 'ready');
     const enProceso = jobs.length - paraEntregar.length;
 
@@ -177,6 +192,7 @@ export default function Workshop() {
                             job={job}
                             onClick={() => setEditingJob(job)}
                             onDeliver={() => handleDeliver(job)}
+                            onReopen={() => handleReopen(job)}
                         />
                     ))
                 )}
@@ -204,6 +220,7 @@ export default function Workshop() {
                                 onClick={() => setEditingJob(job)}
                                 onFinalize={() => setFinalizingJob(job)}
                                 onDeliver={() => handleDeliver(job)}
+                                onReopen={() => handleReopen(job)}
                             />
                         ))}
                         {jobs.length === 0 && (
@@ -237,7 +254,7 @@ export default function Workshop() {
     );
 }
 
-function MobileJobCard({ job, onClick, onDeliver }: { job: DashboardJob; onClick: () => void; onDeliver: () => void }) {
+function MobileJobCard({ job, onClick, onDeliver, onReopen }: { job: DashboardJob; onClick: () => void; onDeliver: () => void; onReopen: () => void }) {
     const taller = useAuthStore(s => s.taller);
     const mostrarEtapas = avancesActivos(taller);
     const isReady = (job.status || '').toLowerCase() === 'ready';
@@ -272,18 +289,27 @@ function MobileJobCard({ job, onClick, onDeliver }: { job: DashboardJob; onClick
                 </div>
             </div>
             {isReady && (
-                <button
-                    onClick={(e) => { e.stopPropagation(); onDeliver(); }}
-                    className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-secondary-foreground bg-secondary hover:bg-secondary/90 active:bg-secondary/90 rounded-lg transition-colors"
-                >
-                    <PackageCheck size={16} /> Entregar Bici
-                </button>
+                <div className="flex gap-2 mt-3">
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onReopen(); }}
+                        className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-semibold text-slate-600 border border-slate-300 hover:bg-slate-100 active:bg-slate-100 rounded-lg transition-colors"
+                        title="¿Se finalizó por error? Vuelve a En curso"
+                    >
+                        <Undo2 size={15} /> Reabrir
+                    </button>
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onDeliver(); }}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-secondary-foreground bg-secondary hover:bg-secondary/90 active:bg-secondary/90 rounded-lg transition-colors"
+                    >
+                        <PackageCheck size={16} /> Entregar Bici
+                    </button>
+                </div>
             )}
         </div>
     );
 }
 
-function JobRow({ job, onClick, onFinalize, onDeliver }: { job: DashboardJob, onClick: () => void, onFinalize: () => void, onDeliver: () => void }) {
+function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: DashboardJob, onClick: () => void, onFinalize: () => void, onDeliver: () => void, onReopen: () => void }) {
     const handleFinish = (e: React.MouseEvent) => { e.stopPropagation(); onFinalize(); };
     const isReady = (job.status || '').toLowerCase() === 'ready';
 
@@ -483,16 +509,28 @@ function JobRow({ job, onClick, onFinalize, onDeliver }: { job: DashboardJob, on
                                     {isLoading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
                                     Avisar por WhatsApp
                                 </Button>
-                                {/* Los DOS pasos siempre a la vista: primero Finalizar, después Entregar */}
-                                <Button
-                                    size="sm"
-                                    className="bg-green-600 hover:bg-green-700 text-white h-9 gap-2 disabled:opacity-40"
-                                    onClick={handleFinish}
-                                    disabled={isReady}
-                                    title={isReady ? "Service ya finalizado" : "El mecánico terminó el trabajo"}
-                                >
-                                    <CheckCircle className="h-4 w-4" /> Finalizar Service
-                                </Button>
+                                {/* Los DOS pasos siempre a la vista: primero Finalizar, después Entregar.
+                                    Si se finalizó por error, el slot se convierte en "Reabrir". */}
+                                {isReady ? (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="border-slate-300 text-slate-600 hover:bg-slate-100 h-9 gap-2"
+                                        onClick={(e) => { e.stopPropagation(); onReopen(); }}
+                                        title="¿Se finalizó por error? Vuelve a En curso"
+                                    >
+                                        <Undo2 className="h-4 w-4" /> Reabrir
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        size="sm"
+                                        className="bg-green-600 hover:bg-green-700 text-white h-9 gap-2"
+                                        onClick={handleFinish}
+                                        title="El mecánico terminó el trabajo"
+                                    >
+                                        <CheckCircle className="h-4 w-4" /> Finalizar Service
+                                    </Button>
+                                )}
                                 <Button
                                     size="sm"
                                     className="bg-secondary hover:bg-secondary/90 text-secondary-foreground h-9 gap-2 disabled:opacity-40"
@@ -615,13 +653,18 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
                         // Guard multi-taller: solo Probikes dispara la baja de stock / orden ERP
                         // desde el frontend. Otros talleres (ej: Once a Fondo) son autosuficientes
                         // y no deben tocar la automatización de Probikes. Ver lib/ordenWebhook.ts.
-                        if (shouldFireOrdenWebhook(taller_id)) {
+                        // Guard anti-doble-disparo: si el service se reabrió y se volvió a
+                        // finalizar, el stock ya se descontó la primera vez.
+                        if (shouldFireOrdenWebhook(taller_id) && !service.webhook_erp_disparado) {
                             fetch(import.meta.env.VITE_N8N_ORDEN_WEBHOOK_URL, {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify(payload),
                                 keepalive: true
                             }).catch(e => console.error("Webhook Error (Fetch):", e));
+                            await updateServicio(job.service_id, { webhook_erp_disparado: true });
+                        } else if (service.webhook_erp_disparado) {
+                            console.log("Webhook de orden NO re-disparado: ya corrió para este service (reabierto y re-finalizado).");
                         } else {
                             console.log("Webhook de orden NO disparado: taller autosuficiente (no es Probikes).");
                         }

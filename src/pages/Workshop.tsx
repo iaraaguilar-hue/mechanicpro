@@ -147,7 +147,7 @@ export default function Workshop() {
                         </div>
                     </CardContent>
                 </Card>
-                <Card className="bg-amber-500 border-none shadow-md text-white">
+                <Card className="bg-secondary border-none shadow-md text-secondary-foreground">
                     <CardContent className="p-6 flex flex-col gap-1">
                         <p className="text-xs font-bold text-white/90 uppercase tracking-widest">Listas para Entregar</p>
                         <div className="flex items-baseline gap-2">
@@ -265,7 +265,7 @@ function MobileJobCard({ job, onClick, onDeliver }: { job: DashboardJob; onClick
             {isReady && (
                 <button
                     onClick={(e) => { e.stopPropagation(); onDeliver(); }}
-                    className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-white bg-amber-500 hover:bg-amber-600 active:bg-amber-600 rounded-lg transition-colors"
+                    className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-secondary-foreground bg-secondary hover:bg-secondary/90 active:bg-secondary/90 rounded-lg transition-colors"
                 >
                     <PackageCheck size={16} /> Entregar Bici
                 </button>
@@ -437,7 +437,7 @@ function JobRow({ job, onClick, onFinalize, onDeliver }: { job: DashboardJob, on
                 </TableCell>
                 <TableCell>{serviceBadge}</TableCell>
                 <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex flex-wrap justify-end gap-2">
                         {job.client_phone && (
                             <Button
                                 size="sm"
@@ -461,7 +461,7 @@ function JobRow({ job, onClick, onFinalize, onDeliver }: { job: DashboardJob, on
                         <Button variant="outline" size="sm" className="h-9" onClick={(e) => { e.stopPropagation(); onClick(); }}>
                             <Pencil className="h-4 w-4 mr-2" /> Editar
                         </Button>
-                        {isReady ? (
+                        {job.status !== 'delivered' && (
                             <>
                                 <Button
                                     size="sm"
@@ -474,30 +474,24 @@ function JobRow({ job, onClick, onFinalize, onDeliver }: { job: DashboardJob, on
                                     {isLoading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
                                     Avisar por WhatsApp
                                 </Button>
+                                {/* Los DOS pasos siempre a la vista: primero Finalizar, después Entregar */}
                                 <Button
                                     size="sm"
-                                    className="bg-amber-500 hover:bg-amber-600 text-white h-9 gap-2"
+                                    className="bg-green-600 hover:bg-green-700 text-white h-9 gap-2 disabled:opacity-40"
+                                    onClick={handleFinish}
+                                    disabled={isReady}
+                                    title={isReady ? "Service ya finalizado" : "El mecánico terminó el trabajo"}
+                                >
+                                    <CheckCircle className="h-4 w-4" /> Finalizar Service
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    className="bg-secondary hover:bg-secondary/90 text-secondary-foreground h-9 gap-2 disabled:opacity-40"
                                     onClick={(e) => { e.stopPropagation(); onDeliver(); }}
-                                    title="El cliente retiró la bici: pasa al historial"
+                                    disabled={!isReady}
+                                    title={isReady ? "El cliente retiró la bici: pasa al historial" : "Primero finalizá el service"}
                                 >
                                     <PackageCheck className="h-4 w-4" /> Entregar Bici
-                                </Button>
-                            </>
-                        ) : job.status !== 'delivered' && (
-                            <>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="border-green-500 text-green-600 hover:bg-green-50 h-9 px-2 gap-2"
-                                    onClick={notifyCustomer}
-                                    disabled={isLoading}
-                                    title="Avisar que está listo por WhatsApp (Sin Finalizar)"
-                                >
-                                    {isLoading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-                                    Avisar por WhatsApp
-                                </Button>
-                                <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-9 w-9 p-0" onClick={handleFinish} title="Finalizar Trabajo">
-                                    <CheckCircle className="h-5 w-5" />
                                 </Button>
                             </>
                         )}

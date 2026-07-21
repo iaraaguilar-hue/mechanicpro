@@ -16,11 +16,12 @@ export function StatusBadge({ status }: StatusBadgeProps) {
         );
     }
 
-    // 'ready' = el mecánico terminó pero la bici sigue en el taller esperando al cliente
+    // 'ready' = el mecánico terminó pero la bici sigue en el taller esperando al cliente.
+    // Chip sólido en el color secundario del theme del taller (nada de amarillos ajenos a la marca).
     if (normalized === 'ready') {
         return (
-            <div className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border border-amber-100/50 w-fit whitespace-nowrap">
-                <span className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></span>
+            <div className="inline-flex items-center gap-1.5 bg-secondary text-secondary-foreground px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border border-secondary/50 w-fit whitespace-nowrap">
+                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
                 Listo p/ entregar
             </div>
         );

@@ -16,21 +16,14 @@ export function StatusBadge({ status }: StatusBadgeProps) {
         );
     }
 
-    // 'ready' = el mecánico terminó pero la bici sigue en el taller esperando al cliente.
-    // Chip sólido en el color secundario del theme del taller (nada de amarillos ajenos a la marca).
-    if (normalized === 'ready') {
-        return (
-            <div className="inline-flex items-center gap-1.5 bg-secondary text-secondary-foreground px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border border-secondary/50 w-fit whitespace-nowrap">
-                <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
-                Listo p/ entregar
-            </div>
-        );
-    }
-
-    if (normalized === 'completed' || normalized === 'completado' || normalized === 'terminado') {
+    // Dos estados distintos y con nombre propio (pedido de Iara, 21-jul):
+    // "Finalizado" = el mecánico terminó ('ready' + variantes legacy); la bici sigue en el taller.
+    // "Entregado" = el cliente retiró la bici (abajo). El dot pulsa solo en 'ready'
+    // porque ahí hay una acción pendiente: apretar "Entregar Bici".
+    if (normalized === 'ready' || normalized === 'completed' || normalized === 'completado' || normalized === 'terminado') {
         return (
             <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border border-emerald-100/50 w-fit whitespace-nowrap">
-                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                <span className={`w-1.5 h-1.5 bg-emerald-500 rounded-full${normalized === 'ready' ? ' animate-pulse' : ''}`}></span>
                 Finalizado
             </div>
         );

@@ -30,34 +30,55 @@ export function tieneFeature(taller: { plan_actual?: string } | null | undefined
 }
 
 // ─────────────────────────────────────────────────────────────
-// Modo "Avances por etapas" (opt-in por taller, pedido de Cronobikes).
-// Config en talleres.config_avances: { habilitado, etapas[] }.
-// Progreso por orden en servicios.etapas_data: { [etapa]: bool }.
+// "Checklist de trabajos" (opt-in por taller, pedido de Cronobikes).
+// Rediseño 21-jul-2026 tras feedback de Iara: NO son etapas genéricas de
+// plantilla — el checklist se arma SOLO desde lo que la orden dice que hay
+// que hacerle a ESA bici (service base + cada mano de obra y repuesto).
+// Si la orden dice "cambio de cadena", el mecánico tilda "cambio de cadena".
+// Config en talleres.config_avances: { habilitado }.
+// Progreso por orden en servicios.etapas_data: { [claveTrabajo]: bool }.
 // ─────────────────────────────────────────────────────────────
-
-export interface ConfigAvances {
-    habilitado: boolean;
-    etapas: string[];
-}
-
-export const ETAPAS_DEFAULT = [
-    'Diagnóstico',
-    'Esperando repuesto',
-    'En reparación',
-    'Prueba y ajuste',
-    'Lista para retirar',
-];
-
-/** Lee la config de avances del taller con defaults sanos. */
-export function configAvancesDe(taller?: { plan_actual?: string; config_avances?: any } | null): ConfigAvances {
-    const raw = taller?.config_avances;
-    const etapas = Array.isArray(raw?.etapas) && raw.etapas.length > 0
-        ? raw.etapas.filter((e: any) => typeof e === 'string' && e.trim())
-        : ETAPAS_DEFAULT;
-    return { habilitado: raw?.habilitado === true, etapas };
-}
 
 /** true solo si el plan lo permite Y el taller lo activó en Configuración. */
 export function avancesActivos(taller?: { plan_actual?: string; config_avances?: any } | null): boolean {
-    return tieneFeature(taller ?? null, 'etapas') && configAvancesDe(taller).habilitado;
+    return tieneFeature(taller ?? null, 'etapas') && taller?.config_avances?.habilitado === true;
+}
+
+export interface TrabajoChecklist {
+    /** Clave estable en etapas_data. Por descripción (no por id: los items se
+     *  regeneran con id nuevo en cada edición de la orden). Si se edita el
+     *  texto de un trabajo, su check se resetea — correcto: cambió la tarea. */
+    clave: string;
+    etiqueta: string;
+    tipo: 'base' | 'labor' | 'part';
+}
+
+/** Los trabajos tildables de una orden = service base + items cargados. */
+export function trabajosDe(servicio?: {
+    tipo_servicio?: string;
+    items_extra?: { descripcion: string; categoria?: string }[];
+} | null): TrabajoChecklist[] {
+    if (!servicio) return [];
+    const trabajos: TrabajoChecklist[] = [];
+    // "OTRO" no es un trabajo en sí: el laburo real está en los items.
+    if (servicio.tipo_servicio && servicio.tipo_servicio.trim().toUpperCase() !== 'OTRO') {
+        trabajos.push({ clave: 'base', etiqueta: servicio.tipo_servicio.trim(), tipo: 'base' });
+    }
+    for (const item of servicio.items_extra || []) {
+        const desc = item.descripcion?.trim();
+        if (!desc) continue;
+        const tipo = item.categoria === 'labor' ? 'labor' : 'part';
+        trabajos.push({ clave: `${tipo}:${desc.toLowerCase()}`, etiqueta: desc, tipo });
+    }
+    return trabajos;
+}
+
+/** Trabajos de la orden que todavía no fueron tildados. */
+export function trabajosPendientes(servicio?: {
+    tipo_servicio?: string;
+    items_extra?: { descripcion: string; categoria?: string }[];
+    etapas_data?: Record<string, boolean> | null;
+} | null): TrabajoChecklist[] {
+    const data = servicio?.etapas_data || {};
+    return trabajosDe(servicio).filter(t => !data[t.clave]);
 }

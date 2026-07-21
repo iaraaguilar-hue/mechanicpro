@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore, type TallerData } from '@/store/authStore';
-import { tieneFeature, configAvancesDe, ETAPAS_DEFAULT } from '@/lib/planFeatures';
+import { tieneFeature } from '@/lib/planFeatures';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import {
     Settings, Loader2, Save, UploadCloud, Plus, Edit2, Check, X,
-    AlertCircle, ArrowUp, ArrowDown, Trash2, Sparkles, ListChecks, CheckCircle
+    AlertCircle, Sparkles, ListChecks, CheckCircle
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────
@@ -707,47 +707,32 @@ function TabMenuServices({ taller, taller_id, puedeEditar, avisar }: {
 }
 
 // ═════════════════════════════════════════════════════════════
-// TAB 3 — PREFERENCIAS (modo "Avances por etapas", pedido Cronobikes)
+// TAB 3 — PREFERENCIAS (checklist de trabajos, pedido Cronobikes)
+// El checklist NO se configura acá: se arma solo desde cada orden
+// (service base + manos de obra + repuestos). Acá solo se prende/apaga.
 // ═════════════════════════════════════════════════════════════
 function TabPreferencias({ taller, setTaller, avisar }: {
     taller: TallerData;
     setTaller: (t: TallerData) => void;
     avisar: (tipo: 'ok' | 'error', msg: string) => void;
 }) {
-    const tienePlanEtapas = tieneFeature(taller, 'etapas');
-    const configActual = configAvancesDe(taller);
-    const [habilitado, setHabilitado] = useState(configActual.habilitado);
-    const [etapas, setEtapas] = useState<string[]>(configActual.etapas);
-    const [nuevaEtapa, setNuevaEtapa] = useState('');
+    const tienePlanChecklist = tieneFeature(taller, 'etapas');
+    const [habilitado, setHabilitado] = useState(taller.config_avances?.habilitado === true);
     const [saving, setSaving] = useState(false);
 
-    const mover = (i: number, dir: -1 | 1) => {
-        const j = i + dir;
-        if (j < 0 || j >= etapas.length) return;
-        const copia = [...etapas];
-        [copia[i], copia[j]] = [copia[j], copia[i]];
-        setEtapas(copia);
-    };
-
     const handleSave = async () => {
-        const etapasLimpias = etapas.map(e => e.trim()).filter(Boolean);
-        if (habilitado && etapasLimpias.length === 0) {
-            avisar('error', 'Necesitás al menos una etapa para activar el seguimiento.');
-            return;
-        }
         try {
             setSaving(true);
-            const config_avances = { habilitado, etapas: etapasLimpias.length > 0 ? etapasLimpias : ETAPAS_DEFAULT };
+            const config_avances = { habilitado };
             const { error } = await supabase
                 .from('talleres')
                 .update({ config_avances })
                 .eq('id', taller.id);
             if (error) throw error;
-            setTaller({ ...taller, config_avances });
-            setEtapas(config_avances.etapas);
+            setTaller({ ...taller, config_avances: config_avances as any });
             avisar('ok', habilitado
-                ? 'Seguimiento por etapas activado. Lo vas a ver en la Mesa de Trabajo.'
-                : 'Seguimiento por etapas desactivado.');
+                ? 'Checklist de trabajos activado. Lo vas a ver en cada orden de la Mesa de Trabajo.'
+                : 'Checklist de trabajos desactivado.');
         } catch (error: any) {
             avisar('error', 'Error guardando: ' + error.message);
         } finally {
@@ -760,15 +745,16 @@ function TabPreferencias({ taller, setTaller, avisar }: {
             <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                     <ListChecks className="h-5 w-5 text-primary" />
-                    Seguimiento por etapas
+                    Checklist de trabajos del service
                 </CardTitle>
                 <p className="text-sm text-muted-foreground">
-                    Marcá el avance de cada service paso a paso en la Mesa de Trabajo (diagnóstico, reparación, prueba...).
-                    Es opcional: si tu taller no lo necesita, dejalo apagado y la app sigue igual que siempre.
+                    Cada orden ya dice qué hay que hacerle a esa bici. Con esto activado, esos trabajos
+                    aparecen como una lista tildable en la Mesa de Trabajo: el mecánico marca cada cosa
+                    a medida que la termina, y al finalizar la app avisa si quedó algo sin tildar.
                 </p>
             </CardHeader>
             <CardContent className="space-y-5">
-                {!tienePlanEtapas && (
+                {!tienePlanChecklist && (
                     <div className="flex items-start gap-2 p-3 rounded-md border border-amber-200 bg-amber-50 text-amber-900 text-sm">
                         <Sparkles className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
                         Disponible en los planes Pro y Expert.
@@ -777,77 +763,36 @@ function TabPreferencias({ taller, setTaller, avisar }: {
 
                 <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/20">
                     <div>
-                        <p className="font-semibold text-sm">Activar seguimiento por etapas</p>
-                        <p className="text-xs text-muted-foreground">Cada service en curso muestra sus etapas tildables.</p>
+                        <p className="font-semibold text-sm">Activar checklist de trabajos</p>
+                        <p className="text-xs text-muted-foreground">
+                            Es opcional: si tu taller no lo necesita, dejalo apagado y la app sigue igual que siempre.
+                        </p>
                     </div>
                     <Switch
                         checked={habilitado}
                         onCheckedChange={setHabilitado}
-                        disabled={!tienePlanEtapas}
+                        disabled={!tienePlanChecklist}
                     />
                 </div>
 
-                <div className={`space-y-2 ${!habilitado ? 'opacity-50' : ''}`}>
-                    <Label>Etapas de tu taller (en orden)</Label>
-                    {etapas.map((etapa, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                            <span className="text-xs font-mono text-muted-foreground w-5 text-right">{i + 1}.</span>
-                            <Input
-                                value={etapa}
-                                onChange={(e) => setEtapas(etapas.map((et, j) => j === i ? e.target.value : et))}
-                                className="h-9 text-sm"
-                                disabled={!tienePlanEtapas || !habilitado}
-                            />
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" onClick={() => mover(i, -1)} disabled={!tienePlanEtapas || !habilitado || i === 0}>
-                                <ArrowUp size={14} />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" onClick={() => mover(i, 1)} disabled={!tienePlanEtapas || !habilitado || i === etapas.length - 1}>
-                                <ArrowDown size={14} />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive/70 hover:text-destructive" onClick={() => setEtapas(etapas.filter((_, j) => j !== i))} disabled={!tienePlanEtapas || !habilitado}>
-                                <Trash2 size={14} />
-                            </Button>
-                        </div>
-                    ))}
-                    <div className="flex items-center gap-2 pt-1">
-                        <span className="w-5" />
-                        <Input
-                            value={nuevaEtapa}
-                            onChange={(e) => setNuevaEtapa(e.target.value)}
-                            placeholder="Nueva etapa..."
-                            className="h-9 text-sm"
-                            disabled={!tienePlanEtapas || !habilitado}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter' && nuevaEtapa.trim()) {
-                                    setEtapas([...etapas, nuevaEtapa.trim()]);
-                                    setNuevaEtapa('');
-                                }
-                            }}
-                        />
-                        <Button
-                            variant="outline" size="sm" className="h-9"
-                            disabled={!tienePlanEtapas || !habilitado || !nuevaEtapa.trim()}
-                            onClick={() => { setEtapas([...etapas, nuevaEtapa.trim()]); setNuevaEtapa(''); }}
-                        >
-                            <Plus size={14} className="mr-1" /> Agregar
-                        </Button>
-                    </div>
-                    <button
-                        className="text-xs text-primary underline-offset-2 hover:underline disabled:opacity-50"
-                        onClick={() => setEtapas(ETAPAS_DEFAULT)}
-                        disabled={!tienePlanEtapas || !habilitado}
-                    >
-                        Restaurar etapas sugeridas
-                    </button>
+                {/* Ejemplo concreto para que se entienda sin probarlo */}
+                <div className="rounded-lg border bg-slate-50 p-4 text-sm">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Ejemplo</p>
+                    <p className="text-slate-600 mb-2">Si la orden tiene cargado:</p>
+                    <ul className="space-y-1 text-slate-700">
+                        <li className="flex items-center gap-2"><Check size={14} className="text-green-600" /> Service Completo <span className="text-[10px] font-semibold px-1.5 rounded-full bg-primary/10 text-primary">Service</span></li>
+                        <li className="flex items-center gap-2"><Check size={14} className="text-green-600" /> Cambio de cadena <span className="text-[10px] font-semibold px-1.5 rounded-full bg-blue-50 text-blue-600">Mano de obra</span></li>
+                        <li className="flex items-center gap-2"><span className="w-3.5 h-3.5 border rounded-sm inline-block" /> Cadena Shimano 11v <span className="text-[10px] font-semibold px-1.5 rounded-full bg-slate-100 text-slate-500">Repuesto</span></li>
+                    </ul>
+                    <p className="text-slate-500 text-xs mt-2">
+                        …ese es el checklist de esa orden. Se agrega un trabajo a la orden → aparece solo en la lista.
+                    </p>
                 </div>
 
-                <Button onClick={handleSave} disabled={saving || !tienePlanEtapas} className="w-full">
+                <Button onClick={handleSave} disabled={saving || !tienePlanChecklist} className="w-full">
                     {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                     Guardar preferencias
                 </Button>
-                <p className="text-xs text-muted-foreground">
-                    Cambiar las etapas no afecta los services ya finalizados. Los services en curso muestran las etapas nuevas.
-                </p>
             </CardContent>
         </Card>
     );

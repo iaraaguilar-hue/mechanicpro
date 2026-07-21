@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
 import { shouldFireOrdenWebhook } from "@/lib/ordenWebhook";
 import { EtapasChecklist } from "@/components/EtapasChecklist";
-import { avancesActivos } from "@/lib/planFeatures";
+import { avancesActivos, trabajosPendientes } from "@/lib/planFeatures";
 
 export const formatSafeDate = (dateString: string | null | undefined): string => {
     if (!dateString) return '-';
@@ -527,6 +527,7 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
     const updateServicio = useDataStore(s => s.updateServicio);
     const upsertRecordatorios = useDataStore(s => s.upsertRecordatorios);
     const taller_id = useAuthStore(s => s.taller_id);
+    const taller = useAuthStore(s => s.taller);
 
     const service = servicios.find(s => s.id === job.service_id) || null;
     const bike = service ? bicicletas.find(b => b.id === service.bicicleta_id) : null;
@@ -538,6 +539,21 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
 
     const handleFinalize = async () => {
         if (!service) return;
+
+        // Seguro anti-olvidos del checklist de trabajos: si la orden tiene
+        // trabajos sin tildar, avisar antes de finalizar (no bloquea).
+        if (avancesActivos(taller)) {
+            const pendientes = trabajosPendientes(service);
+            const estadoActual = (service.estado || '').toLowerCase();
+            if (pendientes.length > 0 && estadoActual !== 'ready' && estadoActual !== 'delivered') {
+                const lista = pendientes.map(t => `  • ${t.etiqueta}`).join('\n');
+                const seguir = window.confirm(
+                    `Ojo: quedaron ${pendientes.length} trabajo(s) sin tildar en el checklist:\n\n${lista}\n\n¿Finalizar el service igual?`
+                );
+                if (!seguir) return;
+            }
+        }
+
         setIsSaving(true);
         try {
             // Update service notes

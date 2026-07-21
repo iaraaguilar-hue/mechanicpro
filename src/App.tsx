@@ -274,7 +274,7 @@ function AppContent() {
               <DrawerLink to="/reminders" icon={<Bell size={20} />} label="Motor Retención" onClick={closeDrawer} />
               <DrawerLink to="/metrics" icon={<BarChart3 size={20} />} label="Métricas" onClick={closeDrawer} />
               <DrawerLink to="/admin" icon={<MessageSquare size={20} />} label="Contactar" onClick={closeDrawer} />
-              {rol?.toLowerCase()?.trim() === 'admin' && (
+              {rol?.toLowerCase()?.trim() !== 'super_admin' && (
                 <DrawerLink to="/configuracion" icon={<Settings size={20} />} label="Configuración" onClick={closeDrawer} />
               )}
               {rol?.toLowerCase()?.trim() === 'admin' && tieneFeature(taller, 'auditoria') && (
@@ -324,7 +324,7 @@ function AppContent() {
           <Link to="/reminders"><NavButton icon={<Bell />} label="Motor Retención" /></Link>
           <Link to="/metrics"><NavButton icon={<BarChart3 />} label="Métricas" /></Link>
           <Link to="/admin"><NavButton icon={<MessageSquare />} label="Contactar" /></Link>
-          {rol?.toLowerCase()?.trim() === 'admin' && (
+          {rol?.toLowerCase()?.trim() !== 'super_admin' && (
             <Link to="/configuracion"><NavButton icon={<Settings />} label="Configuración" /></Link>
           )}
           {rol?.toLowerCase()?.trim() === 'admin' && tieneFeature(taller, 'auditoria') && (

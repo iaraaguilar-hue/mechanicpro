@@ -78,9 +78,10 @@ export default function Configuracion() {
     const [activeTab, setActiveTab] = useState('taller');
     const [toast, setToast] = useState<{ tipo: 'ok' | 'error'; msg: string } | null>(null);
 
+    // Abierta a todo el equipo del taller (admin + mecánicos, pedido de Iara
+    // 21-jul-2026). El plan lo protege la BD (trigger proteger_plan_actual).
     const rolNorm = rol?.toLowerCase()?.trim();
     if (rolNorm === 'super_admin') return <Navigate to="/superadmin" />;
-    if (rolNorm !== 'admin') return <Navigate to="/" />;
     if (!taller || !taller_id) {
         return <div className="p-8 text-center text-muted-foreground">Cargando configuración...</div>;
     }

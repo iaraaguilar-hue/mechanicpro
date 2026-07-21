@@ -24,6 +24,7 @@ import {
 import { Search, FilterX, ChevronUp, ChevronDown, FileText, Pencil, Trash2, Eye, ClipboardList, Calendar as CalendarIcon, Wrench, Package, Info, Tag, MessageCircle } from "lucide-react";
 import { printServiceReport } from '@/lib/printServiceBtn';
 import { ServiceModal } from '@/components/ServiceModal';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { es } from "date-fns/locale";
 
 export const formatSafeDate = (dateString: string | null | undefined): string => {
@@ -253,6 +254,7 @@ export default function History() {
 
     const [expandedIds, setExpandedIds] = useState<string[]>([]);
     const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+    const [deletingServiceId, setDeletingServiceId] = useState<string | null>(null);
 
 
     // Filters State
@@ -267,13 +269,14 @@ export default function History() {
         );
     };
 
-    const handleDelete = async (id: string) => {
-        if (confirm("¿Estás seguro de eliminar este servicio? Esta acción no se puede deshacer.")) {
-            try {
-                await storeDeleteServicio(id);
-            } catch {
-                alert("Error al eliminar servicio");
-            }
+    // Confirmación linda (ConfirmDialog) en vez de window.confirm
+    const handleDelete = (id: string) => setDeletingServiceId(id);
+
+    const doDelete = async (id: string) => {
+        try {
+            await storeDeleteServicio(id);
+        } catch {
+            alert("Error al eliminar servicio");
         }
     };
 
@@ -661,6 +664,23 @@ export default function History() {
                     />
                 )
             }
+
+            {deletingServiceId && (() => {
+                const job = allJobs.find(j => j.id === deletingServiceId);
+                return (
+                    <ConfirmDialog
+                        open={!!deletingServiceId}
+                        onClose={() => setDeletingServiceId(null)}
+                        onConfirm={() => { const id = deletingServiceId; setDeletingServiceId(null); doDelete(id); }}
+                        icon={<Trash2 className="h-7 w-7" />}
+                        iconClassName="bg-red-50 text-red-500"
+                        title="Eliminar este service"
+                        description={<>Se elimina el service {job ? <>de <span className="font-semibold text-foreground">{job.clientName}</span> ({formatOrdenNumber(job.numero_orden, job.id)})</> : null} del historial. <span className="font-semibold text-foreground">Esta acción no se puede deshacer.</span></>}
+                        confirmLabel="Sí, eliminar"
+                        confirmClassName="bg-red-600 hover:bg-red-700 text-white"
+                    />
+                );
+            })()}
         </div>
     );
 }

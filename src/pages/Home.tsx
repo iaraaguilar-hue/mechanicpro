@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useDataStore, type SupabaseBike } from "@/store/dataStore";
 import { RapidIntakeWizard } from "@/components/RapidIntakeWizard";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 import { Input } from "@/components/ui/input";
 
@@ -72,8 +73,13 @@ export default function Home() {
         );
     }, [clientes, bicicletas, servicios, recordatorios, searchTerm]);
 
-    const handleDeleteClient = async (clientId: string, clientName: string) => {
-        if (!window.confirm(`¿Eliminar a ${clientName}?`)) return;
+    // Confirmación linda (ConfirmDialog) en vez de window.confirm
+    const [deletingClient, setDeletingClient] = useState<{ id: string; name: string } | null>(null);
+
+    const handleDeleteClient = (clientId: string, clientName: string) =>
+        setDeletingClient({ id: clientId, name: clientName });
+
+    const doDeleteClient = async (clientId: string) => {
         try {
             await deleteCliente(clientId);
         } catch (e: any) {
@@ -241,6 +247,20 @@ export default function Home() {
                         </div>
                     ))}
                 </div>
+            )}
+
+            {deletingClient && (
+                <ConfirmDialog
+                    open={!!deletingClient}
+                    onClose={() => setDeletingClient(null)}
+                    onConfirm={() => { const c = deletingClient; setDeletingClient(null); doDeleteClient(c.id); }}
+                    icon={<Trash2 className="h-7 w-7" />}
+                    iconClassName="bg-red-50 text-red-500"
+                    title={`Eliminar a ${deletingClient.name}`}
+                    description={<>Se elimina el cliente con sus bicis del listado. <span className="font-semibold text-foreground">Esta acción no se puede deshacer.</span></>}
+                    confirmLabel="Sí, eliminar"
+                    confirmClassName="bg-red-600 hover:bg-red-700 text-white"
+                />
             )}
         </div>
     );

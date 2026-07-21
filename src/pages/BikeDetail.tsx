@@ -18,6 +18,7 @@ import { ArrowLeft, Wrench, AlertTriangle, Clock, Pencil, Save, FileDown, Plus, 
 import { cn } from "@/lib/utils";
 import { AddBikeDialog } from "@/components/AddBikeDialog";
 import { ServiceModal } from "@/components/ServiceModal";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 export default function BikeDetail() {
     const { id, clientId } = useParams<{ id: string, clientId: string }>();
@@ -161,10 +162,16 @@ export default function BikeDetail() {
         }
     };
 
-    const handleDeleteBike = async (bikeIdToDelete?: string) => {
+    // Confirmación linda (ConfirmDialog) en vez de window.confirm
+    const [deletingBikeId, setDeletingBikeId] = useState<string | null>(null);
+
+    const handleDeleteBike = (bikeIdToDelete?: string) => {
         const targetId = bikeIdToDelete || editingBikeId || bike?.id;
         if (!targetId) return;
-        if (!confirm("¿Eliminar esta bicicleta?")) return;
+        setDeletingBikeId(targetId);
+    };
+
+    const doDeleteBike = async (targetId: string) => {
         try {
             await deleteBicicleta(targetId);
             setEditingBikeId(null);
@@ -631,6 +638,20 @@ export default function BikeDetail() {
                 preSelectedClientId={client?.id}
                 preSelectedBikeId={activeBike?.id}
             />
+
+            {deletingBikeId && (
+                <ConfirmDialog
+                    open={!!deletingBikeId}
+                    onClose={() => setDeletingBikeId(null)}
+                    onConfirm={() => { const id = deletingBikeId; setDeletingBikeId(null); doDeleteBike(id); }}
+                    icon={<Trash2 className="h-7 w-7" />}
+                    iconClassName="bg-red-50 text-red-500"
+                    title="Eliminar esta bicicleta"
+                    description={<>Se elimina la bici del sistema con su historial asociado. <span className="font-semibold text-foreground">Esta acción no se puede deshacer.</span></>}
+                    confirmLabel="Sí, eliminar"
+                    confirmClassName="bg-red-600 hover:bg-red-700 text-white"
+                />
+            )}
         </div>
     );
 }

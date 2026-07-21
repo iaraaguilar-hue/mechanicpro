@@ -307,12 +307,15 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
             if (!taller_id) return;
             const { data } = await supabase.from('catalogo_servicios').select('*').eq('taller_id', taller_id);
             if (data) {
+                // Los services desactivados desde /configuracion no se ofrecen al crear
+                // órdenes nuevas (las históricas que los usaron quedan intactas).
+                const activos = data.filter((s: any) => s.activo !== false);
                 // Always guarantee 'OTRO' ($0) is available for every workshop.
                 // Guard against duplication if SuperAdmin already added it to the catalog.
-                const yaHayOtro = data.some((s: any) => s.nombre?.toUpperCase() === 'OTRO');
+                const yaHayOtro = activos.some((s: any) => s.nombre?.toUpperCase() === 'OTRO');
                 const dataConOtro = yaHayOtro
-                    ? data
-                    : [...data, { id: 'otro_universal', nombre: 'OTRO', precio: 0 }];
+                    ? activos
+                    : [...activos, { id: 'otro_universal', nombre: 'OTRO', precio: 0 }];
                 setCatalogoServicios(dataConOtro);
             }
         };

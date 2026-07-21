@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useDataStore, type SupabaseService } from "@/store/dataStore";
+import { useDataStore } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
 import { supabase } from "@/lib/supabase";
 import { formatOrdenNumber } from "@/lib/formatId";
@@ -15,8 +15,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
-import { isExternalItem } from "@/lib/utils";
 import { shouldFireOrdenWebhook } from "@/lib/ordenWebhook";
+import { EtapasChecklist } from "@/components/EtapasChecklist";
+import { avancesActivos } from "@/lib/planFeatures";
 
 export const formatSafeDate = (dateString: string | null | undefined): string => {
     if (!dateString) return '-';
@@ -198,6 +199,8 @@ export default function Workshop() {
 }
 
 function MobileJobCard({ job, onClick }: { job: DashboardJob; onClick: () => void }) {
+    const taller = useAuthStore(s => s.taller);
+    const mostrarEtapas = avancesActivos(taller);
     return (
         <div
             onClick={onClick}
@@ -214,6 +217,7 @@ function MobileJobCard({ job, onClick }: { job: DashboardJob; onClick: () => voi
                     <Wrench size={12} className="flex-shrink-0" />
                     <span className="truncate">{job.bike_brand} {job.bike_model}</span>
                 </div>
+                {mostrarEtapas && <EtapasChecklist serviceId={job.service_id} />}
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
                 <div className="flex flex-col items-end gap-1">
@@ -237,7 +241,9 @@ function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () =
     const [showToast, setShowToast] = useState<{type: 'success' | 'error', message: string} | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const taller_id = useAuthStore(s => s.taller_id);
+    const taller = useAuthStore(s => s.taller);
     const servicios = useDataStore(s => s.servicios);
+    const mostrarEtapas = avancesActivos(taller);
 
     const notifyCustomer = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -356,7 +362,10 @@ function JobRow({ job, onClick, onFinalize }: { job: DashboardJob, onClick: () =
     return (
         <>
             <TableRow className="hover:bg-muted/30 transition-colors cursor-pointer" onClick={onClick}>
-                <TableCell>{statusBadge}</TableCell>
+                <TableCell>
+                    {statusBadge}
+                    {mostrarEtapas && <EtapasChecklist serviceId={job.service_id} />}
+                </TableCell>
                 <TableCell className="font-medium text-muted-foreground w-28">
                     <div className="flex flex-col gap-1">
                         <span className="text-slate-900 font-semibold">{formatSafeDate(job.date_in)}</span>

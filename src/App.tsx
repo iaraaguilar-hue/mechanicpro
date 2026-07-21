@@ -14,8 +14,10 @@ import UpdatePasswordScreen from "./pages/UpdatePasswordScreen";
 import DeletedServices from "./pages/DeletedServices";
 import Metrics from "./pages/Metrics";
 import SuperAdmin from "./pages/SuperAdmin";
+import Configuracion from "./pages/Configuracion";
 import { Button } from "@/components/ui/button";
-import { Home, ClipboardList, Settings, Wrench, History, Bell, LogOut, BarChart3, Trash2, Menu, User, X } from "lucide-react";
+import { Home, ClipboardList, Settings, Wrench, History, Bell, LogOut, BarChart3, Trash2, Menu, User, X, MessageSquare } from "lucide-react";
+import { tieneFeature } from "@/lib/planFeatures";
 
 
 
@@ -210,7 +212,7 @@ function AppContent() {
                   <User size={15} className="text-slate-400" /> Mi Perfil
                 </Link>
                 <Link
-                  to="/admin"
+                  to="/configuracion"
                   onClick={() => setUserMenuOpen(false)}
                   className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                 >
@@ -271,8 +273,11 @@ function AppContent() {
               <DrawerLink to="/history" icon={<History size={20} />} label="Historial" onClick={closeDrawer} />
               <DrawerLink to="/reminders" icon={<Bell size={20} />} label="Motor Retención" onClick={closeDrawer} />
               <DrawerLink to="/metrics" icon={<BarChart3 size={20} />} label="Métricas" onClick={closeDrawer} />
-              <DrawerLink to="/admin" icon={<Settings size={20} />} label="Admin" onClick={closeDrawer} />
-              {rol?.toLowerCase()?.trim() === 'admin' && taller?.plan_actual !== 'Sport' && (
+              <DrawerLink to="/admin" icon={<MessageSquare size={20} />} label="Contactar" onClick={closeDrawer} />
+              {rol?.toLowerCase()?.trim() === 'admin' && (
+                <DrawerLink to="/configuracion" icon={<Settings size={20} />} label="Configuración" onClick={closeDrawer} />
+              )}
+              {rol?.toLowerCase()?.trim() === 'admin' && tieneFeature(taller, 'auditoria') && (
                 <DrawerLink to="/auditoria" icon={<Trash2 size={20} />} label="Auditoría" onClick={closeDrawer} />
               )}
               {rol?.toLowerCase()?.trim() === 'super_admin' && (
@@ -318,8 +323,11 @@ function AppContent() {
           <Link to="/history"><NavButton icon={<History />} label="Historial" /></Link>
           <Link to="/reminders"><NavButton icon={<Bell />} label="Motor Retención" /></Link>
           <Link to="/metrics"><NavButton icon={<BarChart3 />} label="Métricas" /></Link>
-          <Link to="/admin"><NavButton icon={<Settings />} label="Admin" /></Link>
-          {rol?.toLowerCase()?.trim() === 'admin' && taller?.plan_actual !== 'Sport' && (
+          <Link to="/admin"><NavButton icon={<MessageSquare />} label="Contactar" /></Link>
+          {rol?.toLowerCase()?.trim() === 'admin' && (
+            <Link to="/configuracion"><NavButton icon={<Settings />} label="Configuración" /></Link>
+          )}
+          {rol?.toLowerCase()?.trim() === 'admin' && tieneFeature(taller, 'auditoria') && (
             <Link to="/auditoria"><NavButton icon={<Trash2 />} label="Auditoría (Admin)" /></Link>
           )}
           {rol?.toLowerCase()?.trim() === 'super_admin' && (
@@ -354,6 +362,7 @@ function AppContent() {
           <Route path="/service/:id" element={<ServiceJob />} />
           <Route path="/metrics" element={<Metrics />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/configuracion" element={<Configuracion />} />
           <Route path="/auditoria" element={<DeletedServices />} />
           <Route path="/superadmin" element={<SuperAdmin />} />
         </Routes>

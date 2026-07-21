@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useDataStore } from "@/store/dataStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Settings } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 
 export default function Admin() {
     const recordatorios = useDataStore(s => s.recordatorios);
@@ -42,8 +42,8 @@ export default function Admin() {
     return (
         <div className="space-y-6">
             <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-                <Settings className="h-8 w-8 text-primary" />
-                Configuración
+                <MessageSquare className="h-8 w-8 text-primary" />
+                Clientes a Contactar
             </h1>
             <p className="text-muted-foreground">Clientes con componentes vencidos o próximos a vencer (Hoy).</p>
 

@@ -43,6 +43,7 @@ export interface SupabaseService {
     fecha_finalizacion?: string;
     eliminado_en?: string | null;
     checklist_data?: Record<string, boolean>;
+    etapas_data?: Record<string, boolean> | null;
     carrera_id?: string | null;
     alertas_ocultas?: string[];
     items_extra?: { id: string; descripcion: string; precio: number; categoria?: string }[];

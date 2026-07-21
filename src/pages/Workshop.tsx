@@ -9,7 +9,8 @@ import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2 } from "lucide-react";
+import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks } from "lucide-react";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -64,6 +65,8 @@ export default function Workshop() {
     const [editingJob, setEditingJob] = useState<DashboardJob | null>(null);
     const [finalizingJob, setFinalizingJob] = useState<DashboardJob | null>(null);
     const [isRefetching, setIsRefetching] = useState(false);
+    // Confirmación linda (estilo MP) en vez de window.confirm
+    const [confirming, setConfirming] = useState<{ kind: 'deliver' | 'reopen'; job: DashboardJob } | null>(null);
 
     // Compute active jobs from store (replaces getDashboardJobs)
     // 'ready' NO está acá: la bici finalizada queda en el Taller Activo como
@@ -106,8 +109,7 @@ export default function Workshop() {
     };
 
     // Paso 2 del flujo: el cliente retiró la bici → recién ahí pasa al historial
-    const handleDeliver = async (job: DashboardJob) => {
-        if (!window.confirm(`¿Confirmás que ${job.client_name} retiró la bici?`)) return;
+    const doDeliver = async (job: DashboardJob) => {
         try {
             await updateServicio(job.service_id, {
                 estado: 'delivered',
@@ -121,8 +123,7 @@ export default function Workshop() {
 
     // Deshacer un "Finalizar Service" apretado por error: vuelve a En curso.
     // El webhook ERP NO se re-dispara al re-finalizar (marca webhook_erp_disparado).
-    const handleReopen = async (job: DashboardJob) => {
-        if (!window.confirm(`¿Reabrir el service de ${job.client_name}? Vuelve a "En curso" para seguir trabajándolo.`)) return;
+    const doReopen = async (job: DashboardJob) => {
         try {
             await updateServicio(job.service_id, {
                 estado: 'in_progress',
@@ -133,6 +134,9 @@ export default function Workshop() {
             alert(`Error al reabrir el service: ${e.message}`);
         }
     };
+
+    const handleDeliver = (job: DashboardJob) => setConfirming({ kind: 'deliver', job });
+    const handleReopen = (job: DashboardJob) => setConfirming({ kind: 'reopen', job });
 
     const paraEntregar = jobs.filter(j => (j.status || '').toLowerCase() === 'ready');
     const enProceso = jobs.length - paraEntregar.length;
@@ -248,6 +252,28 @@ export default function Workshop() {
                     job={finalizingJob}
                     isOpen={!!finalizingJob}
                     onClose={() => { setFinalizingJob(null); handleRefresh(); }}
+                />
+            )}
+
+            {confirming && (
+                <ConfirmDialog
+                    open={!!confirming}
+                    onClose={() => setConfirming(null)}
+                    onConfirm={() => {
+                        const c = confirming;
+                        setConfirming(null);
+                        if (c.kind === 'deliver') doDeliver(c.job); else doReopen(c.job);
+                    }}
+                    icon={confirming.kind === 'deliver' ? <PackageCheck className="h-7 w-7" /> : <Undo2 className="h-7 w-7" />}
+                    iconClassName={confirming.kind === 'deliver' ? 'bg-secondary/15 text-secondary' : 'bg-slate-100 text-slate-600'}
+                    title={confirming.kind === 'deliver' ? 'Entregar la bici' : 'Reabrir el service'}
+                    description={confirming.kind === 'deliver'
+                        ? <>¿<span className="font-semibold text-foreground">{confirming.job.client_name}</span> retiró su <span className="font-semibold text-foreground">{confirming.job.bike_brand} {confirming.job.bike_model}</span>? La orden pasa al historial como <span className="font-semibold text-foreground">Entregada</span>.</>
+                        : <>El service de <span className="font-semibold text-foreground">{confirming.job.client_name}</span> vuelve a <span className="font-semibold text-foreground">En curso</span> para seguir trabajándolo.</>}
+                    confirmLabel={confirming.kind === 'deliver' ? 'Sí, entregar' : 'Sí, reabrir'}
+                    confirmClassName={confirming.kind === 'deliver'
+                        ? 'bg-secondary hover:bg-secondary/90 text-secondary-foreground'
+                        : 'bg-slate-800 hover:bg-slate-700 text-white'}
                 />
             )}
         </div>
@@ -577,6 +603,7 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
     const [notes, setNotes] = useState(service?.notas_mecanico || "");
     const [healthCheckData, setHealthCheckData] = useState<HealthCheckData[]>([]);
     const [isSaving, setIsSaving] = useState(false);
+    const [pendientesConfirm, setPendientesConfirm] = useState<string[] | null>(null);
 
     const handleFinalize = async () => {
         if (!service) return;
@@ -587,14 +614,15 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
             const pendientes = trabajosPendientes(service);
             const estadoActual = (service.estado || '').toLowerCase();
             if (pendientes.length > 0 && estadoActual !== 'ready' && estadoActual !== 'delivered') {
-                const lista = pendientes.map(t => `  • ${t.etiqueta}`).join('\n');
-                const seguir = window.confirm(
-                    `Ojo: quedaron ${pendientes.length} trabajo(s) sin tildar en el checklist:\n\n${lista}\n\n¿Finalizar el service igual?`
-                );
-                if (!seguir) return;
+                setPendientesConfirm(pendientes.map(t => t.etiqueta));
+                return;
             }
         }
+        await doFinalize();
+    };
 
+    const doFinalize = async () => {
+        if (!service) return;
         setIsSaving(true);
         try {
             // Update service notes
@@ -782,6 +810,31 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
                     )}
                 </DialogFooter>
             </DialogContent>
+
+            {/* Confirmación linda del seguro anti-olvidos (antes era window.confirm) */}
+            {pendientesConfirm && (
+                <ConfirmDialog
+                    open={!!pendientesConfirm}
+                    onClose={() => setPendientesConfirm(null)}
+                    onConfirm={() => { setPendientesConfirm(null); doFinalize(); }}
+                    icon={<ListChecks className="h-7 w-7" />}
+                    iconClassName="bg-primary/10 text-primary"
+                    title={`Quedaron ${pendientesConfirm.length} trabajo(s) sin tildar`}
+                    description={
+                        <div className="text-left bg-slate-50 border border-slate-200 rounded-lg p-3 max-h-40 overflow-y-auto">
+                            {pendientesConfirm.map((etiqueta, i) => (
+                                <div key={i} className="flex items-start gap-2 py-0.5">
+                                    <span className="text-slate-400 mt-0.5">•</span>
+                                    <span className="text-slate-700">{etiqueta}</span>
+                                </div>
+                            ))}
+                        </div>
+                    }
+                    confirmLabel="Finalizar igual"
+                    confirmClassName="bg-green-600 hover:bg-green-700 text-white"
+                    cancelLabel="Volver al checklist"
+                />
+            )}
         </Dialog>
     )
 }

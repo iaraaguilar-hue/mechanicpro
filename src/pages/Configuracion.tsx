@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import {
     Settings, Loader2, Save, UploadCloud, Plus, Edit2, Check, X,
-    AlertCircle, Sparkles, ListChecks, CheckCircle
+    AlertCircle, Sparkles, ListChecks, CheckCircle, Lock, Bell
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────
@@ -720,6 +720,35 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     const [habilitado, setHabilitado] = useState(taller.config_avances?.habilitado === true);
     const [saving, setSaving] = useState(false);
 
+    // Tareas del service (todos los planes) + candado de finalización.
+    const [tareasHab, setTareasHab] = useState(taller.config_notificaciones?.tareas_habilitado === true);
+    const [bloqueo, setBloqueo] = useState(taller.config_notificaciones?.bloquear_finalizacion === true);
+    const [savingTareas, setSavingTareas] = useState(false);
+
+    const handleSaveTareas = async () => {
+        try {
+            setSavingTareas(true);
+            const config_notificaciones = {
+                ...(taller.config_notificaciones || {}),
+                tareas_habilitado: tareasHab,
+                bloquear_finalizacion: tareasHab ? bloqueo : false,
+            };
+            const { error } = await supabase
+                .from('talleres')
+                .update({ config_notificaciones })
+                .eq('id', taller.id);
+            if (error) throw error;
+            setTaller({ ...taller, config_notificaciones: config_notificaciones as any });
+            avisar('ok', tareasHab
+                ? 'Tareas del service activadas. El mecánico ya puede anotar tareas en cada orden.'
+                : 'Tareas del service desactivadas.');
+        } catch (error: any) {
+            avisar('error', 'Error guardando: ' + error.message);
+        } finally {
+            setSavingTareas(false);
+        }
+    };
+
     const handleSave = async () => {
         try {
             setSaving(true);
@@ -741,7 +770,8 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     };
 
     return (
-        <Card className="max-w-2xl">
+        <div className="space-y-6 max-w-2xl">
+        <Card>
             <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                     <ListChecks className="h-5 w-5 text-primary" />
@@ -795,5 +825,50 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                 </Button>
             </CardContent>
         </Card>
+
+        {/* ── Tareas del service (todos los planes) — pedido Cronobikes ── */}
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                    <Bell className="h-5 w-5 text-primary" />
+                    Tareas del service
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                    Dentro de cada orden, el mecánico puede anotar tareas para no olvidarse
+                    (ej: "colocar plato 34 con su cadena"). Aparecen como una lista tildable en la
+                    Mesa de Trabajo. Disponible en todos los planes.
+                </p>
+            </CardHeader>
+            <CardContent className="space-y-5">
+                <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/20">
+                    <div className="pr-3">
+                        <p className="font-semibold text-sm">Activar tareas del service</p>
+                        <p className="text-xs text-muted-foreground">
+                            Es opcional: si lo dejás apagado, la app sigue igual que siempre.
+                        </p>
+                    </div>
+                    <Switch checked={tareasHab} onCheckedChange={setTareasHab} />
+                </div>
+
+                <div className={`flex items-center justify-between p-4 rounded-lg border transition-opacity ${tareasHab ? 'bg-amber-50/50 border-amber-200' : 'bg-muted/20 opacity-50'}`}>
+                    <div className="pr-3">
+                        <p className="font-semibold text-sm flex items-center gap-1.5">
+                            <Lock className="h-4 w-4 text-amber-600" /> No dejar finalizar hasta completar las tareas
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            El botón verde "Finalizar service" queda bloqueado hasta que el mecánico
+                            tilde todas las tareas cargadas en esa orden.
+                        </p>
+                    </div>
+                    <Switch checked={bloqueo} onCheckedChange={setBloqueo} disabled={!tareasHab} />
+                </div>
+
+                <Button onClick={handleSaveTareas} disabled={savingTareas} className="w-full">
+                    {savingTareas ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                    Guardar preferencias
+                </Button>
+            </CardContent>
+        </Card>
+        </div>
     );
 }

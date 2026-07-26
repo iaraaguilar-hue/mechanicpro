@@ -9,7 +9,7 @@ import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks } from "lucide-react";
+import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
 import { shouldFireOrdenWebhook } from "@/lib/ordenWebhook";
 import { EtapasChecklist } from "@/components/EtapasChecklist";
-import { avancesActivos, trabajosPendientes } from "@/lib/planFeatures";
+import { avancesActivos, trabajosPendientes, tareasActivas, bloqueoFinalizacionActivo, tareasLibresPendientes } from "@/lib/planFeatures";
 
 export const formatSafeDate = (dateString: string | null | undefined): string => {
     if (!dateString) return '-';
@@ -283,6 +283,7 @@ export default function Workshop() {
 function MobileJobCard({ job, onClick, onDeliver, onReopen }: { job: DashboardJob; onClick: () => void; onDeliver: () => void; onReopen: () => void }) {
     const taller = useAuthStore(s => s.taller);
     const mostrarEtapas = avancesActivos(taller);
+    const mostrarTareas = tareasActivas(taller);
     const isReady = (job.status || '').toLowerCase() === 'ready';
     return (
         <div
@@ -301,7 +302,7 @@ function MobileJobCard({ job, onClick, onDeliver, onReopen }: { job: DashboardJo
                         <Wrench size={12} className="flex-shrink-0" />
                         <span className="truncate">{job.bike_brand} {job.bike_model}</span>
                     </div>
-                    {mostrarEtapas && <EtapasChecklist serviceId={job.service_id} />}
+                    {(mostrarEtapas || mostrarTareas) && <EtapasChecklist serviceId={job.service_id} />}
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                     <div className="flex flex-col items-end gap-1">
@@ -347,6 +348,7 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
     const taller = useAuthStore(s => s.taller);
     const servicios = useDataStore(s => s.servicios);
     const mostrarEtapas = avancesActivos(taller);
+    const mostrarTareas = tareasActivas(taller);
 
     const notifyCustomer = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -467,7 +469,7 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
             <TableRow className="hover:bg-muted/30 transition-colors cursor-pointer" onClick={onClick}>
                 <TableCell>
                     {statusBadge}
-                    {mostrarEtapas && <EtapasChecklist serviceId={job.service_id} />}
+                    {(mostrarEtapas || mostrarTareas) && <EtapasChecklist serviceId={job.service_id} />}
                 </TableCell>
                 <TableCell className="font-medium text-muted-foreground w-28">
                     <div className="flex flex-col gap-1">
@@ -604,17 +606,29 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
     const [healthCheckData, setHealthCheckData] = useState<HealthCheckData[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [pendientesConfirm, setPendientesConfirm] = useState<string[] | null>(null);
+    const [bloqueoPendientes, setBloqueoPendientes] = useState<string[] | null>(null);
 
     const handleFinalize = async () => {
         if (!service) return;
 
-        // Seguro anti-olvidos del checklist de trabajos: si la orden tiene
-        // trabajos sin tildar, avisar antes de finalizar (no bloquea).
-        if (avancesActivos(taller)) {
-            const pendientes = trabajosPendientes(service);
-            const estadoActual = (service.estado || '').toLowerCase();
-            if (pendientes.length > 0 && estadoActual !== 'ready' && estadoActual !== 'delivered') {
-                setPendientesConfirm(pendientes.map(t => t.etiqueta));
+        const estadoActual = (service.estado || '').toLowerCase();
+        const yaCerrado = estadoActual === 'ready' || estadoActual === 'delivered';
+
+        if (!yaCerrado) {
+            // Junta lo que quedó sin tildar: trabajos del checklist (si está activo)
+            // + tareas libres del mecánico (si están activas).
+            const pendDerivadas = avancesActivos(taller) ? trabajosPendientes(service).map(t => t.etiqueta) : [];
+            const pendLibres = tareasActivas(taller) ? tareasLibresPendientes(service).map(t => t.texto) : [];
+            const pendientes = [...pendDerivadas, ...pendLibres];
+
+            if (pendientes.length > 0) {
+                // Candado (poka-yoke): si el taller lo prendió, NO se puede finalizar.
+                if (bloqueoFinalizacionActivo(taller)) {
+                    setBloqueoPendientes(pendientes);
+                    return;
+                }
+                // Sin candado: solo avisa, pero deja finalizar igual.
+                setPendientesConfirm(pendientes);
                 return;
             }
         }
@@ -833,6 +847,32 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
                     confirmLabel="Finalizar igual"
                     confirmClassName="bg-green-600 hover:bg-green-700 text-white"
                     cancelLabel="Volver al checklist"
+                />
+            )}
+
+            {/* Candado (poka-yoke): faltan tareas → NO deja finalizar */}
+            {bloqueoPendientes && (
+                <ConfirmDialog
+                    open={!!bloqueoPendientes}
+                    onClose={() => setBloqueoPendientes(null)}
+                    onConfirm={() => { setBloqueoPendientes(null); onClose(); }}
+                    icon={<Lock className="h-7 w-7" />}
+                    iconClassName="bg-amber-100 text-amber-600"
+                    title={`Faltan ${bloqueoPendientes.length} tarea(s) por completar`}
+                    description={
+                        <div className="text-left bg-slate-50 border border-slate-200 rounded-lg p-3 max-h-40 overflow-y-auto">
+                            <p className="text-slate-500 mb-2 text-xs">Este taller pide completar todas las tareas antes de finalizar el service:</p>
+                            {bloqueoPendientes.map((etiqueta, i) => (
+                                <div key={i} className="flex items-start gap-2 py-0.5">
+                                    <span className="text-amber-500 mt-0.5">•</span>
+                                    <span className="text-slate-700">{etiqueta}</span>
+                                </div>
+                            ))}
+                        </div>
+                    }
+                    confirmLabel="Ir a la lista de tareas"
+                    confirmClassName="bg-primary hover:bg-primary/90 text-primary-foreground"
+                    cancelLabel="Volver"
                 />
             )}
         </Dialog>

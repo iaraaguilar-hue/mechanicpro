@@ -21,6 +21,8 @@ const FEATURES: Record<string, Plan[]> = {
     rich_text: ['Pro', 'Expert'],
     /** Modo "Avances por etapas" en la Mesa de Trabajo. */
     etapas: ['Pro', 'Expert'],
+    /** Tareas libres del service + candado de finalización. Todos los planes. */
+    tareas_service: ['Sport', 'Pro', 'Expert'],
 };
 
 export type Feature = keyof typeof FEATURES;
@@ -81,4 +83,35 @@ export function trabajosPendientes(servicio?: {
 } | null): TrabajoChecklist[] {
     const data = servicio?.etapas_data || {};
     return trabajosDe(servicio).filter(t => !data[t.clave]);
+}
+
+// ─────────────────────────────────────────────────────────────
+// "Tareas del service" (opt-in por taller — pedido Cecilia/Cronobikes 26-jul).
+// Tareas LIBRES que el mecánico anota para no olvidarse ("colocar plato 34").
+// A diferencia del checklist de trabajos (derivado del catálogo, Pro/Expert),
+// estas son texto libre, para TODOS los planes, y pueden BLOQUEAR la
+// finalización (poka-yoke): sin todas tildadas, no se habilita el botón verde.
+// Config en talleres.config_notificaciones: { tareas_habilitado, bloquear_finalizacion }.
+// Data por orden en servicios.tareas_extra: [{ id, texto, hecha }].
+// ─────────────────────────────────────────────────────────────
+
+export interface TareaService {
+    id: string;
+    texto: string;
+    hecha: boolean;
+}
+
+/** true solo si el taller activó las tareas del service en Configuración. */
+export function tareasActivas(taller?: { plan_actual?: string; config_notificaciones?: any } | null): boolean {
+    return tieneFeature(taller ?? null, 'tareas_service') && taller?.config_notificaciones?.tareas_habilitado === true;
+}
+
+/** true si además prendió el candado: no se puede finalizar con tareas sin tildar. */
+export function bloqueoFinalizacionActivo(taller?: { plan_actual?: string; config_notificaciones?: any } | null): boolean {
+    return tareasActivas(taller) && taller?.config_notificaciones?.bloquear_finalizacion === true;
+}
+
+/** Tareas libres de una orden que todavía no se tildaron. */
+export function tareasLibresPendientes(servicio?: { tareas_extra?: TareaService[] | null } | null): TareaService[] {
+    return (servicio?.tareas_extra || []).filter(t => !t.hecha);
 }

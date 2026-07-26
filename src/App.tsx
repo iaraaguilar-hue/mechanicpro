@@ -16,7 +16,7 @@ import Metrics from "./pages/Metrics";
 import SuperAdmin from "./pages/SuperAdmin";
 import Configuracion from "./pages/Configuracion";
 import { Button } from "@/components/ui/button";
-import { Settings, Wrench, History, Bell, LogOut, BarChart3, Trash2, Menu, User, X, MessageSquare, Users } from "lucide-react";
+import { Settings, Wrench, History, Repeat, LogOut, BarChart3, Trash2, Menu, User, X, MessageSquare, Users } from "lucide-react";
 import { tieneFeature } from "@/lib/planFeatures";
 
 
@@ -28,10 +28,10 @@ import { hexToHslSpaceSeparated } from "@/lib/utils";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { useIdleTimeout } from "@/hooks/useIdleTimeout";
 import { UpdateBanner } from "@/components/UpdateBanner";
+import { NotificationBell } from "@/components/NotificationBell";
 
 function AppContent() {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [bellOpen, setBellOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { updateAvailable } = useVersionCheck();
   const session = useAuthStore((state) => state.session);
@@ -168,33 +168,15 @@ function AppContent() {
           )}
         </div>
         <div className="flex items-center gap-1 -mr-2">
-          {/* Bell dropdown */}
-          <div className="relative">
-            <button
-              className="p-2 text-slate-600 relative"
-              aria-label="Notificaciones"
-              onClick={() => { setBellOpen(o => !o); setUserMenuOpen(false); }}
-            >
-              <Bell size={20} />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#f25a30] rounded-full border border-white"></span>
-            </button>
-            {bellOpen && (
-              <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-100 z-[60] py-3 px-4 animate-in fade-in slide-in-from-top-1 duration-150">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Notificaciones</p>
-                <div className="flex flex-col items-center py-4 text-slate-400 gap-1">
-                  <Bell size={22} className="opacity-30" />
-                  <p className="text-xs">No hay notificaciones nuevas</p>
-                </div>
-              </div>
-            )}
-          </div>
+          {/* Centro de notificaciones */}
+          <NotificationBell variant="mobile" />
 
           {/* User dropdown */}
           <div className="relative">
             <button
               className="p-2 text-slate-600"
               aria-label="Perfil"
-              onClick={() => { setUserMenuOpen(o => !o); setBellOpen(false); }}
+              onClick={() => { setUserMenuOpen(o => !o); }}
             >
               <User size={20} />
             </button>
@@ -270,7 +252,7 @@ function AppContent() {
               <DrawerLink to="/" icon={<Wrench size={20} />} label="Taller Activo" onClick={closeDrawer} />
               <DrawerLink to="/clientes" icon={<Users size={20} />} label="Clientes" onClick={closeDrawer} />
               <DrawerLink to="/history" icon={<History size={20} />} label="Historial" onClick={closeDrawer} />
-              <DrawerLink to="/reminders" icon={<Bell size={20} />} label="Motor Retención" onClick={closeDrawer} />
+              <DrawerLink to="/reminders" icon={<Repeat size={20} />} label="Motor Retención" onClick={closeDrawer} />
               <DrawerLink to="/metrics" icon={<BarChart3 size={20} />} label="Métricas" onClick={closeDrawer} />
               <DrawerLink to="/admin" icon={<MessageSquare size={20} />} label="Contactar" onClick={closeDrawer} />
               {rol?.toLowerCase()?.trim() !== 'super_admin' && (
@@ -320,10 +302,11 @@ function AppContent() {
         </div>
 
         <div className="flex-1 flex flex-col items-center space-y-4 justify-start">
+          <NotificationBell variant="desktop" />
           <Link to="/"><NavButton icon={<Wrench />} label="Taller Activo" /></Link>
           <Link to="/clientes"><NavButton icon={<Users />} label="Clientes" /></Link>
           <Link to="/history"><NavButton icon={<History />} label="Historial" /></Link>
-          <Link to="/reminders"><NavButton icon={<Bell />} label="Retención" /></Link>
+          <Link to="/reminders"><NavButton icon={<Repeat />} label="Retención" /></Link>
           <Link to="/metrics"><NavButton icon={<BarChart3 />} label="Métricas" /></Link>
           <Link to="/admin"><NavButton icon={<MessageSquare />} label="Contactar" /></Link>
           {rol?.toLowerCase()?.trim() !== 'super_admin' && (

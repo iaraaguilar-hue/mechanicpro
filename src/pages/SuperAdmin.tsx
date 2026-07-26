@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Pencil, Loader2, Save, UploadCloud, Plus, Trash2, Edit2, Check, X, AlertCircle } from 'lucide-react';
+import { NovedadesAdmin } from '@/components/NovedadesAdmin';
 import { RichTextEditor } from '@/components/RichTextEditor';
 
 const HTTPS_URL_REGEX = /^https:\/\/.+/;
@@ -326,6 +327,8 @@ export default function SuperAdmin() {
                     Gestión de Talleres (Multi-Tenant White-Labeling).
                 </p>
             </div>
+
+            <NovedadesAdmin />
 
             <Card>
                 <CardHeader>

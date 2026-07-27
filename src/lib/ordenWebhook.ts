@@ -14,3 +14,28 @@ export const PROBIKES_TALLER_ID = 'f3844f35-cb20-420d-93e7-a940a50a68a1';
 export function shouldFireOrdenWebhook(tallerId: string | null | undefined): boolean {
   return tallerId === PROBIKES_TALLER_ID;
 }
+
+// Webhook "bici entregada" (Probikes libro diario, 27-jul-2026).
+// Al FINALIZAR el service generamos la orden y bajamos stock (VITE_N8N_ORDEN_WEBHOOK_URL).
+// Pero la bici a veces se entrega y se cobra días después. Cuando el cliente RETIRA la
+// bici (estado 'delivered') avisamos a la automatización de Probikes para que actualice
+// la FECHA de la orden al día real de entrega. Mismo guard que el webhook de orden: solo
+// Probikes dispara (otros talleres son autosuficientes).
+//
+// Vive en la MISMA instancia de n8n que generar-orden (mismo túnel ngrok de Mica), solo
+// cambia el path → derivamos la URL del webhook de orden para tener UNA fuente de verdad
+// del host: si el túnel cambia, se actualiza una sola variable y ambos webhooks siguen.
+// Path fijado por Mica el 27-jul-2026. Override opcional: VITE_N8N_ENTREGADO_WEBHOOK_URL.
+const ENTREGADO_WEBHOOK_PATH = '/webhook/mechanic-pro-entregado';
+
+export function getEntregadoWebhookUrl(): string | null {
+  const override = import.meta.env.VITE_N8N_ENTREGADO_WEBHOOK_URL;
+  if (override) return override;
+  const base = import.meta.env.VITE_N8N_ORDEN_WEBHOOK_URL;
+  if (!base) return null;
+  try {
+    return new URL(ENTREGADO_WEBHOOK_PATH, base).toString();
+  } catch {
+    return null;
+  }
+}

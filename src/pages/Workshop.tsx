@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
-import { shouldFireOrdenWebhook } from "@/lib/ordenWebhook";
+import { shouldFireOrdenWebhook, getEntregadoWebhookUrl } from "@/lib/ordenWebhook";
 import { EtapasChecklist } from "@/components/EtapasChecklist";
 import { avancesActivos, trabajosPendientes, tareasActivas, bloqueoFinalizacionActivo, tareasLibresPendientes } from "@/lib/planFeatures";
 
@@ -133,6 +133,25 @@ export default function Workshop() {
                 estado: 'delivered',
                 fecha_entregado: new Date().toISOString(),
             });
+
+            // Webhook "bici entregada" → Probikes actualiza la fecha de la orden al día
+            // real en que el cliente la retiró (a veces se cobra días después de finalizar).
+            // Mismo guard que el webhook de orden: SOLO Probikes toca su automatización;
+            // otros talleres son autosuficientes. Ver lib/ordenWebhook.ts.
+            // numero_orden va con el MISMO formato que se mandó al finalizar (#0042) para
+            // que la orden matchee en la base de Probikes.
+            if (shouldFireOrdenWebhook(taller_id)) {
+                const url = getEntregadoWebhookUrl();
+                if (url) {
+                    const payload = { numero_orden: formatOrdenNumber(job.numero_orden, job.service_id) };
+                    fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                        keepalive: true,
+                    }).catch(e => console.error('Webhook entregado Error (Fetch):', e));
+                }
+            }
         } catch (e: any) {
             console.error("Error entregando:", e);
             alert(`Error al registrar la entrega: ${e.message}`);

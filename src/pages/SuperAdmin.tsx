@@ -53,10 +53,15 @@ export default function SuperAdmin() {
     const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState({ nombre: '', descripcion: '', precio: '' });
 
-    // Webhook ERP URL state
+    // Webhook ERP URL state (webhook del TRIGGER de la base, patrón Contabilium)
     const [webhookErpUrl, setWebhookErpUrl] = useState('');
     const [webhookErpUrlError, setWebhookErpUrlError] = useState<string | null>(null);
     const [loadingWebhook, setLoadingWebhook] = useState(false);
+    // Webhooks del FRONTEND (Probikes libro diario): orden al finalizar + fecha al entregar.
+    const [webhookOrdenUrl, setWebhookOrdenUrl] = useState('');
+    const [webhookOrdenUrlError, setWebhookOrdenUrlError] = useState<string | null>(null);
+    const [webhookEntregadoUrl, setWebhookEntregadoUrl] = useState('');
+    const [webhookEntregadoUrlError, setWebhookEntregadoUrlError] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchTalleres = async () => {
@@ -112,15 +117,19 @@ export default function SuperAdmin() {
             setLoadingWebhook(true);
             const { data, error } = await supabase
                 .from('taller_configuraciones')
-                .select('webhook_erp_url')
+                .select('webhook_erp_url, webhook_orden_url, webhook_entregado_url')
                 .eq('taller_id', tallerId)
                 .maybeSingle();
 
             if (error) throw error;
             setWebhookErpUrl(data?.webhook_erp_url || '');
+            setWebhookOrdenUrl(data?.webhook_orden_url || '');
+            setWebhookEntregadoUrl(data?.webhook_entregado_url || '');
             setWebhookErpUrlError(null);
+            setWebhookOrdenUrlError(null);
+            setWebhookEntregadoUrlError(null);
         } catch (err: any) {
-            console.error('Error fetching webhook_erp_url:', err.message);
+            console.error('Error fetching webhooks de taller_configuraciones:', err.message);
         } finally {
             setLoadingWebhook(false);
         }
@@ -194,9 +203,17 @@ export default function SuperAdmin() {
     const handleSave = async () => {
         if (!editingTaller) return;
 
-        // Validate webhook_erp_url if provided
+        // Validate webhook URLs if provided (todas HTTPS)
         if (webhookErpUrl.trim() && !HTTPS_URL_REGEX.test(webhookErpUrl.trim())) {
             setWebhookErpUrlError('La URL debe comenzar con https:// y ser válida.');
+            return;
+        }
+        if (webhookOrdenUrl.trim() && !HTTPS_URL_REGEX.test(webhookOrdenUrl.trim())) {
+            setWebhookOrdenUrlError('La URL debe comenzar con https:// y ser válida.');
+            return;
+        }
+        if (webhookEntregadoUrl.trim() && !HTTPS_URL_REGEX.test(webhookEntregadoUrl.trim())) {
+            setWebhookEntregadoUrlError('La URL debe comenzar con https:// y ser válida.');
             return;
         }
 
@@ -216,26 +233,31 @@ export default function SuperAdmin() {
 
             if (error) throw error;
 
-            // Upsert webhook_erp_url in taller_configuraciones (schema flat: una fila por taller).
-            const trimmedUrl = webhookErpUrl.trim();
+            // Upsert de los webhooks en taller_configuraciones (schema flat: una fila por taller).
             const { error: cfgError } = await supabase
                 .from('taller_configuraciones')
                 .upsert(
                     {
                         taller_id: editingTaller.id,
-                        webhook_erp_url: trimmedUrl || null,
+                        webhook_erp_url: webhookErpUrl.trim() || null,
+                        webhook_orden_url: webhookOrdenUrl.trim() || null,
+                        webhook_entregado_url: webhookEntregadoUrl.trim() || null,
                     },
                     { onConflict: 'taller_id' }
                 );
             if (cfgError) {
-                console.error('Error guardando webhook_erp_url:', cfgError.message);
-                alert('Error guardando webhook ERP URL: ' + cfgError.message);
+                console.error('Error guardando webhooks:', cfgError.message);
+                alert('Error guardando los webhooks: ' + cfgError.message);
             }
 
             setTalleres(talleres.map(t => t.id === editingTaller.id ? editingTaller : t));
             setEditingTaller(null);
             setWebhookErpUrl('');
             setWebhookErpUrlError(null);
+            setWebhookOrdenUrl('');
+            setWebhookOrdenUrlError(null);
+            setWebhookEntregadoUrl('');
+            setWebhookEntregadoUrlError(null);
         } catch (error: any) {
             console.error("Error guardando taller:", error.message);
             alert("Error guardando taller: " + error.message);
@@ -555,6 +577,59 @@ export default function SuperAdmin() {
                                             <div className="flex items-center gap-1.5 text-red-600 text-xs font-medium">
                                                 <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
                                                 {webhookErpUrlError}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Webhooks del libro diario (Probikes). El front los dispara al
+                                        finalizar (genera la orden) y al entregar (actualiza la fecha).
+                                        Cargalos a mano acá y no hace falta redeployar si cambia el túnel. */}
+                                    <div className="space-y-2 pt-2 border-t">
+                                        <Label htmlFor="webhook_orden_url">Webhook — Generar orden (al finalizar)</Label>
+                                        <p className="text-xs text-muted-foreground -mt-1">
+                                            Se dispara cuando el service pasa a <b>Finalizado</b>: genera la orden de venta y baja el stock. Solo HTTPS.
+                                        </p>
+                                        <Input
+                                            id="webhook_orden_url"
+                                            name="webhook_orden_url"
+                                            value={webhookOrdenUrl}
+                                            onChange={(e) => {
+                                                setWebhookOrdenUrl(e.target.value);
+                                                if (webhookOrdenUrlError) setWebhookOrdenUrlError(null);
+                                            }}
+                                            placeholder="https://....ngrok-free.dev/webhook/generar-orden"
+                                            className={`font-mono text-sm ${webhookOrdenUrlError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+                                            disabled={loadingWebhook}
+                                        />
+                                        {webhookOrdenUrlError && (
+                                            <div className="flex items-center gap-1.5 text-red-600 text-xs font-medium">
+                                                <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                                                {webhookOrdenUrlError}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="webhook_entregado_url">Webhook — Bici entregada (al retirar)</Label>
+                                        <p className="text-xs text-muted-foreground -mt-1">
+                                            Se dispara cuando el cliente <b>retira</b> la bici: actualiza la fecha de la orden al día de entrega. Si lo dejás vacío, se deriva del host del webhook de arriba. Solo HTTPS.
+                                        </p>
+                                        <Input
+                                            id="webhook_entregado_url"
+                                            name="webhook_entregado_url"
+                                            value={webhookEntregadoUrl}
+                                            onChange={(e) => {
+                                                setWebhookEntregadoUrl(e.target.value);
+                                                if (webhookEntregadoUrlError) setWebhookEntregadoUrlError(null);
+                                            }}
+                                            placeholder="https://....ngrok-free.dev/webhook/mechanic-pro-entregado"
+                                            className={`font-mono text-sm ${webhookEntregadoUrlError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+                                            disabled={loadingWebhook}
+                                        />
+                                        {webhookEntregadoUrlError && (
+                                            <div className="flex items-center gap-1.5 text-red-600 text-xs font-medium">
+                                                <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                                                {webhookEntregadoUrlError}
                                             </div>
                                         )}
                                     </div>

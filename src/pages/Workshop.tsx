@@ -71,6 +71,9 @@ export default function Workshop() {
     const [searchParams, setSearchParams] = useSearchParams();
     // Confirmación linda (estilo MP) en vez de window.confirm
     const [confirming, setConfirming] = useState<{ kind: 'deliver' | 'reopen'; job: DashboardJob } | null>(null);
+    // URLs de webhook del libro diario (Probikes), que Iara carga a mano desde SuperAdmin.
+    // Si el taller no las cargó, cae al fallback de la env / derivación (lib/ordenWebhook.ts).
+    const [webhookUrls, setWebhookUrls] = useState<{ orden: string | null; entregado: string | null }>({ orden: null, entregado: null });
 
     // Compute active jobs from store (replaces getDashboardJobs)
     // 'ready' NO está acá: la bici finalizada queda en el Taller Activo como
@@ -119,6 +122,23 @@ export default function Workshop() {
         setSearchParams(searchParams, { replace: true });
     }, [searchParams, jobs, isHydrating, setSearchParams]);
 
+    // Cargar las URLs de webhook configuradas (solo Probikes las dispara desde el front).
+    // Editable en SuperAdmin → si cambia el túnel de Mica, Iara lo actualiza sin redeploy.
+    useEffect(() => {
+        if (!taller_id || !shouldFireOrdenWebhook(taller_id)) return;
+        supabase
+            .from('taller_configuraciones')
+            .select('webhook_orden_url, webhook_entregado_url')
+            .eq('taller_id', taller_id)
+            .maybeSingle()
+            .then(({ data }) => {
+                setWebhookUrls({
+                    orden: data?.webhook_orden_url?.trim() || null,
+                    entregado: data?.webhook_entregado_url?.trim() || null,
+                });
+            });
+    }, [taller_id]);
+
     const handleRefresh = async () => {
         if (!taller_id) return;
         setIsRefetching(true);
@@ -141,7 +161,7 @@ export default function Workshop() {
             // numero_orden va con el MISMO formato que se mandó al finalizar (#0042) para
             // que la orden matchee en la base de Probikes.
             if (shouldFireOrdenWebhook(taller_id)) {
-                const url = getEntregadoWebhookUrl();
+                const url = webhookUrls.entregado || getEntregadoWebhookUrl();
                 if (url) {
                     const payload = { numero_orden: formatOrdenNumber(job.numero_orden, job.service_id) };
                     fetch(url, {
@@ -300,6 +320,7 @@ export default function Workshop() {
                     job={finalizingJob}
                     isOpen={!!finalizingJob}
                     onClose={() => { setFinalizingJob(null); handleRefresh(); }}
+                    ordenWebhookUrl={webhookUrls.orden}
                 />
             )}
 
@@ -637,7 +658,7 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
 }
 
 
-function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen: boolean, onClose: () => void }) {
+function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: DashboardJob, isOpen: boolean, onClose: () => void, ordenWebhookUrl: string | null }) {
     const servicios = useDataStore(s => s.servicios);
     const bicicletas = useDataStore(s => s.bicicletas);
     const clientes = useDataStore(s => s.clientes);
@@ -745,8 +766,9 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
                         // y no deben tocar la automatización de Probikes. Ver lib/ordenWebhook.ts.
                         // Guard anti-doble-disparo: si el service se reabrió y se volvió a
                         // finalizar, el stock ya se descontó la primera vez.
-                        if (shouldFireOrdenWebhook(taller_id) && !service.webhook_erp_disparado) {
-                            fetch(import.meta.env.VITE_N8N_ORDEN_WEBHOOK_URL, {
+                        const ordenUrl = ordenWebhookUrl || import.meta.env.VITE_N8N_ORDEN_WEBHOOK_URL;
+                        if (shouldFireOrdenWebhook(taller_id) && !service.webhook_erp_disparado && ordenUrl) {
+                            fetch(ordenUrl, {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify(payload),

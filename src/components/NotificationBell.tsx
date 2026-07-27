@@ -4,7 +4,8 @@ import { useDataStore } from '@/store/dataStore';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase';
 import { avancesActivos, tareasActivas, trabajosPendientes, tareasLibresPendientes } from '@/lib/planFeatures';
-import { calculateDaysRemaining } from '@/lib/utils';
+import { buildRetentionAlerts } from '@/lib/retentionAlerts';
+import { getNovedadesVistas, saveNovedadesVistas } from '@/lib/novedadesSeen';
 import { Bell, Wrench, PackageCheck, HeartPulse, Megaphone } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────
@@ -18,10 +19,6 @@ import { Bell, Wrench, PackageCheck, HeartPulse, Megaphone } from 'lucide-react'
 
 interface Novedad { id: string; titulo: string; cuerpo: string; fecha: string; activa: boolean; }
 
-const SEEN_KEY = 'mp_novedades_vistas';
-const getSeen = (): string[] => { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'); } catch { return []; } };
-const saveSeen = (ids: string[]) => { try { localStorage.setItem(SEEN_KEY, JSON.stringify(ids)); } catch { /* ignore */ } };
-
 const waLink = (phone: string | undefined, msg: string) =>
     `https://wa.me/${(phone || '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(msg)}`;
 
@@ -29,13 +26,14 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
     const [open, setOpen] = useState(false);
     const [tab, setTab] = useState<'pendientes' | 'novedades'>('pendientes');
     const [novedades, setNovedades] = useState<Novedad[]>([]);
-    const [seen, setSeen] = useState<string[]>(getSeen());
+    const [seen, setSeen] = useState<string[]>(getNovedadesVistas());
     const ref = useRef<HTMLDivElement>(null);
 
     const servicios = useDataStore(s => s.servicios);
     const recordatorios = useDataStore(s => s.recordatorios);
     const clientes = useDataStore(s => s.clientes);
     const bicicletas = useDataStore(s => s.bicicletas);
+    const carreras = useDataStore(s => s.carreras);
     const taller = useAuthStore(s => s.taller);
     const navigate = useNavigate();
 
@@ -73,21 +71,26 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
     // 2. Bicis listas para entregar → avisar al cliente.
     const paraAvisar = activos.filter(s => (s.estado || '').toLowerCase() === 'ready');
 
-    // 3. Mantenimiento vencido (recordatorios con vencimiento pasado).
-    const vencidos = recordatorios.filter(r =>
-        (r.estado || '').toLowerCase() !== 'completado' &&
-        r.fecha_vencimiento && calculateDaysRemaining(r.fecha_vencimiento) <= 0
-    );
+    // 3. Mantenimiento vencido (retención). MISMA fuente que la página de
+    //    Retención (buildRetentionAlerts) → respeta alertas_ocultas, así que
+    //    descartar un aviso en Retención baja este contador y queda coherente
+    //    al recargar. Antes esto filtraba `recordatorios` a mano e IGNORABA
+    //    alertas_ocultas (por eso el número no bajaba nunca).
+    const vencidos = buildRetentionAlerts({ recordatorios, bicicletas, clientes, servicios, carreras })
+        .filter(a => a.daysRemaining <= 0);
 
     const totalPendientes = conTareas.length + paraAvisar.length + vencidos.length;
     const noLeidas = novedades.filter(n => !seen.includes(n.id)).length;
     const badge = totalPendientes + noLeidas;
 
-    const irAlTaller = () => { setOpen(false); navigate('/'); };
+    // Acceso rápido (Tarea F): abrir la orden puntual para completar sus
+    // tareas. La notificación NO se descarta a mano: desaparece sola cuando
+    // el mecánico tilda la última tarea (se recomputa del store).
+    const abrirService = (serviceId: string) => { setOpen(false); navigate(`/?openService=${serviceId}`); };
     const verNovedades = () => {
         setTab('novedades');
         const ids = novedades.map(n => n.id);
-        setSeen(ids); saveSeen(ids);
+        setSeen(ids); saveNovedadesVistas(ids);
     };
 
     const panelPos = variant === 'desktop' ? 'fixed top-3 left-28' : 'absolute right-0 top-full mt-2';
@@ -150,12 +153,13 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
                                     {conTareas.map(({ s, pend }) => {
                                         const cli = clienteDe(s.bicicleta_id);
                                         return (
-                                            <button key={`t-${s.id}`} onClick={irAlTaller} className="w-full text-left flex items-start gap-2.5 p-2 rounded-lg hover:bg-slate-50 transition-colors">
-                                                <span className="mt-0.5 p-1.5 rounded-md bg-primary/10 text-primary shrink-0"><Wrench size={14} /></span>
+                                            <button key={`t-${s.id}`} onClick={() => abrirService(s.id)} className="w-full text-left flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-50 transition-colors group">
+                                                <span className="p-1.5 rounded-md bg-primary/10 text-primary shrink-0"><Wrench size={14} /></span>
                                                 <span className="flex-1 min-w-0">
                                                     <span className="block text-sm text-slate-700 font-medium truncate">{cli?.nombre || 'Cliente'}</span>
                                                     <span className="block text-xs text-slate-500">{pend} tarea{pend > 1 ? 's' : ''} sin completar</span>
                                                 </span>
+                                                <span className="shrink-0 text-[11px] font-semibold text-primary border border-primary/30 rounded-md px-2 py-1 group-hover:bg-primary/10">Resolver</span>
                                             </button>
                                         );
                                     })}
@@ -178,19 +182,19 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
                                         );
                                     })}
 
-                                    {vencidos.map(r => {
-                                        const cli = clienteDe(r.bicicleta_id);
-                                        const bike = bikeDe(r.bicicleta_id);
-                                        const msg = `Hola ${cli?.nombre || ''}! Pasó el tiempo recomendado para ${r.componente || 'el mantenimiento'} de tu ${bike?.marca || 'bici'}. ¿Coordinamos una revisión? 🔧`;
+                                    {vencidos.map(a => {
+                                        const msg = a.isPostCarrera
+                                            ? `Hola ${a.clientName}! ¿Cómo te fue en ${a.carreraName}? Contanos cómo se portó la bici 🚲`
+                                            : `Hola ${a.clientName}! Pasó el tiempo recomendado para ${a.component || 'el mantenimiento'} de tu ${a.bikeModel || 'bici'}. ¿Coordinamos una revisión? 🔧`;
                                         return (
-                                            <div key={`m-${r.id}`} className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                                            <div key={`m-${a.id}`} className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-slate-50 transition-colors">
                                                 <span className="mt-0.5 p-1.5 rounded-md bg-amber-100 text-amber-600 shrink-0"><HeartPulse size={14} /></span>
                                                 <span className="flex-1 min-w-0">
-                                                    <span className="block text-sm text-slate-700 font-medium truncate">{cli?.nombre || 'Cliente'}</span>
-                                                    <span className="block text-xs text-slate-500 truncate">Mantenimiento: {r.componente}</span>
+                                                    <span className="block text-sm text-slate-700 font-medium truncate">{a.clientName || 'Cliente'}</span>
+                                                    <span className="block text-xs text-slate-500 truncate">{a.isPostCarrera ? 'Seguimiento' : 'Mantenimiento'}: {a.component}</span>
                                                 </span>
-                                                {cli?.telefono && (
-                                                    <a href={waLink(cli.telefono, msg)} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="shrink-0 text-[11px] font-semibold text-amber-600 border border-amber-200 rounded-md px-2 py-1 hover:bg-amber-50">WhatsApp</a>
+                                                {a.clientPhone && (
+                                                    <a href={waLink(a.clientPhone, msg)} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="shrink-0 text-[11px] font-semibold text-amber-600 border border-amber-200 rounded-md px-2 py-1 hover:bg-amber-50">WhatsApp</a>
                                                 )}
                                             </div>
                                         );

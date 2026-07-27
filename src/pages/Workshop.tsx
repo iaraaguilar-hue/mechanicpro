@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useDataStore } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
 import { supabase } from "@/lib/supabase";
@@ -65,6 +65,10 @@ export default function Workshop() {
     const [editingJob, setEditingJob] = useState<DashboardJob | null>(null);
     const [finalizingJob, setFinalizingJob] = useState<DashboardJob | null>(null);
     const [isRefetching, setIsRefetching] = useState(false);
+    // "Recibir Bici" abre el wizard directo (identificación del cliente),
+    // sin la pantalla intermedia de Recepción (Tarea E).
+    const [newServiceOpen, setNewServiceOpen] = useState(false);
+    const [searchParams, setSearchParams] = useSearchParams();
     // Confirmación linda (estilo MP) en vez de window.confirm
     const [confirming, setConfirming] = useState<{ kind: 'deliver' | 'reopen'; job: DashboardJob } | null>(null);
 
@@ -100,6 +104,20 @@ export default function Workshop() {
             return new Date(a.date_out).getTime() - new Date(b.date_out).getTime();
         });
     }, [servicios, bicicletas, clientes]);
+
+    // Acceso rápido desde la campana (Tarea F): /?openService=<id> abre la
+    // orden puntual para completar sus tareas. Se limpia el query param al abrir.
+    // Si el store todavía no hidrató (recarga directa de la URL), esperamos:
+    // no borramos el param hasta poder buscar la orden.
+    useEffect(() => {
+        const openId = searchParams.get('openService');
+        if (!openId) return;
+        const job = jobs.find(j => j.service_id === openId);
+        if (job) setEditingJob(job);
+        else if (isHydrating) return; // aún cargando → reintenta cuando hidrate
+        searchParams.delete('openService');
+        setSearchParams(searchParams, { replace: true });
+    }, [searchParams, jobs, isHydrating, setSearchParams]);
 
     const handleRefresh = async () => {
         if (!taller_id) return;
@@ -154,12 +172,14 @@ export default function Workshop() {
                     <p className="text-muted-foreground mt-1">Trabajos en curso y bicis listas para entregar.</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                    {/* Acceso rápido (feedback 11 a Fondo): Recepción salió del menú lateral */}
-                    <Link to="/reception">
-                        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
-                            <ClipboardList className="h-4 w-4" /> Recibir Bici
-                        </Button>
-                    </Link>
+                    {/* Recibir Bici abre el wizard directo (identificación del cliente),
+                        sin pantalla intermedia de Recepción (Tarea E). */}
+                    <Button
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+                        onClick={() => setNewServiceOpen(true)}
+                    >
+                        <ClipboardList className="h-4 w-4" /> Recibir Bici
+                    </Button>
                     <Button variant="outline" size="icon" onClick={handleRefresh} title="Recargar datos">
                         <RefreshCcw className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
                     </Button>
@@ -244,6 +264,15 @@ export default function Workshop() {
                     onClose={() => setEditingJob(null)}
                     preSelectedServiceId={editingJob.service_id}
                     onSuccess={() => { }}
+                />
+            )}
+
+            {/* Nuevo service directo desde "Recibir Bici" (Tarea E) */}
+            {newServiceOpen && (
+                <ServiceModal
+                    isOpen={newServiceOpen}
+                    onClose={() => setNewServiceOpen(false)}
+                    onSuccess={() => setNewServiceOpen(false)}
                 />
             )}
 
@@ -799,7 +828,9 @@ function FinalizeJobDialog({ job, isOpen, onClose }: { job: DashboardJob, isOpen
                         </div>
                     </div>
 
-                    {!isCompleted && (
+                    {/* Diagnóstico al finalizar: se muestra salvo que el taller haya
+                        elegido registrarlo SOLO 'durante' el service (Tarea G-pref). */}
+                    {!isCompleted && (taller?.config_notificaciones?.momento_diagnostico || 'final') !== 'durante' && (
                         <div className="pt-2">
                             <HealthCheckWidget onChange={setHealthCheckData} />
                         </div>

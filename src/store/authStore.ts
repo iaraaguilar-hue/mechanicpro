@@ -11,7 +11,7 @@ export interface TallerData {
     politica_pago?: string;
     plan_actual?: string;
     config_avances?: { habilitado: boolean; etapas: string[] } | null;
-    config_notificaciones?: { tareas_habilitado?: boolean; bloquear_finalizacion?: boolean } | null;
+    config_notificaciones?: { tareas_habilitado?: boolean; bloquear_finalizacion?: boolean; momento_diagnostico?: 'final' | 'durante' | 'ambos' } | null;
     [key: string]: any;
 }
 

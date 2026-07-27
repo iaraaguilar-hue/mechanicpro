@@ -16,6 +16,10 @@ import { Search, User, Bike as BikeIcon, Plus, CheckCircle, Wrench, Pencil, Tras
 import { AddClientDialog } from "@/components/AddClientDialog";
 import { AddBikeDialog } from "@/components/AddBikeDialog";
 import { EditBikeDialog } from "@/components/EditBikeDialog";
+import { TareasServiceEditor } from "@/components/TareasServiceEditor";
+import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
+import { NuevoBadge } from "@/components/NuevoBadge";
+import { type TareaService } from "@/lib/planFeatures";
 
 // Service types (const object pattern for erasableSyntaxOnly compatibility)
 // export const ServiceType = {
@@ -295,11 +299,22 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [fechaEntrega, setFechaEntrega] = useState("");
     const [selectedCarreraId, setSelectedCarreraId] = useState<string | null>(null);
+    // Tareas libres "A realizar" cargadas en el mismo paso (Tarea G).
+    const [tareasExtra, setTareasExtra] = useState<TareaService[]>([]);
+    // Diagnóstico durante el service (Tarea G-pref): avisos de mantenimiento
+    // futuro que el mecánico registra mientras trabaja, no solo al finalizar.
+    const [healthCheckData, setHealthCheckData] = useState<HealthCheckData[]>([]);
 
     const servicios = useDataStore(s => s.servicios);
     const createServicio = useDataStore(s => s.createServicio);
     const updateServicio = useDataStore(s => s.updateServicio);
+    const upsertRecordatorios = useDataStore(s => s.upsertRecordatorios);
     const taller_id = useAuthStore(s => s.taller_id);
+    const taller = useAuthStore(s => s.taller);
+
+    // ¿Se puede registrar diagnóstico DURANTE el service? (preferencia del taller)
+    const momentoDiag = taller?.config_notificaciones?.momento_diagnostico || 'final';
+    const verDiagnostico = !!serviceId && (momentoDiag === 'durante' || momentoDiag === 'ambos');
 
     // Fetch config and existing services
     useEffect(() => {
@@ -349,6 +364,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
         }
 
         setSelectedCarreraId(existing.carrera_id || null);
+        setTareasExtra((existing.tareas_extra as any) || []);
     }, [serviceId, servicios]);
 
     // Pre-selects the first catalog item ONLY when creating a new service (not editing).
@@ -402,7 +418,20 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                     precio_total: totalPrice,
                     fecha_entrega: fechaEntrega || null,
                     carrera_id: selectedCarreraId || null,
+                    tareas_extra: tareasExtra,
                 });
+                // Diagnóstico durante el service → crea recordatorios de Retención
+                // (mismo formato que al finalizar). Solo si la preferencia lo permite.
+                if (verDiagnostico && healthCheckData.length > 0 && bike?.id && taller_id) {
+                    await upsertRecordatorios(healthCheckData.map(item => ({
+                        taller_id,
+                        bicicleta_id: bike.id,
+                        componente: item.component,
+                        fecha_vencimiento: item.dueDate,
+                        fecha_asignacion: new Date().toISOString(),
+                        estado: 'Pendiente',
+                    })));
+                }
                 setSuccessMessage(`Servicio actualizado correctamente.`);
             } else {
                 // CREATE
@@ -418,6 +447,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                     precio_total: totalPrice,
                     fecha_entrega: fechaEntrega || null,
                     carrera_id: selectedCarreraId || null,
+                    tareas_extra: tareasExtra,
                 });
                 setSuccessMessage(`Servicio ${formatOrdenNumber(created.numero_orden, created.id)} creado con éxito.`);
             }
@@ -441,6 +471,8 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                         setServiceType("");
                         setFechaEntrega("");
                         setSelectedCarreraId(null);
+                        setTareasExtra([]);
+                        setHealthCheckData([]);
                         if (onReset) onReset();
                         onSuccess();
                     }}
@@ -563,6 +595,14 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                     </div>
                 </div>
 
+                {/* A realizar — tareas en el mismo paso (Tarea G) */}
+                <TareasServiceEditor
+                    tipoServicio={serviceType}
+                    itemsExtra={extraItems}
+                    tareas={tareasExtra}
+                    onChange={setTareasExtra}
+                />
+
                 {/* Total & Notes */}
                 <div className="flex justify-between items-center pt-4 border-t border-dashed">
                     <span className="text-xl font-bold">Total Estimado</span>
@@ -596,6 +636,20 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                         onSelect={setSelectedCarreraId}
                     />
                 </div>
+
+                {/* Diagnóstico durante el service (preferencia del taller, Tarea G-pref) */}
+                {verDiagnostico && (
+                    <div className="space-y-2">
+                        <Label className="text-lg font-semibold flex items-center gap-2">
+                            Diagnóstico de mantenimiento
+                            <NuevoBadge feature="registro-diagnostico" />
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                            Registrá ahora lo que veas mientras trabajás. Se guarda como aviso a futuro en Retención.
+                        </p>
+                        <HealthCheckWidget onChange={setHealthCheckData} />
+                    </div>
+                )}
             </div>
 
             {/* Footer */}

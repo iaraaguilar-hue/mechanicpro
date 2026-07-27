@@ -1,13 +1,11 @@
 
 import { useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route, Link, useNavigate } from "react-router-dom";
-import Reception from "./pages/Reception";
+import { BrowserRouter, Routes, Route, Link, Navigate, useNavigate } from "react-router-dom";
 import Workshop from "./pages/Workshop";
 import HomePage from "./pages/Home";
 import ServiceJob from "./pages/ServiceJob";
 import BikeDetail from "./pages/BikeDetail";
 import HistoryPage from "./pages/History";
-import Admin from "./pages/Admin";
 import RetentionEngine from "./pages/RetentionEngine";
 import LoginScreen from "./pages/LoginScreen";
 import UpdatePasswordScreen from "./pages/UpdatePasswordScreen";
@@ -16,7 +14,7 @@ import Metrics from "./pages/Metrics";
 import SuperAdmin from "./pages/SuperAdmin";
 import Configuracion from "./pages/Configuracion";
 import { Button } from "@/components/ui/button";
-import { Settings, Wrench, History, Repeat, LogOut, BarChart3, Trash2, Menu, User, X, MessageSquare, Users } from "lucide-react";
+import { Settings, Wrench, History, Repeat, LogOut, BarChart3, Trash2, Menu, User, X, Users } from "lucide-react";
 import { tieneFeature } from "@/lib/planFeatures";
 
 
@@ -29,6 +27,7 @@ import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { useIdleTimeout } from "@/hooks/useIdleTimeout";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { NotificationBell } from "@/components/NotificationBell";
+import { NovedadesPopup } from "@/components/NovedadesPopup";
 
 function AppContent() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -150,6 +149,8 @@ function AppContent() {
       {/* 🔒 Idle-timeout guardian — active only when session exists */}
       <IdleGuard />
       {updateAvailable && <UpdateBanner />}
+      {/* Pop-up de novedades al abrir la app — 1 vez por dispositivo (Tarea C) */}
+      <NovedadesPopup />
 
       {/* ── MOBILE HEADER (visible only on < md) ── */}
       <header className="flex md:hidden items-center justify-between px-4 py-3 bg-white border-b border-slate-200 sticky top-0 z-50">
@@ -187,7 +188,7 @@ function AppContent() {
                   <p className="text-[10px] text-slate-400 truncate">{session?.user?.email}</p>
                 </div>
                 <Link
-                  to="/admin"
+                  to="/configuracion"
                   onClick={() => setUserMenuOpen(false)}
                   className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                 >
@@ -252,9 +253,8 @@ function AppContent() {
               <DrawerLink to="/" icon={<Wrench size={20} />} label="Taller Activo" onClick={closeDrawer} />
               <DrawerLink to="/clientes" icon={<Users size={20} />} label="Clientes" onClick={closeDrawer} />
               <DrawerLink to="/history" icon={<History size={20} />} label="Historial" onClick={closeDrawer} />
-              <DrawerLink to="/reminders" icon={<Repeat size={20} />} label="Motor Retención" onClick={closeDrawer} />
+              <DrawerLink to="/reminders" icon={<Repeat size={20} />} label="Retención" onClick={closeDrawer} />
               <DrawerLink to="/metrics" icon={<BarChart3 size={20} />} label="Métricas" onClick={closeDrawer} />
-              <DrawerLink to="/admin" icon={<MessageSquare size={20} />} label="Contactar" onClick={closeDrawer} />
               {rol?.toLowerCase()?.trim() !== 'super_admin' && (
                 <DrawerLink to="/configuracion" icon={<Settings size={20} />} label="Configuración" onClick={closeDrawer} />
               )}
@@ -308,7 +308,6 @@ function AppContent() {
           <Link to="/history"><NavButton icon={<History />} label="Historial" /></Link>
           <Link to="/reminders"><NavButton icon={<Repeat />} label="Retención" /></Link>
           <Link to="/metrics"><NavButton icon={<BarChart3 />} label="Métricas" /></Link>
-          <Link to="/admin"><NavButton icon={<MessageSquare />} label="Contactar" /></Link>
           {rol?.toLowerCase()?.trim() !== 'super_admin' && (
             <Link to="/configuracion"><NavButton icon={<Settings />} label="Configuración" /></Link>
           )}
@@ -341,7 +340,6 @@ function AppContent() {
           <Route path="/" element={<Workshop />} />
           <Route path="/clientes" element={<HomePage />} />
           <Route path="/update-password" element={<UpdatePasswordScreen />} />
-          <Route path="/reception" element={<Reception />} />
           <Route path="/workshop" element={<Workshop />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/reminders" element={<RetentionEngine />} />
@@ -349,7 +347,9 @@ function AppContent() {
           <Route path="/clients/:clientId" element={<BikeDetail />} />
           <Route path="/service/:id" element={<ServiceJob />} />
           <Route path="/metrics" element={<Metrics />} />
-          <Route path="/admin" element={<Admin />} />
+          {/* "Contactar" (Admin) se unificó dentro de Retención → redirect por si
+              queda algún link/bookmark viejo apuntando acá (Tarea A). */}
+          <Route path="/admin" element={<Navigate to="/reminders" replace />} />
           <Route path="/configuracion" element={<Configuracion />} />
           <Route path="/auditoria" element={<DeletedServices />} />
           <Route path="/superadmin" element={<SuperAdmin />} />

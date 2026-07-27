@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing, Flag, Copy } from "lucide-react";
-import { calculateDaysRemaining } from "@/lib/utils";
+import { buildRetentionAlerts } from "@/lib/retentionAlerts";
 
 export default function RetentionEngine() {
     const recordatorios = useDataStore(s => s.recordatorios);
@@ -15,106 +15,12 @@ export default function RetentionEngine() {
     const carreras = useDataStore(s => s.carreras);
     const isHydrating = useDataStore(s => s.isHydrating);
 
-    // Build alerts from store (replaces getAllRemindersWithDetails)
-    const alerts = useMemo(() => {
-        const baseAlerts = recordatorios
-            .filter(r => {
-                const bike = bicicletas.find(b => b.id === r.bicicleta_id);
-                const client = bike ? clientes.find(c => c.id === bike.cliente_id) : null;
-
-                // Get all dismissed alerts for this bike across all its services
-                const dismissedAlerts = bike
-                    ? servicios.filter(s => s.bicicleta_id === bike.id).flatMap(s => s.alertas_ocultas || [])
-                    : [];
-
-                return !client?.eliminado_en && !dismissedAlerts.includes(r.componente || '');
-            })
-            .map(r => {
-                const bike = bicicletas.find(b => b.id === r.bicicleta_id);
-                const client = bike ? clientes.find(c => c.id === bike.cliente_id) : null;
-
-                const daysRemaining = calculateDaysRemaining(r.fecha_vencimiento || "");
-
-                // Find most recent service to attach the dismissal if needed
-                const mostRecentService = servicios
-                    .filter(s => s.bicicleta_id === r.bicicleta_id)
-                    .sort((a, b) => new Date(b.fecha_ingreso || 0).getTime() - new Date(a.fecha_ingreso || 0).getTime())[0];
-
-                return {
-                    id: r.id,
-                    servicioId: mostRecentService?.id,
-                    alertIdentity: r.componente,
-                    clientName: client?.nombre || "Desconocido",
-                    clientPhone: client?.telefono || "",
-                    bikeModel: bike?.modelo || "Desconocida",
-                    component: r.componente || "Sin componente",
-                    dueDate: r.fecha_vencimiento || "",
-                    daysRemaining,
-                    isPostCarrera: false,
-                    isPreCarrera: false,
-                    carreraName: "",
-                };
-            });
-
-        const postCarreraAlerts = servicios
-            .filter(s => s.carrera_id != null)
-            .map(s => {
-                const carrera = carreras.find(c => c.id === s.carrera_id);
-                const bike = bicicletas.find(b => b.id === s.bicicleta_id);
-                const client = bike ? clientes.find(c => c.id === bike.cliente_id) : null;
-
-                if (!carrera || !carrera.fecha_evento || !client || client.eliminado_en) return null;
-
-                const dismissedAlerts = s.alertas_ocultas || [];
-                const carreraAlertIdentity = `carrera-${carrera.id}`;
-                if (dismissedAlerts.includes(carreraAlertIdentity)) return null;
-
-                if (!carrera.fecha_evento) return null;
-                const daysUntilEvent = calculateDaysRemaining(carrera.fecha_evento);
-                const daysSinceEvent = -daysUntilEvent;
-
-                if (daysSinceEvent >= 1 && daysSinceEvent <= 2) {
-                    return {
-                        id: `carrera-urgent-${s.id}`,
-                        servicioId: s.id,
-                        alertIdentity: carreraAlertIdentity,
-                        clientName: client.nombre,
-                        clientPhone: client.telefono || "",
-                        bikeModel: bike?.modelo || "Desconocida",
-                        component: `¿Cómo le fue en ${carrera.nombre}?`,
-                        dueDate: carrera.fecha_evento,
-                        daysRemaining: -daysSinceEvent, // Negative to put it in urgent
-                        isPostCarrera: true,
-                        isPreCarrera: false,
-                        carreraName: carrera.nombre,
-                    };
-                }
-
-                // PRE-CARRERA (Event is in the future)
-                // daysSinceEvent < 0 means it hasn't happened yet
-                if (daysSinceEvent < 0) {
-                    return {
-                        id: `pre-carrera-${s.id}`,
-                        servicioId: s.id,
-                        alertIdentity: carreraAlertIdentity,
-                        clientName: client.nombre,
-                        clientPhone: client.telefono || "",
-                        bikeModel: bike?.modelo || "Desconocida",
-                        component: `🏁 Carrera: ${carrera.nombre}`,
-                        dueDate: carrera.fecha_evento,
-                        daysRemaining: -daysSinceEvent, // Positive days remaining until event
-                        isPostCarrera: false,
-                        isPreCarrera: true,
-                        carreraName: carrera.nombre,
-                    };
-                }
-
-                return null;
-            })
-            .filter(Boolean) as any[];
-
-        return [...baseAlerts, ...postCarreraAlerts];
-    }, [recordatorios, bicicletas, clientes, servicios, carreras]);
+    // Fuente única compartida con la campana (NotificationBell) → mismo
+    // listado y mismo alertas_ocultas en los dos lados.
+    const alerts = useMemo(
+        () => buildRetentionAlerts({ recordatorios, bicicletas, clientes, servicios, carreras }),
+        [recordatorios, bicicletas, clientes, servicios, carreras]
+    );
 
     if (isHydrating) return <div className="p-8 text-center text-muted-foreground">Cargando motor de retención...</div>;
 

@@ -11,9 +11,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { NuevoBadge } from '@/components/NuevoBadge';
 import {
     Settings, Loader2, Save, UploadCloud, Plus, Edit2, Check, X,
-    AlertCircle, Sparkles, ListChecks, CheckCircle, Lock, Bell
+    AlertCircle, Sparkles, ListChecks, CheckCircle, Lock, Bell, HeartPulse
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────
@@ -725,6 +726,34 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     const [bloqueo, setBloqueo] = useState(taller.config_notificaciones?.bloquear_finalizacion === true);
     const [savingTareas, setSavingTareas] = useState(false);
 
+    // Registro del diagnóstico: en qué momento del service se cargan los
+    // avisos de mantenimiento futuro (Retención). 'final' | 'durante' | 'ambos'.
+    const [momentoDiag, setMomentoDiag] = useState<'final' | 'durante' | 'ambos'>(
+        taller.config_notificaciones?.momento_diagnostico || 'final'
+    );
+    const [savingDiag, setSavingDiag] = useState(false);
+
+    const handleSaveDiag = async () => {
+        try {
+            setSavingDiag(true);
+            const config_notificaciones = {
+                ...(taller.config_notificaciones || {}),
+                momento_diagnostico: momentoDiag,
+            };
+            const { error } = await supabase
+                .from('talleres')
+                .update({ config_notificaciones })
+                .eq('id', taller.id);
+            if (error) throw error;
+            setTaller({ ...taller, config_notificaciones: config_notificaciones as any });
+            avisar('ok', 'Preferencia de diagnóstico guardada.');
+        } catch (error: any) {
+            avisar('error', 'Error guardando: ' + error.message);
+        } finally {
+            setSavingDiag(false);
+        }
+    };
+
     const handleSaveTareas = async () => {
         try {
             setSavingTareas(true);
@@ -865,6 +894,47 @@ function TabPreferencias({ taller, setTaller, avisar }: {
 
                 <Button onClick={handleSaveTareas} disabled={savingTareas} className="w-full">
                     {savingTareas ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                    Guardar preferencias
+                </Button>
+            </CardContent>
+        </Card>
+
+        {/* ── Registro del diagnóstico (todos los planes) ── */}
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                    <HeartPulse className="h-5 w-5 text-primary" />
+                    Registro del diagnóstico
+                    <NuevoBadge feature="registro-diagnostico" />
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                    El diagnóstico genera los avisos de mantenimiento futuro que aparecen en Retención
+                    (por ejemplo, revisar la cadena en 3 meses). Elegí en qué momento del service el
+                    taller los registra.
+                </p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+                {([
+                    { val: 'final', tit: 'Al finalizar el service', desc: 'Se registra al cerrar la orden. Opción por defecto.' },
+                    { val: 'durante', tit: 'Durante el service', desc: 'El mecánico lo registra mientras trabaja en la bicicleta.' },
+                    { val: 'ambos', tit: 'Durante y al finalizar', desc: 'Disponible en todo momento, con un repaso al cerrar.' },
+                ] as const).map(opt => (
+                    <button
+                        key={opt.val}
+                        type="button"
+                        onClick={() => setMomentoDiag(opt.val)}
+                        className={`w-full text-left flex items-start gap-3 p-4 rounded-lg border transition-colors ${momentoDiag === opt.val ? 'border-primary bg-primary/5' : 'bg-muted/20 hover:border-primary/40'}`}
+                    >
+                        <span className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 ${momentoDiag === opt.val ? 'border-primary bg-primary' : 'border-muted-foreground/40'}`} />
+                        <span>
+                            <span className="block font-semibold text-sm">{opt.tit}</span>
+                            <span className="block text-xs text-muted-foreground">{opt.desc}</span>
+                        </span>
+                    </button>
+                ))}
+
+                <Button onClick={handleSaveDiag} disabled={savingDiag} className="w-full">
+                    {savingDiag ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                     Guardar preferencias
                 </Button>
             </CardContent>

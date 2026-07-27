@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 import { useDataStore } from '@/store/dataStore';
 import ExpertMetrics from '@/components/ExpertMetrics';
 import { normalizeBikeData, normalizeServiceType } from '@/lib/bikeDataNormalizer';
+import { rankProducts } from '@/lib/productMatcher';
 import {
     BarChart3,
     TrendingUp,
@@ -60,13 +61,14 @@ export function parseItemQuantityAndName(rawDesc: string) {
 export function normalizeItemName(rawName: string): string {
     let lower = rawName.toLowerCase().trim();
 
-    // 1. Hardcoded Rules (Master Names)
-    if (lower.includes('b05s') && (lower.includes('pastilla') || lower.includes('freno'))) {
+    // 1. Hardcoded Rules (Master Names). Con límite de palabra para no matchear por substring
+    // (ej. 'hg40' NO debe pescar 'CN-HG400-9', que es otro cassette).
+    if (/\bb05s\b/.test(lower) && (lower.includes('pastilla') || lower.includes('freno'))) {
         return 'Pastillas Shimano B05S';
     }
-    if (lower.includes('hg601')) return 'Cadena Shimano 11v (HG601)';
-    if (lower.includes('hg40')) return 'Cadena Shimano 8v (HG40)';
-    if (lower.includes('nx') && lower.includes('cadena')) return 'Cadena SRAM NX';
+    if (/\bhg601\b/.test(lower)) return 'Cadena Shimano 11v (HG601)';
+    if (/\bhg40\b/.test(lower)) return 'Cadena Shimano 8v (HG40)';
+    if (/\bnx\b/.test(lower) && lower.includes('cadena')) return 'Cadena SRAM NX';
 
     // 2. Remove Noise Words
     const noiseWords = ['de resina', 'mtb', 'ruta', 'compatible con', 'para bicicleta', 'delantero', 'trasero', 'derecho', 'izquierdo'];
@@ -88,9 +90,11 @@ export function normalizeItemName(rawName: string): string {
 export function getSemanticCategory(rawDesc: string): string {
     const lower = rawDesc.toLowerCase();
 
+    // OJO: clasificar por el COMPONENTE, no por la marca. Poner 'shimano'/'sram'/'hg' acá sesgaba
+    // TODO a Transmisión (se evalúa primera y casi todo repuesto nombra la marca) → el gráfico mentía.
     const dic = {
-        'Transmisión': ['piñon', 'piñón', 'cadena', 'plato', 'palanca', 'caja pedalera', 'cambio', 'fusible', 'descarrilador', 'polea', 'hg', 'sram', 'shimano', 'cassette', 'shifter', 'crank', 'bottom bracket', 'bb'],
-        'Frenos': ['pastilla', 'patin', 'disco', 'freno', 'purgado', 'ducto', 'liquido de freno', 'avid', 'cable', 'caliper', 'maneta', 'rotor', 'b05s', 'hidráulico'],
+        'Transmisión': ['piñon', 'piñón', 'cadena', 'plato', 'palanca', 'caja pedalera', 'cambio', 'fusible', 'descarrilador', 'polea', 'cassette', 'shifter', 'crank', 'bottom bracket', 'monoplato', 'body'],
+        'Frenos': ['pastilla', 'patin', 'patín', 'disco', 'freno', 'purgado', 'ducto', 'liquido de freno', 'caliper', 'maneta', 'rotor', 'b05s', 'k05s', 'hidráulico'],
         'Neumáticos y Ruedas': ['tubeless', 'tubelizado', 'camara', 'cámara', 'cubierta', 'aro', 'maza', 'centrado', 'rayo', 'roval', 'parche', 'valvula', 'válvula', 'cinta tubeless', 'maxxis', 'schwalbe', 'fast trak', 'neumático', 'llanta'],
         'Suspensión': ['horquilla', 'shock', 'brain', 'rockshox', 'reten', 'retén', 'fox', 'suspensión', 'suspension', 'resorte', 'aire'],
         'Cockpit y Componentes': ['stem', 'manubrio', 'asiento', 'tija', 'pedal', 'cinta', 'puño', 'grip', 'sillín', 'saddle', 'vela', 'dropper'],
@@ -104,6 +108,29 @@ export function getSemanticCategory(rawDesc: string): string {
     }
 
     return 'Otros';
+}
+
+// --- MODELO DE FACTURACIÓN (única fuente de verdad) ---
+// Facturación de un servicio = mano de obra (precio_base) + TODOS los items (repuestos y otros).
+// `precio_total` NO se usa para facturar: en algunos registros ya viene con los repuestos sumados,
+// así que re-sumar los items lo duplica (era el bug del período anterior: contaba los repuestos 2×).
+// Tanto el motor de `stats` como `previousPeriodRevenue` DEBEN pasar por esta función para que la
+// comparación de tendencia sea honesta (misma definición en las dos mitades).
+export function servicioRevenue(s: any): { facturacion: number; labor: number; parts: number } {
+    let labor = Number(s?.precio_base) || 0;
+    let parts = 0;
+    const items = Array.isArray(s?.servicio_items)
+        ? s.servicio_items
+        : (Array.isArray(s?.items_extra) ? s.items_extra : []);
+    for (const item of items) {
+        const itemPrecio = Number(item?.precio) || 0;
+        if (item?.categoria === 'part' || item?.categoria === 'producto' || item?.categoria === 'repuesto') {
+            parts += itemPrecio;
+        } else {
+            labor += itemPrecio;
+        }
+    }
+    return { facturacion: labor + parts, labor, parts };
 }
 
 export default function Metrics() {
@@ -165,16 +192,8 @@ export default function Metrics() {
             const serviceTs = new Date(rawDate).getTime();
             if (isNaN(serviceTs)) return;
             if (serviceTs >= prevStartMs && serviceTs <= prevEndMs) {
-                const precioTotal = Number(s.precio_total) || 0;
-                const precioBase = Number(s.precio_base) || 0;
-                prevRevenue += precioTotal > 0 ? precioTotal : precioBase;
-
-                // Include item-level revenue to match the stats engine logic
-                const items = Array.isArray(s.servicio_items) ? s.servicio_items : (Array.isArray(s.items_extra) ? s.items_extra : []);
-                items.forEach((item: any) => {
-                    const itemPrecio = Number(item.precio) || 0;
-                    prevRevenue += itemPrecio;
-                });
+                // Misma definición de facturación que el motor de stats (base + items, sin precio_total).
+                prevRevenue += servicioRevenue(s).facturacion;
             }
         });
 
@@ -187,12 +206,12 @@ export default function Metrics() {
         const filtered = filteredServicios;
         // Normalize bikes ONCE before aggregating
         const normalizedBikes = normalizeBikeData(bicicletas);
-        let totalRevenue = 0;
         let totalLabor = 0;
         let totalPartsRevenue = 0;
         let totalPartsCount = 0;
         const uniqueBikes = new Set();
-        const productCounts: Record<string, number> = {};
+        // Ítems de repuesto (nombre + unidades) para resolver identidad y rankear después del loop.
+        const partItems: Array<{ name: string; qty: number }> = [];
         const trendCategories: Record<string, number> = {
             'Transmisión': 0, 'Frenos': 0, 'Neumáticos y Ruedas': 0,
             'Suspensión': 0, 'Cockpit y Componentes': 0, 'Mantenimiento General': 0, 'Otros': 0
@@ -203,10 +222,11 @@ export default function Metrics() {
         const categoryCounts: Record<string, number> = {};
 
         filtered.forEach(s => {
-            const precioTotal = Number(s.precio_total) || 0;
-            const precioBase = Number(s.precio_base) || 0;
-            totalRevenue += precioTotal > 0 ? precioTotal : precioBase;
-            totalLabor += precioBase;
+            // Facturación por la única fuente de verdad (base + items). Mantiene labor y parts
+            // consistentes con previousPeriodRevenue → el badge de tendencia no puede mentir.
+            const rev = servicioRevenue(s);
+            totalLabor += rev.labor;
+            totalPartsRevenue += rev.parts;
             uniqueBikes.add(s.bicicleta_id);
 
             const normalizedType = normalizeServiceType(s.tipo_servicio || '');
@@ -229,23 +249,23 @@ export default function Metrics() {
 
             const items = Array.isArray(s.servicio_items) ? s.servicio_items : (Array.isArray(s.items_extra) ? s.items_extra : []);
             items.forEach((item: any) => {
-                const itemPrecio = Number(item.precio) || 0;
+                // La plata ya la sumó servicioRevenue(s). Acá solo contamos unidades y categorías de repuestos.
                 if (item.categoria === 'part' || item.categoria === 'producto' || item.categoria === 'repuesto') {
                     const desc = (item.descripcion || '').trim();
                     if (!desc) return;
                     const { name, qty } = parseItemQuantityAndName(desc);
-                    totalPartsRevenue += itemPrecio;
                     totalPartsCount += qty;
-                    productCounts[name] = (productCounts[name] || 0) + qty;
+                    partItems.push({ name, qty });
                     const category = getSemanticCategory(desc);
                     trendCategories[category] += qty;
-                } else {
-                    totalLabor += itemPrecio;
                 }
             });
         });
 
-        const sortedProducts = Object.entries(productCounts).sort(([, a], [, b]) => b - a).slice(0, 5).map(([name, count]) => ({ name, count }));
+        // Ranking de repuestos con entity resolution: colapsa el mismo producto escrito de N formas
+        // ("pastillas shimano" / "past. freno") en un solo ítem, sin fusionar productos distintos
+        // (HG40≠HG601, NX≠GX, 11v≠8v). Ver lib/productMatcher.ts.
+        const sortedProducts = rankProducts(partItems, 5);
         const totalTrendCount = Object.values(trendCategories).reduce((a, b) => a + b, 0);
         const trendData = Object.entries(trendCategories)
             .filter(([, count]) => count > 0)
@@ -278,7 +298,10 @@ export default function Metrics() {
         const finalCategoryData = processTopN(categoryCounts);
 
         const totalFacturacion = totalLabor + totalPartsRevenue;
-        const avgTicket = uniqueBikes.size > 0 ? Math.round(totalFacturacion / uniqueBikes.size) : 0;
+        // Ticket promedio = ARO (Average Repair Order): facturación / cantidad de órdenes de servicio.
+        // Antes dividía por bicis únicas (2 visitas de la misma bici contaban como 1 ticket) pero el
+        // label decía "por visita" → medía otra cosa. Ahora denominador y label coinciden (por orden).
+        const avgTicket = filtered.length > 0 ? Math.round(totalFacturacion / filtered.length) : 0;
         const laborPerc = totalFacturacion > 0 ? Math.round((totalLabor / totalFacturacion) * 100) : 0;
         const partsPerc = totalFacturacion > 0 ? Math.round((totalPartsRevenue / totalFacturacion) * 100) : 0;
 
@@ -336,7 +359,7 @@ export default function Metrics() {
             <KPICard title="Facturación Total" value={`$ ${stats.revenue.toLocaleString('es-AR')}`} icon={<DollarSign className="w-5 h-5 text-green-600" />} trend={revenueGrowth?.label ?? null} trendUp={revenueGrowth?.isUp ?? null} className="bg-green-50 border-green-100" />
             <KPICard title="Mano de Obra" value={`$ ${stats.labor.toLocaleString('es-AR')}`} icon={<Wrench className="w-5 h-5 text-primary" />} sublabel={`${stats.count} Servicios realizados`} />
             <KPICard title="Venta Repuestos" value={`$ ${stats.parts.toLocaleString('es-AR')}`} icon={<Package className="w-5 h-5 text-secondary" />} sublabel={`${stats.partsCount} Productos vendidos`} />
-            <KPICard title="Ticket Promedio" value={`$ ${stats.avgTicket.toLocaleString('es-AR')}`} icon={<Ticket className="w-5 h-5 text-primary" />} sublabel="Por visita de cliente" />
+            <KPICard title="Ticket Promedio" value={`$ ${stats.avgTicket.toLocaleString('es-AR')}`} icon={<Ticket className="w-5 h-5 text-primary" />} sublabel="Por orden de servicio" />
             <KPICard title="Bicis Atendidas" value={stats.bikesCount.toString()} icon={<TrendingUp className="w-5 h-5 text-purple-600" />} sublabel="En el período seleccionado" />
             <Card className="hover:shadow-md transition-shadow">
                 <CardContent className="p-6">

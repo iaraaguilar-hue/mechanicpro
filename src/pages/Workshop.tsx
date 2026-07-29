@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
-import { shouldFireOrdenWebhook, getEntregadoWebhookUrl } from "@/lib/ordenWebhook";
+import { resolveOrdenWebhookUrl, resolveEntregadoWebhookUrl } from "@/lib/ordenWebhook";
 import { EtapasChecklist } from "@/components/EtapasChecklist";
 import { avancesActivos, trabajosPendientes, tareasActivas, bloqueoFinalizacionActivo, tareasLibresPendientes } from "@/lib/planFeatures";
 
@@ -122,10 +122,12 @@ export default function Workshop() {
         setSearchParams(searchParams, { replace: true });
     }, [searchParams, jobs, isHydrating, setSearchParams]);
 
-    // Cargar las URLs de webhook configuradas (solo Probikes las dispara desde el front).
-    // Editable en SuperAdmin → si cambia el túnel de Mica, Iara lo actualiza sin redeploy.
+    // Cargar las URLs de webhook configuradas del taller. Multi-taller (29-jul-2026):
+    // cada taller dispara a SU propio n8n si tiene URL en taller_configuraciones; si no,
+    // solo Probikes cae al env global (ver resolveOrdenWebhookUrl). Editable en SuperAdmin
+    // → si cambia el server/túnel del taller, Iara lo actualiza sin redeploy.
     useEffect(() => {
-        if (!taller_id || !shouldFireOrdenWebhook(taller_id)) return;
+        if (!taller_id) return;
         supabase
             .from('taller_configuraciones')
             .select('webhook_orden_url, webhook_entregado_url')
@@ -154,23 +156,21 @@ export default function Workshop() {
                 fecha_entregado: new Date().toISOString(),
             });
 
-            // Webhook "bici entregada" → Probikes actualiza la fecha de la orden al día
-            // real en que el cliente la retiró (a veces se cobra días después de finalizar).
-            // Mismo guard que el webhook de orden: SOLO Probikes toca su automatización;
-            // otros talleres son autosuficientes. Ver lib/ordenWebhook.ts.
+            // Webhook "bici entregada" → el n8n del taller actualiza la fecha de la orden al
+            // día real en que el cliente la retiró (a veces se cobra días después de finalizar).
+            // Multi-taller: dispara a la URL propia del taller (o al fallback Probikes). Si el
+            // taller no tiene webhook configurado → null → no dispara. Ver lib/ordenWebhook.ts.
             // numero_orden va con el MISMO formato que se mandó al finalizar (#0042) para
-            // que la orden matchee en la base de Probikes.
-            if (shouldFireOrdenWebhook(taller_id)) {
-                const url = webhookUrls.entregado || getEntregadoWebhookUrl();
-                if (url) {
-                    const payload = { numero_orden: formatOrdenNumber(job.numero_orden, job.service_id) };
-                    fetch(url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload),
-                        keepalive: true,
-                    }).catch(e => console.error('Webhook entregado Error (Fetch):', e));
-                }
+            // que la orden matchee en la base del taller.
+            const url = resolveEntregadoWebhookUrl(taller_id, webhookUrls.entregado);
+            if (url) {
+                const payload = { numero_orden: formatOrdenNumber(job.numero_orden, job.service_id) };
+                fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                    keepalive: true,
+                }).catch(e => console.error('Webhook entregado Error (Fetch):', e));
             }
         } catch (e: any) {
             console.error("Error entregando:", e);
@@ -761,13 +761,13 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                             total_service: totalProductos,
                         };
 
-                        // Guard multi-taller: solo Probikes dispara la baja de stock / orden ERP
-                        // desde el frontend. Otros talleres (ej: Once a Fondo) son autosuficientes
-                        // y no deben tocar la automatización de Probikes. Ver lib/ordenWebhook.ts.
+                        // Multi-taller: dispara a la URL propia del taller (o al fallback
+                        // Probikes). Si el taller no tiene webhook configurado → null → no
+                        // dispara y nunca toca la automatización ajena. Ver lib/ordenWebhook.ts.
                         // Guard anti-doble-disparo: si el service se reabrió y se volvió a
                         // finalizar, el stock ya se descontó la primera vez.
-                        const ordenUrl = ordenWebhookUrl || import.meta.env.VITE_N8N_ORDEN_WEBHOOK_URL;
-                        if (shouldFireOrdenWebhook(taller_id) && !service.webhook_erp_disparado && ordenUrl) {
+                        const ordenUrl = resolveOrdenWebhookUrl(taller_id, ordenWebhookUrl);
+                        if (ordenUrl && !service.webhook_erp_disparado) {
                             fetch(ordenUrl, {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
@@ -778,7 +778,7 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                         } else if (service.webhook_erp_disparado) {
                             console.log("Webhook de orden NO re-disparado: ya corrió para este service (reabierto y re-finalizado).");
                         } else {
-                            console.log("Webhook de orden NO disparado: taller autosuficiente (no es Probikes).");
+                            console.log("Webhook de orden NO disparado: taller sin webhook configurado.");
                         }
                     } else {
                         console.log("Webhook saltado: El servicio no incluye repuestos físicos.");

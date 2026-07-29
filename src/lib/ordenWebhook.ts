@@ -11,8 +11,40 @@
 // base (taller_configuraciones.webhook_erp_url), que es seguro por diseño.
 export const PROBIKES_TALLER_ID = 'f3844f35-cb20-420d-93e7-a940a50a68a1';
 
+export function isProbikesTaller(tallerId: string | null | undefined): boolean {
+  return tallerId === PROBIKES_TALLER_ID;
+}
+
+// Legacy (lo usa ServiceJob.tsx, página vieja): mantiene el comportamiento
+// Probikes-only. La página VIVA (Workshop.tsx) usa los resolvers de abajo.
 export function shouldFireOrdenWebhook(tallerId: string | null | undefined): boolean {
   return tallerId === PROBIKES_TALLER_ID;
+}
+
+// Multi-taller (29-jul-2026): cada taller dispara a SU PROPIO n8n si tiene una
+// URL configurada en taller_configuraciones.webhook_orden_url. Sin URL propia,
+// SOLO Probikes cae al env global (VITE_N8N_ORDEN_WEBHOOK_URL); cualquier otro
+// taller sin config NO dispara (null) — así nunca toca la automatización ajena.
+// configUrl = webhook_orden_url leída de taller_configuraciones (puede ser null).
+export function resolveOrdenWebhookUrl(
+  tallerId: string | null | undefined,
+  configUrl: string | null | undefined,
+): string | null {
+  const own = configUrl?.trim();
+  if (own) return own;
+  if (isProbikesTaller(tallerId)) return import.meta.env.VITE_N8N_ORDEN_WEBHOOK_URL || null;
+  return null;
+}
+
+// Ídem para el webhook "bici entregada". configUrl = webhook_entregado_url.
+export function resolveEntregadoWebhookUrl(
+  tallerId: string | null | undefined,
+  configUrl: string | null | undefined,
+): string | null {
+  const own = configUrl?.trim();
+  if (own) return own;
+  if (isProbikesTaller(tallerId)) return getEntregadoWebhookUrl();
+  return null;
 }
 
 // Webhook "bici entregada" (Probikes libro diario, 27-jul-2026).

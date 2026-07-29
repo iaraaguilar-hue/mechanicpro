@@ -19,3 +19,21 @@ export function formatOrdenNumber(numeroOrden: number | undefined | null, fallba
     }
     return formatDisplayId(fallbackUuid);
 }
+
+/**
+ * numero_orden para el PAYLOAD de los webhooks (libro diario de Mica).
+ * Mica matchea por el número PELADO, sin '#' ni ceros a la izquierda (spec 29-jul-2026:
+ * ejemplo `{"numero_orden": "123"}`). NO usar formatOrdenNumber acá (ese es para MOSTRAR
+ * en pantalla). Fallback consistente para órdenes viejas sin numero_orden: últimos 6 del
+ * uuid en mayúscula (mismo valor en finalizar y entregar, para que matcheen entre sí).
+ * Example: 42 → "42", undefined → "3899EC"
+ */
+export function ordenNumberForWebhook(numeroOrden: number | undefined | null, fallbackUuid?: string): string {
+    if (numeroOrden != null) {
+        return String(numeroOrden);
+    }
+    if (fallbackUuid && fallbackUuid.length >= 6) {
+        return fallbackUuid.slice(-6).toUpperCase();
+    }
+    return String(fallbackUuid ?? '');
+}

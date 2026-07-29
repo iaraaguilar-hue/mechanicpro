@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useDataStore } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
 import { supabase } from "@/lib/supabase";
-import { formatOrdenNumber } from "@/lib/formatId";
+import { formatOrdenNumber, ordenNumberForWebhook } from "@/lib/formatId";
 import { printServiceReport } from "@/lib/printServiceBtn";
 import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -160,11 +160,11 @@ export default function Workshop() {
             // día real en que el cliente la retiró (a veces se cobra días después de finalizar).
             // Multi-taller: dispara a la URL propia del taller (o al fallback Probikes). Si el
             // taller no tiene webhook configurado → null → no dispara. Ver lib/ordenWebhook.ts.
-            // numero_orden va con el MISMO formato que se mandó al finalizar (#0042) para
-            // que la orden matchee en la base del taller.
+            // numero_orden va con el MISMO valor que se mandó al finalizar (número pelado,
+            // sin # ni ceros — spec de Mica) para que la orden matchee en la base del taller.
             const url = resolveEntregadoWebhookUrl(taller_id, webhookUrls.entregado);
             if (url) {
-                const payload = { numero_orden: formatOrdenNumber(job.numero_orden, job.service_id) };
+                const payload = { numero_orden: ordenNumberForWebhook(job.numero_orden, job.service_id) };
                 fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -749,7 +749,7 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                         const nombresConcatenados = productosFisicos.map((p: any) => p.descripcion).join(", ");
 
                         const payload = {
-                            numero_orden: formatOrdenNumber(service.numero_orden, service.id),
+                            numero_orden: ordenNumberForWebhook(service.numero_orden, service.id),
                             dni_cliente: client?.dni || "Sin DNI",
                             nombre_cliente: client?.nombre || "Cliente",
                             fecha_finalizacion: fechaFinalizacion,

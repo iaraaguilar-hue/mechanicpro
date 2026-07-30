@@ -261,9 +261,15 @@ export const ServiceTicketPDF: React.FC<ServiceTicketPDFProps> = ({ data }) => {
           <Text style={[styles.sectionTitle, { color: data.primaryColor }]}>MANO DE OBRA</Text>
         </View>
         
-        {data.serviceType !== 'OTRO' && data.serviceType !== 'OTHER' && (
+        {/* El precio base se muestra SIEMPRE que exista, aunque el tipo sea "OTRO".
+            Antes se ocultaba en ese caso pero igual se sumaba al total: el cliente sumaba las
+            líneas del comprobante y no le daba el total. Un taller sin catálogo cargado tiene
+            TODAS sus órdenes como "OTRO", así que le pasaba en cada una. (30-jul-2026) */}
+        {data.basePrice > 0 && (
           <View style={styles.tableRow}>
-            <Text style={styles.tableCellLeftBold}>{data.serviceType}</Text>
+            <Text style={styles.tableCellLeftBold}>
+              {data.serviceType !== 'OTRO' && data.serviceType !== 'OTHER' ? data.serviceType : 'Service'}
+            </Text>
             <Text style={styles.tableCellRightBold}>$ {data.basePrice.toLocaleString('es-AR')}</Text>
           </View>
         )}

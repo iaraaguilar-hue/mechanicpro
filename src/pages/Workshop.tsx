@@ -405,6 +405,12 @@ function MobileJobCard({ job, onClick, onDeliver, onReopen }: { job: DashboardJo
     );
 }
 
+// El aviso por WhatsApp depende de un n8n configurado por env (VITE_N8N_WHATSAPP_WEBHOOK_URL).
+// Si no está, el fetch salía contra `undefined` y el botón fallaba SIEMPRE — después de haber
+// subido el PDF del cliente al bucket público. Mejor no ofrecer lo que no se puede cumplir:
+// sin URL configurada, el botón no se muestra. (30-jul-2026)
+const WHATSAPP_CONFIGURADO = !!import.meta.env.VITE_N8N_WHATSAPP_WEBHOOK_URL;
+
 function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: DashboardJob, onClick: () => void, onFinalize: () => void, onDeliver: () => void, onReopen: () => void }) {
     const handleFinish = (e: React.MouseEvent) => { e.stopPropagation(); onFinalize(); };
     const isReady = (job.status || '').toLowerCase() === 'ready';
@@ -491,7 +497,12 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                 .getPublicUrl(fileName);
 
             // 6. Preparar y enviar mensaje
-            const messageText = `Hola ${job.client_name}, te avisamos que tu bicicleta ${job.bike_model} ya está lista. El total del service es de $${job.total_price || 0}. Te recordamos que la mano de obra se abona únicamente en efectivo o transferencia. Los repuestos podés abonarlos en efectivo, transferencia o tarjeta. ¡Te esperamos!`;
+            // La política de pago sale de la config del taller, NO hardcodeada: el texto fijo era
+            // el de Probikes ("la mano de obra se abona únicamente en efectivo o transferencia") y
+            // se lo mandaba a los clientes de cualquier taller. El PDF ya la tomaba de la config
+            // (printServiceBtn.ts); el WhatsApp era el único que no. (30-jul-2026)
+            const politicaPago = (taller as any)?.politica_pago?.trim();
+            const messageText = `Hola ${job.client_name}, te avisamos que tu bicicleta ${job.bike_model} ya está lista. El total del service es de $${job.total_price || 0}.${politicaPago ? ` ${politicaPago}` : ''} ¡Te esperamos!`;
 
             const payload = {
                 taller_id: taller_id,
@@ -595,6 +606,7 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                         </Button>
                         {job.status !== 'delivered' && (
                             <>
+                                {WHATSAPP_CONFIGURADO && (
                                 <Button
                                     size="sm"
                                     variant="outline"
@@ -606,6 +618,7 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                                     {isLoading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
                                     Avisar por WhatsApp
                                 </Button>
+                                )}
                                 {/* Los DOS pasos siempre a la vista: primero Finalizar, después Entregar.
                                     Si se finalizó por error, el slot se convierte en "Reabrir". */}
                                 {isReady ? (

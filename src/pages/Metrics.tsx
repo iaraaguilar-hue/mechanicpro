@@ -158,10 +158,18 @@ export default function Metrics() {
     const filteredServicios = useMemo(() => {
         if (!dateStart || !dateEnd) return allServicios;
 
-        // setHours uses the LOCAL clock, so boundaries are always in local time
-        // regardless of the UTC offset stored in fecha_ingreso.
-        const startTs = new Date(dateStart).setHours(0, 0, 0, 0);
-        const endTs = new Date(dateEnd).setHours(23, 59, 59, 999);
+        // Ojo: new Date('2026-07-30') se parsea como MEDIANOCHE UTC → en Argentina (UTC-3) eso
+        // ya es el 29 a las 21:00, y el setHours local terminaba de correr el borde al 29 23:59.
+        // Resultado: el último día del período quedaba afuera y las órdenes de HOY no se contaban.
+        // Construimos la fecha en hora local desde los componentes. (30-jul-2026)
+        const bordeLocal = (iso: string, finDelDia: boolean) => {
+            const [y, m, d] = iso.split('-').map(Number);
+            return finDelDia
+                ? new Date(y, m - 1, d, 23, 59, 59, 999).getTime()
+                : new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+        };
+        const startTs = bordeLocal(dateStart, false);
+        const endTs = bordeLocal(dateEnd, true);
 
         return allServicios.filter(s => {
             // Prefer fecha_ingreso; fall back to created_at. Skip if neither.

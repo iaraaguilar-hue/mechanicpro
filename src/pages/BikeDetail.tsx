@@ -390,7 +390,7 @@ export default function BikeDetail() {
                                                 <AccordionItem key={service.id} value={`item-${service.id}`} className="border rounded-lg bg-card px-4">
                                                     <AccordionTrigger className="hover:no-underline py-3">
                                                         <div className="flex items-center gap-4 w-full text-left">
-                                                            <Badge variant={(service.tipo_servicio || "").toLowerCase() === "expert" ? "default" : "secondary"} className="w-20 justify-center">
+                                                            <Badge variant={(service.tipo_servicio || "").toLowerCase() === "expert" ? "default" : "secondary"} className="min-w-20 justify-center text-center whitespace-nowrap shrink-0">
                                                                 {(service.tipo_servicio || "OTRO").toUpperCase()}
                                                             </Badge>
                                                             <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-4 flex-1">

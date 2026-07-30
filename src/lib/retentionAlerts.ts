@@ -26,6 +26,11 @@ export interface RetentionAlert {
     id: string;
     servicioId?: string;
     alertIdentity?: string;
+    // Para el acceso rápido al perfil del cliente desde la alerta: con bikeId
+    // se abre la bici puntual (y ahí están las demás en pestañas); si la bici
+    // no está, se cae al perfil del cliente.
+    clientId?: string;
+    bikeId?: string;
     clientName: string;
     clientPhone: string;
     bikeModel: string;
@@ -79,6 +84,8 @@ export function buildRetentionAlerts({
                 id: r.id,
                 servicioId: mostRecentService?.id,
                 alertIdentity: r.componente,
+                clientId: client?.id,
+                bikeId: bike?.id,
                 clientName: client?.nombre || "Desconocido",
                 clientPhone: client?.telefono || "",
                 bikeModel: bike?.modelo || "Desconocida",
@@ -112,6 +119,8 @@ export function buildRetentionAlerts({
                     id: `carrera-urgent-${s.id}`,
                     servicioId: s.id,
                     alertIdentity: carreraAlertIdentity,
+                    clientId: client.id,
+                    bikeId: bike?.id,
                     clientName: client.nombre,
                     clientPhone: client.telefono || "",
                     bikeModel: bike?.modelo || "Desconocida",
@@ -130,6 +139,8 @@ export function buildRetentionAlerts({
                     id: `pre-carrera-${s.id}`,
                     servicioId: s.id,
                     alertIdentity: carreraAlertIdentity,
+                    clientId: client.id,
+                    bikeId: bike?.id,
                     clientName: client.nombre,
                     clientPhone: client.telefono || "",
                     bikeModel: bike?.modelo || "Desconocida",

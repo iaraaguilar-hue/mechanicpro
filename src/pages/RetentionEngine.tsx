@@ -1,11 +1,21 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useDataStore } from "@/store/dataStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing, Flag, Copy } from "lucide-react";
-import { buildRetentionAlerts } from "@/lib/retentionAlerts";
+import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing, Flag, Copy, User } from "lucide-react";
+import { buildRetentionAlerts, type RetentionAlert } from "@/lib/retentionAlerts";
+
+// Acceso rápido al perfil del cliente desde la alerta: si tenemos la bici,
+// abrimos esa bici (el perfil muestra igual al cliente con TODAS sus bicis en
+// pestañas, su historial y la salud de componentes); si no, el perfil pelado.
+function perfilHref(alert: RetentionAlert): string | null {
+    if (alert.bikeId) return `/bikes/${alert.bikeId}`;
+    if (alert.clientId) return `/clients/${alert.clientId}`;
+    return null;
+}
 
 export default function RetentionEngine() {
     const recordatorios = useDataStore(s => s.recordatorios);
@@ -92,9 +102,26 @@ export default function RetentionEngine() {
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="font-semibold">{alert.component}</TableCell>
-                                        <TableCell>{alert.clientName}</TableCell>
+                                        <TableCell>
+                                            {perfilHref(alert) ? (
+                                                <Link
+                                                    to={perfilHref(alert)!}
+                                                    className="text-slate-900 hover:text-primary hover:underline underline-offset-2"
+                                                    title="Ver perfil del cliente"
+                                                >
+                                                    {alert.clientName}
+                                                </Link>
+                                            ) : alert.clientName}
+                                        </TableCell>
                                         <TableCell className="text-muted-foreground">{alert.bikeModel}</TableCell>
-                                        <TableCell className="text-right">
+                                        <TableCell className="text-right whitespace-nowrap">
+                                            {perfilHref(alert) && (
+                                                <Button variant="ghost" size="sm" asChild className="h-8 text-slate-500 hover:text-primary hover:bg-primary/10">
+                                                    <Link to={perfilHref(alert)!} title="Ver perfil del cliente">
+                                                        <User className="h-4 w-4" />
+                                                    </Link>
+                                                </Button>
+                                            )}
                                             <Button variant="ghost" size="sm" asChild className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50">
                                                 <a
                                                     href={`https://wa.me/${alert.clientPhone.replace(/[^0-9]/g, '')}?text=${alert.isPreCarrera
@@ -122,7 +149,7 @@ export default function RetentionEngine() {
 // ─────────────────────────────────────────────────────────────
 // Componente de Tarjeta de Alerta (UrgentCard)
 // ─────────────────────────────────────────────────────────────
-function AlertCard({ alert }: { alert: any }) {
+function AlertCard({ alert }: { alert: RetentionAlert }) {
     const [isCopied, setIsCopied] = useState(false);
     const [isDismissing, setIsDismissing] = useState(false);
     const dismissAlert = useDataStore(s => s.dismissAlert);
@@ -151,7 +178,8 @@ function AlertCard({ alert }: { alert: any }) {
         try {
             await dismissAlert(alert.servicioId, alert.alertIdentity);
         } catch (e: any) {
-            alert("Error al ocultar alerta: " + e.message);
+            // window.alert: `alert` acá es la prop de la alerta, no el diálogo.
+            window.alert("Error al ocultar alerta: " + e.message);
             setIsDismissing(false);
         }
     };
@@ -162,7 +190,13 @@ function AlertCard({ alert }: { alert: any }) {
         <Card className={`border-l-4 shadow-sm hover:shadow-md transition-shadow ${alert.isPostCarrera ? 'border-l-violet-500 bg-violet-50/50' : 'border-l-red-500 bg-red-50/50'}`}>
             <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">
-                    <CardTitle className="text-lg font-bold text-slate-800">{alert.clientName}</CardTitle>
+                    <CardTitle className="text-lg font-bold text-slate-800">
+                        {perfilHref(alert) ? (
+                            <Link to={perfilHref(alert)!} className="hover:text-primary hover:underline underline-offset-2" title="Ver perfil del cliente">
+                                {alert.clientName}
+                            </Link>
+                        ) : alert.clientName}
+                    </CardTitle>
                     <Badge variant={alert.isPostCarrera ? 'default' : 'destructive'} className={`uppercase text-[10px] ${alert.isPostCarrera ? 'bg-violet-600' : ''}`}>
                         {alert.isPostCarrera ? 'Post-Carrera' : 'Vencido'}
                     </Badge>
@@ -201,6 +235,13 @@ function AlertCard({ alert }: { alert: any }) {
                         {isCopied ? <CheckCircle2 className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
                         {isCopied ? "¡Copiado!" : "Copiar Mensaje"}
                     </Button>
+                    {perfilHref(alert) && (
+                        <Button variant="outline" className="w-full font-semibold border-slate-300 text-slate-700" asChild>
+                            <Link to={perfilHref(alert)!}>
+                                <User className="w-4 h-4 mr-2" /> Ver perfil del cliente
+                            </Link>
+                        </Button>
+                    )}
                     <Button
                         variant="ghost"
                         size="sm"

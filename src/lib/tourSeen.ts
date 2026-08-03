@@ -17,7 +17,9 @@ const KEY_BASE = 'mechanicpro_tour';
 const keyDe = (ctx: ContextoTour) =>
     ctx === 'bienvenida' ? `${KEY_BASE}_v1` : `${KEY_BASE}_${ctx}_v1`;
 
-const CONTEXTOS: ContextoTour[] = ['bienvenida', 'garage', 'service', 'finalizar'];
+const CONTEXTOS: ContextoTour[] = [
+    'bienvenida', 'garage', 'service-cliente', 'service-bici', 'service', 'finalizar', 'retencion',
+];
 
 export function tourVisto(ctx: ContextoTour = 'bienvenida'): boolean {
     try {

@@ -948,8 +948,8 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                 <p className="text-xs text-muted-foreground leading-relaxed">
                     El tutorial guiado de la primera vez: recorre las secciones y explica su valor.
                     Ideal para capacitar a alguien nuevo del equipo sin explicarle nada a mano.
-                    Reiniciarlo también reactiva las guías breves de cada pantalla (ficha del
-                    cliente, orden de trabajo y finalización).
+                    Reiniciarlo también reactiva las guías paso a paso de cada pantalla (recibir
+                    una bici, la orden de trabajo, la ficha del cliente, finalizar y Retención).
                 </p>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col">

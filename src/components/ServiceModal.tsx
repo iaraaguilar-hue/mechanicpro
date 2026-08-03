@@ -78,6 +78,18 @@ export function ServiceModal({
         if (!open) onClose();
     };
 
+    // Guías contextuales del flujo Recibir Bici: cada fase enseña la suya la
+    // primera vez (identificar cliente → elegir bici; la orden tiene la propia).
+    useEffect(() => {
+        if (!isOpen) return;
+        const ctx = step === "SEARCH_CLIENT" ? 'service-cliente' as const
+            : step === "SELECT_BIKE" ? 'service-bici' as const
+            : null;
+        if (!ctx) return;
+        const t = setTimeout(() => lanzarTourContextual(ctx), 500);
+        return () => clearTimeout(t);
+    }, [isOpen, step]);
+
     return (
         <Dialog open={isOpen} onOpenChange={handleClose}>
             {step === "DEFINE_SERVICE" && (selectedBike || preSelectedServiceId) ? (
@@ -97,7 +109,14 @@ export function ServiceModal({
                     onBack={() => setStep("SELECT_BIKE")}
                 />
             ) : (
-                <DialogContent className="max-w-3xl min-h-[500px] flex flex-col">
+                <DialogContent
+                    className="max-w-3xl min-h-[500px] flex flex-col"
+                    /* Mientras corre una guía contextual, el clic en el globo no
+                       debe cerrar este modal (Radix lo toma como clic afuera). */
+                    onPointerDownOutside={tourBloqueaCierreDialog}
+                    onInteractOutside={tourBloqueaCierreDialog}
+                    onEscapeKeyDown={tourBloqueaCierreDialog}
+                >
                     <DialogHeader>
                         <div className="flex items-center gap-3">
                             {step === "SELECT_BIKE" && (
@@ -118,23 +137,27 @@ export function ServiceModal({
 
                     <div className="flex-1 py-4">
                         {step === "SEARCH_CLIENT" && (
-                            <ClientSearchStep
-                                onClientSelect={(client) => {
-                                    setSelectedClient(client);
-                                    setStep("SELECT_BIKE");
-                                }}
-                            />
+                            <div data-tour="sm-cliente">
+                                <ClientSearchStep
+                                    onClientSelect={(client) => {
+                                        setSelectedClient(client);
+                                        setStep("SELECT_BIKE");
+                                    }}
+                                />
+                            </div>
                         )}
 
                         {step === "SELECT_BIKE" && selectedClient && (
-                            <BikeSelectionStep
-                                client={selectedClient}
-                                onBikeSelect={(bike) => {
-                                    setSelectedBike(bike);
-                                    setStep("DEFINE_SERVICE");
-                                }}
-                                onBack={() => setStep("SEARCH_CLIENT")}
-                            />
+                            <div data-tour="sm-bici">
+                                <BikeSelectionStep
+                                    client={selectedClient}
+                                    onBikeSelect={(bike) => {
+                                        setSelectedBike(bike);
+                                        setStep("DEFINE_SERVICE");
+                                    }}
+                                    onBack={() => setStep("SEARCH_CLIENT")}
+                                />
+                            </div>
                         )}
                     </div>
                 </DialogContent>

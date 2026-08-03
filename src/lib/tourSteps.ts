@@ -84,7 +84,7 @@ const BIENVENIDA: PasoTour[] = [
         selector: 'mesa-trabajo',
         titulo: 'Sus órdenes de trabajo',
         cuerpo:
-            'Cada orden en curso vive aquí. Al terminar el trabajo, presione «Finalizar» y la orden pasará a «Lista para entregar»; con «Entregar Bici» queda archivada en el Historial. Nada se pierde ni se traspapela.',
+            'Cada orden en curso vive aquí, y puede abrirse y editarse en cualquier momento con «Editar» (trabajos, precios, notas). Al terminar, «Finalizar» la deja «Lista para entregar» y con «Avisar por WhatsApp» el cliente se entera con un toque; «Entregar Bici» la archiva en el Historial. Nada se pierde ni se traspapela.',
     },
     {
         id: 'clientes',
@@ -94,7 +94,7 @@ const BIENVENIDA: PasoTour[] = [
         nav: 'nav-clientes',
         titulo: 'Su cartera de clientes',
         cuerpo:
-            'Cada cliente queda registrado con sus bicicletas y todos sus services. Con «Nuevo Cliente» se realiza el alta en segundos, y desde cada ficha se consulta el historial completo de cada bicicleta.',
+            'Cada cliente queda registrado con sus bicicletas y todos sus services. Con «Nuevo Cliente» el alta es guiada: sus datos, su bicicleta y, si lo desea, su primer service en el mismo paso. Se carga una sola vez; el sistema lo recuerda para siempre.',
     },
     {
         id: 'buscador-clientes',
@@ -130,7 +130,7 @@ const BIENVENIDA: PasoTour[] = [
         nav: 'nav-retencion',
         titulo: 'Motor de Retención: haga que vuelvan',
         cuerpo:
-            'El sistema le anticipa qué componentes están por vencer y le indica a qué clientes conviene contactar. Cada aviso es una oportunidad concreta de reventa: el taller deja de esperar a que el cliente recuerde volver.',
+            'El sistema le anticipa qué componentes están por vencer y le indica a qué clientes conviene contactar. Los avisos nacen de los diagnósticos que se registran al finalizar cada service; cada uno es una oportunidad concreta de reventa, con el mensaje para el cliente ya preparado.',
     },
     {
         id: 'metricas',
@@ -168,7 +168,7 @@ const BIENVENIDA: PasoTour[] = [
         nav: 'nav-taller',
         titulo: 'Está todo listo para comenzar',
         cuerpo:
-            'Ya conoce las secciones principales. Además, la primera vez que abra la ficha de un cliente, cargue una orden de trabajo o finalice un service, aparecerá una guía breve de esa pantalla. Le sugerimos comenzar con «Recibir Bici». Puede repetir todo desde Configuración → Preferencias.',
+            'Ya conoce las secciones principales. Además, la primera vez que reciba una bicicleta, abra la ficha de un cliente, finalice un service o entre a Retención con avisos activos, aparecerá una guía breve de esa pantalla, paso a paso. Le sugerimos comenzar con «Recibir Bici». Puede repetir todo desde Configuración → Preferencias.',
         botonSiguiente: 'Finalizar',
     },
 ];
@@ -213,6 +213,30 @@ const GARAGE: PasoTour[] = [
         titulo: 'El historial de esta bicicleta',
         cuerpo:
             'Todos los services realizados a esta bicicleta, con sus trabajos y precios. La memoria completa de la máquina, siempre disponible.',
+        botonSiguiente: 'Entendido',
+    },
+];
+
+// ── Recibir Bici, fase 1: identificar (o crear) al cliente ──
+const SERVICE_CLIENTE: PasoTour[] = [
+    {
+        id: 'sm-cliente',
+        selector: 'sm-cliente',
+        titulo: 'Todo empieza por el cliente',
+        cuerpo:
+            'Busque al cliente por nombre o teléfono. Si es la primera vez que viene al taller, créelo desde aquí mismo: se carga una sola vez y el sistema lo recuerda para siempre, con sus bicicletas y todo su historial.',
+        botonSiguiente: 'Entendido',
+    },
+];
+
+// ── Recibir Bici, fase 2: elegir (o agregar) la bicicleta ──
+const SERVICE_BICI: PasoTour[] = [
+    {
+        id: 'sm-bici',
+        selector: 'sm-bici',
+        titulo: 'La bicicleta que ingresa',
+        cuerpo:
+            'Seleccione la bicicleta que entra al taller, o agréguela al garage si es nueva. Cada bicicleta lleva su propio historial y su propio estado de salud, separados del resto.',
         botonSiguiente: 'Entendido',
     },
 ];
@@ -307,11 +331,57 @@ const FINALIZAR: PasoTour[] = [
     },
 ];
 
-export type ContextoTour = 'bienvenida' | 'garage' | 'service' | 'finalizar';
+// ── Retención con avisos activos: cómo se convierte el aviso en visita ──
+const RETENCION: PasoTour[] = [
+    {
+        id: 'retencion-intro',
+        titulo: 'Convierta avisos en visitas',
+        cuerpo:
+            'Estos avisos nacieron de los diagnósticos registrados en los services. Veamos cómo transformarlos en la próxima visita del cliente, en menos de un minuto.',
+        botonSiguiente: 'Ver cómo',
+    },
+    {
+        id: 'retencion-urgentes',
+        selector: 'retencion-urgentes',
+        opcional: true,
+        titulo: 'Atención inmediata',
+        cuerpo:
+            'Componentes vencidos o que vencen hoy: a estos clientes conviene contactarlos primero.',
+    },
+    {
+        id: 'retencion-contactar',
+        selector: 'retencion-contactar',
+        opcional: true,
+        titulo: 'El mensaje, ya escrito',
+        cuerpo:
+            'Con «Contactar por WhatsApp» se abre el chat con el mensaje preparado para ese cliente y su componente; con «Copiar Mensaje» lo lleva al canal que prefiera. Solo debe revisarlo y enviarlo.',
+    },
+    {
+        id: 'retencion-proximos',
+        selector: 'retencion-proximos',
+        opcional: true,
+        titulo: 'Próximos vencimientos',
+        cuerpo:
+            'Lo que vence en los próximos días, ordenado por urgencia: su agenda de reventa para anticiparse, también con el WhatsApp a un clic.',
+        botonSiguiente: 'Entendido',
+    },
+];
+
+export type ContextoTour =
+    | 'bienvenida'
+    | 'garage'
+    | 'service-cliente'
+    | 'service-bici'
+    | 'service'
+    | 'finalizar'
+    | 'retencion';
 
 export const TOURS: Record<ContextoTour, PasoTour[]> = {
     bienvenida: BIENVENIDA,
     garage: GARAGE,
+    'service-cliente': SERVICE_CLIENTE,
+    'service-bici': SERVICE_BICI,
     service: SERVICE,
     finalizar: FINALIZAR,
+    retencion: RETENCION,
 };

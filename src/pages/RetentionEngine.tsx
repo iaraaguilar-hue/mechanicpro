@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useDataStore } from "@/store/dataStore";
+import { lanzarTourContextual } from "@/components/OnboardingTour";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +33,15 @@ export default function RetentionEngine() {
         [recordatorios, bicicletas, clientes, servicios, carreras]
     );
 
+    // Guía contextual del cobro de retención: 1 vez por dispositivo, la primera
+    // vez que se entra con avisos ACTIVOS (con la pantalla vacía no hay nada
+    // que mostrar; la bienvenida ya explicó el concepto).
+    useEffect(() => {
+        if (isHydrating || alerts.length === 0) return;
+        const t = setTimeout(() => lanzarTourContextual('retencion'), 800);
+        return () => clearTimeout(t);
+    }, [isHydrating, alerts.length]);
+
     if (isHydrating) return <div className="p-8 text-center text-muted-foreground">Cargando motor de retención...</div>;
 
     const urgentAlerts = alerts.filter(a => a.daysRemaining <= 0);
@@ -56,7 +66,7 @@ export default function RetentionEngine() {
             )}
 
             {urgentAlerts.length > 0 && (
-                <div className="space-y-4">
+                <div data-tour="retencion-urgentes" className="space-y-4">
                     <div className="flex items-center gap-2 text-red-600">
                         <AlertTriangle className="h-6 w-6 animate-pulse" />
                         <h2 className="text-xl font-bold">Atención Inmediata (Vencidos o Vencen Hoy)</h2>
@@ -75,7 +85,7 @@ export default function RetentionEngine() {
                         <Calendar className="h-6 w-6" />
                         <h2 className="text-xl font-bold">Próximos Vencimientos</h2>
                     </div>
-                    <div className="rounded-md border bg-card">
+                    <div data-tour="retencion-proximos" className="rounded-md border bg-card">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -217,7 +227,7 @@ function AlertCard({ alert }: { alert: RetentionAlert }) {
                         }
                     </div>
                 </div>
-                <div className="flex flex-col gap-2">
+                <div data-tour="retencion-contactar" className="flex flex-col gap-2">
                     <Button className={`w-full font-semibold ${alert.isPostCarrera ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`} asChild>
                         <a
                             href={`https://wa.me/${alert.clientPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(messageText)}`}

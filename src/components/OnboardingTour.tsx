@@ -51,12 +51,6 @@ export const useTourStore = create<TourState>((set, get) => ({
     setPaso: (paso) => set({ paso }),
 }));
 
-/** Disparo de un tutorial contextual: 1 vez por dispositivo, nunca encima de otro tour. */
-export function lanzarTourContextual(ctx: ContextoTour) {
-    const s = useTourStore.getState();
-    if (!s.activo && !tourVisto(ctx)) s.iniciar(ctx);
-}
-
 /** Para pasar a los DialogContent: evita que el clic en el globo cierre el modal. */
 export function tourBloqueaCierreDialog(e: { preventDefault: () => void }) {
     if (useTourStore.getState().activo) e.preventDefault();
@@ -101,6 +95,10 @@ export function OnboardingTour() {
     const pasos = TOURS[contexto];
     const pasoActual: PasoTour | undefined = pasos[paso];
     const esUltimo = paso === pasos.length - 1;
+    // Paso "libre": el velo deja pasar los clics — o porque la persona tiene
+    // que hacer una acción real (avanza) o porque la app puede mostrar
+    // carteles propios que hay que poder cerrar (libre).
+    const esLibre = !!(pasoActual?.avanza || pasoActual?.libre);
 
     // ── Auto-arranque del recorrido general: primera vez que un usuario del
     // taller abre la app en este dispositivo. El super_admin (Iara) no lo ve.
@@ -285,6 +283,34 @@ export function OnboardingTour() {
         setGloboStyle({ top, left, width: ancho });
     }, [targetRect, paso, buscando]);
 
+    // ── Avance automático de los pasos interactivos: mira el DOM cada 300 ms
+    // y avanza cuando la acción real de la persona hizo `aparecer` el elemento
+    // esperado o `desaparecer` el que estaba (ej: se cerró el modal).
+    const avanzarRef = useRef<() => void>(() => {});
+    useEffect(() => {
+        if (!activo || !pasoActual?.avanza) return;
+        const { aparece, desaparece } = pasoActual.avanza;
+        let vistoElQueDesaparece = desaparece
+            ? !!document.querySelector(`[data-tour="${desaparece}"]`)
+            : false;
+        const intervalo = setInterval(() => {
+            if (aparece && buscarElemento(aparece)) {
+                clearInterval(intervalo);
+                avanzarRef.current();
+                return;
+            }
+            if (desaparece) {
+                const esta = !!document.querySelector(`[data-tour="${desaparece}"]`);
+                if (esta) vistoElQueDesaparece = true;
+                else if (vistoElQueDesaparece) {
+                    clearInterval(intervalo);
+                    avanzarRef.current();
+                }
+            }
+        }, 300);
+        return () => clearInterval(intervalo);
+    }, [activo, paso, pasoActual]);
+
     const avanzar = useCallback(() => {
         direccionRef.current = 1;
         if (esUltimo) {
@@ -298,6 +324,9 @@ export function OnboardingTour() {
         direccionRef.current = -1;
         if (paso > 0) setPaso(paso - 1);
     }, [paso, setPaso]);
+
+    // El watcher de avance necesita siempre la versión fresca de avanzar.
+    useEffect(() => { avanzarRef.current = avanzar; }, [avanzar]);
 
     // ── Teclado: → / Enter avanza, ← retrocede, Esc omite.
     useEffect(() => {
@@ -314,15 +343,20 @@ export function OnboardingTour() {
 
     if (!activo || !pasoActual) return null;
 
+    // En pasos interactivos el velo es más suave: la persona tiene que poder
+    // leer y operar la pantalla real mientras hace la acción.
+    const sombraVelo = esLibre ? 'rgba(2, 6, 23, 0.45)' : 'rgba(2, 6, 23, 0.72)';
+
     return (
         <div
             className="fixed inset-0 z-[150]"
-            style={{ pointerEvents: 'auto' }}
+            style={{ pointerEvents: esLibre ? 'none' : 'auto' }}
             role="dialog"
-            aria-modal="true"
+            aria-modal={!esLibre}
             aria-label="Recorrido de bienvenida"
         >
-            {/* Capa que bloquea la interacción con la app durante el recorrido. */}
+            {/* Capa que bloquea la interacción con la app durante el recorrido
+                (en pasos interactivos el contenedor entero deja pasar los clics). */}
             <div className="absolute inset-0" />
 
             {/* El foco: recuadro de luz sobre el elemento; su box-shadow gigante
@@ -335,15 +369,19 @@ export function OnboardingTour() {
                         left: focoRect.left,
                         width: focoRect.width,
                         height: focoRect.height,
-                        boxShadow: '0 0 0 9999px rgba(2, 6, 23, 0.72)',
+                        boxShadow: `0 0 0 9999px ${sombraVelo}`,
                     }}
                 />
             ) : (
-                <div className="absolute inset-0 transition-opacity duration-300" style={{ backgroundColor: 'rgba(2, 6, 23, 0.72)' }} />
+                <div className="absolute inset-0 transition-opacity duration-300" style={{ backgroundColor: sombraVelo }} />
             )}
 
             {/* Cartel de transición: "entrando a la sección X". */}
-            {transicion ? (
+            {buscando && pasoActual.opcional ? (
+                /* Paso opcional buscando su elemento: no mostrar el globo todavía —
+                   si el elemento no existe, el paso se saltea sin flashear. */
+                null
+            ) : transicion ? (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="text-center animate-in fade-in zoom-in-95 duration-300">
                         <p className="text-[12px] font-bold uppercase tracking-[0.3em] text-white/70 mb-2">
@@ -360,7 +398,7 @@ export function OnboardingTour() {
                 <div
                     ref={globoRef}
                     className="absolute bg-white rounded-2xl shadow-2xl p-5 transition-all duration-300 ease-out animate-in fade-in"
-                    style={globoStyle}
+                    style={{ ...globoStyle, pointerEvents: 'auto' }}
                 >
                     <div className="flex items-start justify-between gap-3 mb-2">
                         <p className="text-[11px] font-bold uppercase tracking-widest text-primary">
@@ -391,23 +429,44 @@ export function OnboardingTour() {
                         ))}
                     </div>
 
-                    <div className="flex items-center justify-between gap-3">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={retroceder}
-                            className={paso === 0 ? 'invisible' : 'text-slate-500'}
-                        >
-                            Anterior
-                        </Button>
-                        <Button
-                            size="sm"
-                            onClick={avanzar}
-                            className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6"
-                        >
-                            {pasoActual.botonSiguiente || 'Siguiente'}
-                        </Button>
-                    </div>
+                    {pasoActual.avanza ? (
+                        /* Paso interactivo: la acción real de la persona hace avanzar. */
+                        <div className="flex items-center justify-between gap-3">
+                            <span className="flex items-center gap-2 text-xs font-semibold text-primary">
+                                <span className="relative flex h-2.5 w-2.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
+                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary" />
+                                </span>
+                                Esperando su acción…
+                            </span>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={avanzar}
+                                className="text-slate-400 hover:text-slate-600"
+                            >
+                                Saltear paso
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="flex items-center justify-between gap-3">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={retroceder}
+                                className={paso === 0 ? 'invisible' : 'text-slate-500'}
+                            >
+                                Anterior
+                            </Button>
+                            <Button
+                                size="sm"
+                                onClick={avanzar}
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6"
+                            >
+                                {pasoActual.botonSiguiente || 'Siguiente'}
+                            </Button>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

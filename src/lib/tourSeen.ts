@@ -1,47 +1,51 @@
 // ─────────────────────────────────────────────────────────────
-// Recorridos guiados (onboarding): flag "visto" POR DISPOSITIVO,
-// mismo criterio que las novedades (novedadesSeen.ts) — la cuenta del
-// taller la comparten varios mecánicos, así cada tutorial le aparece
-// una vez a cada uno desde SU dispositivo.
-//
-// Hay varios contextos: 'bienvenida' (el recorrido general) y los
-// contextuales ('garage', 'service', 'finalizar'). Cada uno guarda su
-// propio flag. v1 en la llave: si un guion cambia fuerte, subir a v2
-// para que todos lo vuelvan a ver una vez.
+// Recorrido guiado (onboarding): flag "visto" POR DISPOSITIVO, mismo
+// criterio que las novedades (novedadesSeen.ts) — la cuenta del taller
+// la comparten varios mecánicos, así el recorrido le aparece una vez a
+// cada uno desde SU dispositivo.
+// v2 en la llave: el rediseño interactivo de ago-2026 unificó todo en
+// UN tour → todos lo ven una vez más. Si el guion vuelve a cambiar
+// fuerte, subir a v3.
 // ─────────────────────────────────────────────────────────────
 
 import type { ContextoTour } from '@/lib/tourSteps';
 
-// 'bienvenida' conserva la llave histórica (ya hay dispositivos con ella).
-const KEY_BASE = 'mechanicpro_tour';
-const keyDe = (ctx: ContextoTour) =>
-    ctx === 'bienvenida' ? `${KEY_BASE}_v1` : `${KEY_BASE}_${ctx}_v1`;
+const KEY = 'mechanicpro_tour_v2';
 
-const CONTEXTOS: ContextoTour[] = [
-    'bienvenida', 'garage', 'service-cliente', 'service-bici', 'service', 'finalizar', 'retencion',
+// Llaves de versiones anteriores (bienvenida v1 + tutoriales contextuales
+// que hoy viven dentro del tour único): se limpian en el reset.
+const KEYS_LEGADO = [
+    'mechanicpro_tour_v1',
+    'mechanicpro_tour_garage_v1',
+    'mechanicpro_tour_service-cliente_v1',
+    'mechanicpro_tour_service-bici_v1',
+    'mechanicpro_tour_service_v1',
+    'mechanicpro_tour_finalizar_v1',
+    'mechanicpro_tour_retencion_v1',
 ];
 
-export function tourVisto(ctx: ContextoTour = 'bienvenida'): boolean {
+export function tourVisto(_ctx: ContextoTour = 'bienvenida'): boolean {
     try {
-        return localStorage.getItem(keyDe(ctx)) === 'visto';
+        return localStorage.getItem(KEY) === 'visto';
     } catch {
         // Sin localStorage (modo privado raro) → no insistir con el tour.
         return true;
     }
 }
 
-export function marcarTourVisto(ctx: ContextoTour = 'bienvenida'): void {
+export function marcarTourVisto(_ctx: ContextoTour = 'bienvenida'): void {
     try {
-        localStorage.setItem(keyDe(ctx), 'visto');
+        localStorage.setItem(KEY, 'visto');
     } catch {
         // Sin localStorage no hay persistencia posible; seguir sin romper.
     }
 }
 
-/** Reset total (botón de Configuración): todos los tutoriales vuelven a aparecer. */
+/** Reset (botón de Configuración): el recorrido vuelve a estar disponible. */
 export function resetTours(): void {
     try {
-        CONTEXTOS.forEach((ctx) => localStorage.removeItem(keyDe(ctx)));
+        localStorage.removeItem(KEY);
+        KEYS_LEGADO.forEach((k) => localStorage.removeItem(k));
     } catch {
         // Ídem: sin localStorage no hay nada que resetear.
     }

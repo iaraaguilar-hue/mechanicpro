@@ -19,7 +19,6 @@ import { cn } from "@/lib/utils";
 import { AddBikeDialog } from "@/components/AddBikeDialog";
 import { ServiceModal } from "@/components/ServiceModal";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { lanzarTourContextual } from "@/components/OnboardingTour";
 
 export default function BikeDetail() {
     const { id, clientId } = useParams<{ id: string, clientId: string }>();
@@ -70,14 +69,6 @@ export default function BikeDetail() {
     }, [location.state, activeBikeId, navigate, location.pathname]);
 
     const activeBike = clientBikes.find(b => b.id === activeBikeId);
-
-    // Tutorial contextual de la ficha del cliente (garage/salud/historial):
-    // 1 vez por dispositivo, la primera vez que se abre un perfil.
-    useEffect(() => {
-        if (!client) return;
-        const t = setTimeout(() => lanzarTourContextual('garage'), 800);
-        return () => clearTimeout(t);
-    }, [client]);
 
     // Services and reminders for active bike
     const services = useMemo(() =>
@@ -210,7 +201,7 @@ export default function BikeDetail() {
                     <span className="font-semibold text-foreground">{client?.nombre}</span>
                 </div>
 
-                <div className="bg-white p-6 rounded-xl border shadow-sm space-y-6">
+                <div data-tour="garage-header" className="bg-white p-6 rounded-xl border shadow-sm space-y-6">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                         <div>
                             <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">

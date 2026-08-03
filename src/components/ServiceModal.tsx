@@ -20,7 +20,7 @@ import { TareasServiceEditor } from "@/components/TareasServiceEditor";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
 import { NuevoBadge } from "@/components/NuevoBadge";
 import { type TareaService } from "@/lib/planFeatures";
-import { lanzarTourContextual, tourBloqueaCierreDialog } from "@/components/OnboardingTour";
+import { tourBloqueaCierreDialog } from "@/components/OnboardingTour";
 
 // Service types (const object pattern for erasableSyntaxOnly compatibility)
 // export const ServiceType = {
@@ -78,17 +78,6 @@ export function ServiceModal({
         if (!open) onClose();
     };
 
-    // Guías contextuales del flujo Recibir Bici: cada fase enseña la suya la
-    // primera vez (identificar cliente → elegir bici; la orden tiene la propia).
-    useEffect(() => {
-        if (!isOpen) return;
-        const ctx = step === "SEARCH_CLIENT" ? 'service-cliente' as const
-            : step === "SELECT_BIKE" ? 'service-bici' as const
-            : null;
-        if (!ctx) return;
-        const t = setTimeout(() => lanzarTourContextual(ctx), 500);
-        return () => clearTimeout(t);
-    }, [isOpen, step]);
 
     return (
         <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -340,12 +329,6 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
     const momentoDiag = taller?.config_notificaciones?.momento_diagnostico || 'final';
     const verDiagnostico = !!serviceId && (momentoDiag === 'durante' || momentoDiag === 'ambos');
 
-    // Tutorial contextual de la orden de trabajo: 1 vez por dispositivo, la
-    // primera vez que la persona llega a este formulario.
-    useEffect(() => {
-        const t = setTimeout(() => lanzarTourContextual('service'), 600);
-        return () => clearTimeout(t);
-    }, []);
 
     // Fetch config and existing services
     useEffect(() => {

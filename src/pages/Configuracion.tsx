@@ -946,10 +946,10 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     Recorrido de bienvenida
                 </CardTitle>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                    El tutorial guiado de la primera vez: recorre las secciones y explica su valor.
-                    Ideal para capacitar a alguien nuevo del equipo sin explicarle nada a mano.
-                    Reiniciarlo también reactiva las guías paso a paso de cada pantalla (recibir
-                    una bici, la orden de trabajo, la ficha del cliente, finalizar y Retención).
+                    El tutorial interactivo completo: recorre todas las secciones y, en los pasos
+                    clave, la persona opera el sistema con sus propias manos (recibe una bici,
+                    abre una finalización, explora una ficha). Ideal para capacitar a alguien
+                    nuevo del equipo sin explicarle nada a mano.
                 </p>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col">

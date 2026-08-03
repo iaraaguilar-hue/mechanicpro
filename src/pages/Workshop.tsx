@@ -20,7 +20,7 @@ import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthChec
 import { resolveOrdenWebhookUrl, resolveEntregadoWebhookUrl } from "@/lib/ordenWebhook";
 import { EtapasChecklist } from "@/components/EtapasChecklist";
 import { avancesActivos, trabajosPendientes, tareasActivas, bloqueoFinalizacionActivo, tareasLibresPendientes } from "@/lib/planFeatures";
-import { lanzarTourContextual, tourBloqueaCierreDialog } from "@/components/OnboardingTour";
+import { tourBloqueaCierreDialog } from "@/components/OnboardingTour";
 
 export const formatSafeDate = (dateString: string | null | undefined): string => {
     if (!dateString) return '-';
@@ -692,13 +692,6 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
     const [pendientesConfirm, setPendientesConfirm] = useState<string[] | null>(null);
     const [bloqueoPendientes, setBloqueoPendientes] = useState<string[] | null>(null);
 
-    // Tutorial contextual del cierre del service (incluye el diagnóstico):
-    // 1 vez por dispositivo, la primera vez que se abre este diálogo.
-    useEffect(() => {
-        if (!isOpen) return;
-        const t = setTimeout(() => lanzarTourContextual('finalizar'), 600);
-        return () => clearTimeout(t);
-    }, [isOpen]);
 
     const handleFinalize = async () => {
         if (!service) return;

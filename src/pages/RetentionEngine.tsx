@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useDataStore } from "@/store/dataStore";
-import { lanzarTourContextual } from "@/components/OnboardingTour";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,15 +31,6 @@ export default function RetentionEngine() {
         () => buildRetentionAlerts({ recordatorios, bicicletas, clientes, servicios, carreras }),
         [recordatorios, bicicletas, clientes, servicios, carreras]
     );
-
-    // Guía contextual del cobro de retención: 1 vez por dispositivo, la primera
-    // vez que se entra con avisos ACTIVOS (con la pantalla vacía no hay nada
-    // que mostrar; la bienvenida ya explicó el concepto).
-    useEffect(() => {
-        if (isHydrating || alerts.length === 0) return;
-        const t = setTimeout(() => lanzarTourContextual('retencion'), 800);
-        return () => clearTimeout(t);
-    }, [isHydrating, alerts.length]);
 
     if (isHydrating) return <div className="p-8 text-center text-muted-foreground">Cargando motor de retención...</div>;
 

@@ -141,7 +141,7 @@ export default function Home() {
             {/* Grid */}
             {/* ── MOBILE: Accordion list (hidden on md+) ── */}
             {!isHydrating && (
-                <div className="block md:hidden">
+                <div data-tour="clientes-grilla" className="block md:hidden">
                     {clientList.length === 0 ? (
                         <p className="text-center py-12 text-slate-400">No se encontraron resultados</p>
                     ) : (
@@ -177,7 +177,7 @@ export default function Home() {
                     <p className="text-lg">No se encontraron resultados</p>
                 </div>
             ) : (
-                <div className="hidden md:grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div data-tour="clientes-grilla" className="hidden md:grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {clientList.map((client, index) => (
                         <div key={client.clientId} className="relative group">
                             <Link

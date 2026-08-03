@@ -369,7 +369,7 @@ export default function History() {
         <div className="p-8 space-y-8 max-w-[1800px] mx-auto min-h-screen bg-transparent">
             {/* Header Area */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
+                <div data-tour="historial">
                     <h1 className="text-3xl font-extrabold text-slate-900 flex items-center gap-3 tracking-tight">
                         <ClipboardList className="h-8 w-8 text-primary" />
                         Historial de Trabajos
@@ -379,7 +379,7 @@ export default function History() {
             </div>
 
             {/* Filters Bar */}
-            <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col xl:flex-row gap-6 items-start xl:items-center justify-between">
+            <div data-tour="historial-buscador" className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col xl:flex-row gap-6 items-start xl:items-center justify-between">
 
                 <div className="flex flex-col lg:flex-row gap-4 w-full xl:w-auto items-start lg:items-center">
                     {/* Date Picker */}

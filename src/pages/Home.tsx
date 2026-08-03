@@ -114,7 +114,7 @@ export default function Home() {
                 </div>
 
                 <div className="flex items-center gap-4 flex-1 justify-end w-full md:w-auto">
-                    <div className="relative w-full md:w-96">
+                    <div data-tour="buscador-clientes" className="relative w-full md:w-96">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <Input
                             placeholder="Buscar por cliente o modelo..."
@@ -126,7 +126,7 @@ export default function Home() {
                 </div>
             </div>
 
-            <div className="flex justify-between items-center">
+            <div data-tour="clientes" className="flex justify-between items-center">
                 <h2 className="text-xl font-medium text-slate-600">Base de Datos de Flota y Clientes</h2>
                 <RapidIntakeWizard
                     onComplete={() => handleRefresh()}

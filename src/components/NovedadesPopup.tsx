@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getNovedadesVistas, marcarNovedadesVistas } from '@/lib/novedadesSeen';
+import { tourVisto } from '@/lib/tourSeen';
+import { useTourStore } from '@/components/OnboardingTour';
 import { Megaphone, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -31,6 +33,11 @@ export function NovedadesPopup() {
             });
         return () => { alive = false; };
     }, []);
+
+    // No pisarse con el recorrido de bienvenida: si el tour está pendiente o
+    // corriendo, las novedades esperan a la próxima apertura de la app.
+    const tourActivo = useTourStore((s) => s.activo);
+    if (tourActivo || !tourVisto()) return null;
 
     if (cerrado || pendientes.length === 0) return null;
 

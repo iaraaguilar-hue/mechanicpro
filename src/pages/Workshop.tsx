@@ -203,7 +203,7 @@ export default function Workshop() {
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
+                <div data-tour="taller-activo">
                     <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
                         <Wrench className="h-8 w-8 text-primary" />
                         Taller Activo
@@ -214,6 +214,7 @@ export default function Workshop() {
                     {/* Recibir Bici abre el wizard directo (identificación del cliente),
                         sin pantalla intermedia de Recepción (Tarea E). */}
                     <Button
+                        data-tour="recibir-bici"
                         className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
                         onClick={() => setNewServiceOpen(true)}
                     >
@@ -225,7 +226,7 @@ export default function Workshop() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 w-full">
+            <div data-tour="contadores" className="grid grid-cols-2 gap-4 w-full">
                 <Card className="bg-primary border-none shadow-md text-primary-foreground">
                     <CardContent className="p-6 flex flex-col gap-1">
                         <p className="text-xs font-bold text-white/90 uppercase tracking-widest">En Proceso</p>
@@ -245,7 +246,7 @@ export default function Workshop() {
             </div>
 
             {/* ── MOBILE: Compact horizontal cards (hidden on md+) ── */}
-            <div className="block md:hidden">
+            <div data-tour="mesa-trabajo" className="block md:hidden">
                 {jobs.length === 0 ? (
                     <p className="text-center text-muted-foreground py-12">No hay bicicletas en el taller.</p>
                 ) : (
@@ -262,7 +263,7 @@ export default function Workshop() {
             </div>
 
             {/* ── DESKTOP: Full table (hidden on mobile) ── */}
-            <div className="hidden md:block rounded-md border bg-card">
+            <div data-tour="mesa-trabajo" className="hidden md:block rounded-md border bg-card">
                 <Table>
                     <TableHeader>
                         <TableRow className="bg-muted/50 hover:bg-muted/50">

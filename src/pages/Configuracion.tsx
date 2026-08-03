@@ -14,8 +14,10 @@ import { RichTextEditor } from '@/components/RichTextEditor';
 import { NuevoBadge } from '@/components/NuevoBadge';
 import {
     Settings, Loader2, Save, UploadCloud, Plus, Edit2, Check, X,
-    AlertCircle, Sparkles, ListChecks, CheckCircle, Lock, Bell, HeartPulse
+    AlertCircle, Sparkles, ListChecks, CheckCircle, Lock, Bell, HeartPulse,
+    GraduationCap, PlayCircle
 } from 'lucide-react';
+import { useTourStore } from '@/components/OnboardingTour';
 
 // ─────────────────────────────────────────────────────────────
 // Guardrails del logo: la calidad del branding ya no pasa por Iara,
@@ -96,7 +98,7 @@ export default function Configuracion() {
 
     return (
         <div className="space-y-6">
-            <div>
+            <div data-tour="configuracion">
                 <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
                     <Settings className="h-8 w-8 text-primary" />
                     Configuración del Taller
@@ -936,6 +938,27 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                 <Button onClick={handleSaveDiag} disabled={savingDiag} className="w-full">
                     {savingDiag ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                     Guardar preferencias
+                </Button>
+            </CardContent>
+        </Card>
+
+        {/* ── Recorrido de bienvenida (todos los planes) ── */}
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                    <GraduationCap className="h-5 w-5 text-primary" />
+                    Recorrido de bienvenida
+                </CardTitle>
+                <p className="text-sm text-muted-foreground">
+                    El tutorial guiado que aparece la primera vez que se abre la aplicación:
+                    recorre todas las secciones y explica para qué sirve cada una. Ideal para
+                    capacitar a alguien nuevo del equipo sin explicarle nada a mano.
+                </p>
+            </CardHeader>
+            <CardContent>
+                <Button variant="outline" className="w-full" onClick={() => useTourStore.getState().iniciar()}>
+                    <PlayCircle className="h-4 w-4 mr-2" />
+                    Ver el recorrido nuevamente
                 </Button>
             </CardContent>
         </Card>

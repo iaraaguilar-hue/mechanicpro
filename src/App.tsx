@@ -28,6 +28,7 @@ import { useIdleTimeout } from "@/hooks/useIdleTimeout";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { NotificationBell } from "@/components/NotificationBell";
 import { NovedadesPopup } from "@/components/NovedadesPopup";
+import { OnboardingTour } from "@/components/OnboardingTour";
 
 function AppContent() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -151,10 +152,13 @@ function AppContent() {
       {updateAvailable && <UpdateBanner />}
       {/* Pop-up de novedades al abrir la app — 1 vez por dispositivo (Tarea C) */}
       <NovedadesPopup />
+      {/* Recorrido de bienvenida — 1 vez por dispositivo; repetible desde Configuración */}
+      <OnboardingTour />
 
       {/* ── MOBILE HEADER (visible only on < md) ── */}
       <header className="flex md:hidden items-center justify-between px-4 py-3 bg-white border-b border-slate-200 sticky top-0 z-50">
         <button
+          data-tour="menu-mobile"
           className="p-2 -ml-2 text-slate-600 hover:bg-slate-100 rounded-md active:bg-slate-200 transition-colors"
           onClick={() => setDrawerOpen(true)}
           aria-label="Abrir menú"
@@ -170,7 +174,7 @@ function AppContent() {
         </div>
         <div className="flex items-center gap-1 -mr-2">
           {/* Centro de notificaciones */}
-          <NotificationBell variant="mobile" />
+          <div data-tour="notificaciones-mobile"><NotificationBell variant="mobile" /></div>
 
           {/* User dropdown */}
           <div className="relative">
@@ -280,7 +284,7 @@ function AppContent() {
       )}
 
       {/* ── DESKTOP SIDEBAR (hidden on mobile) ── */}
-      <nav className="hidden md:flex w-28 border-r border-border bg-card flex-col items-center py-4 space-y-4 sticky top-0 z-10 h-screen overflow-y-auto">
+      <nav data-tour="nav" className="hidden md:flex w-28 border-r border-border bg-card flex-col items-center py-4 space-y-4 sticky top-0 z-10 h-screen overflow-y-auto">
         <div className="mb-6 text-center w-full px-2 shrink-0">
           <div className="flex flex-col items-center justify-center mb-2 mt-2 w-full">
             {taller?.logo_url ? (
@@ -302,7 +306,7 @@ function AppContent() {
         </div>
 
         <div className="flex-1 flex flex-col items-center space-y-4 justify-start">
-          <NotificationBell variant="desktop" />
+          <div data-tour="notificaciones"><NotificationBell variant="desktop" /></div>
           <Link to="/"><NavButton icon={<Wrench />} label="Taller Activo" /></Link>
           <Link to="/clientes"><NavButton icon={<Users />} label="Clientes" /></Link>
           <Link to="/history"><NavButton icon={<History />} label="Historial" /></Link>

@@ -39,7 +39,7 @@ export default function RetentionEngine() {
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
-            <div>
+            <div data-tour="retencion">
                 <h1 className="text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-3">
                     <BellRing className="w-8 h-8 text-primary" />
                     Motor de Retención

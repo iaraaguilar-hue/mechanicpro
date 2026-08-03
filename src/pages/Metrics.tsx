@@ -339,7 +339,7 @@ export default function Metrics() {
     // ─── Shared Header ────────────────────────────────────────────────────────
     const header = (
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
+            <div data-tour="metricas">
                 <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
                     <BarChart3 className="h-8 w-8 text-primary" />
                     Métricas y Estadísticas

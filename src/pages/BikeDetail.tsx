@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { AddBikeDialog } from "@/components/AddBikeDialog";
 import { ServiceModal } from "@/components/ServiceModal";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { lanzarTourContextual } from "@/components/OnboardingTour";
 
 export default function BikeDetail() {
     const { id, clientId } = useParams<{ id: string, clientId: string }>();
@@ -69,6 +70,14 @@ export default function BikeDetail() {
     }, [location.state, activeBikeId, navigate, location.pathname]);
 
     const activeBike = clientBikes.find(b => b.id === activeBikeId);
+
+    // Tutorial contextual de la ficha del cliente (garage/salud/historial):
+    // 1 vez por dispositivo, la primera vez que se abre un perfil.
+    useEffect(() => {
+        if (!client) return;
+        const t = setTimeout(() => lanzarTourContextual('garage'), 800);
+        return () => clearTimeout(t);
+    }, [client]);
 
     // Services and reminders for active bike
     const services = useMemo(() =>
@@ -231,7 +240,7 @@ export default function BikeDetail() {
 
                     {/* Bike Tabs */}
                     {clientBikes.length > 0 && (
-                        <div className="flex overflow-x-auto gap-2 pb-1 border-b">
+                        <div data-tour="garage-bicis" className="flex overflow-x-auto gap-2 pb-1 border-b">
                             {clientBikes.map(b => (
                                 <button
                                     key={b.id}
@@ -259,7 +268,7 @@ export default function BikeDetail() {
                                 <div className="text-sm text-slate-500">
                                     Transmisión: <span className="font-medium text-slate-900">{activeBike.transmision || "N/A"}</span>
                                 </div>
-                                <Button size="default" className="shadow-sm bg-blue-600 hover:bg-blue-700" onClick={() => setIsServiceDialogOpen(true)}>
+                                <Button data-tour="garage-iniciar" size="default" className="shadow-sm bg-blue-600 hover:bg-blue-700" onClick={() => setIsServiceDialogOpen(true)}>
                                     <Wrench className="mr-2 h-4 w-4" /> Iniciar Service
                                 </Button>
                             </div>
@@ -285,7 +294,7 @@ export default function BikeDetail() {
             ) : (
                 <>
                     {/* 2. Bike Health */}
-                    <section className="space-y-4">
+                    <section data-tour="garage-salud" className="space-y-4">
                         <h3 className="text-xl font-bold flex items-center gap-2 text-slate-800">
                             <Clock className="h-5 w-5 text-primary" /> Estado de Salud & Mantenimiento
                         </h3>
@@ -361,7 +370,7 @@ export default function BikeDetail() {
                     </section>
 
                     {/* 3. Service History */}
-                    <section className="space-y-4 pt-4 border-t">
+                    <section data-tour="garage-historial" className="space-y-4 pt-4 border-t">
                         <div className="flex items-center justify-between">
                             <h3 className="text-xl font-bold flex items-center gap-2 text-slate-800">
                                 <Wrench className="h-5 w-5 text-primary" /> Historial de Servicios

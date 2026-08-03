@@ -34,10 +34,13 @@ export function NovedadesPopup() {
         return () => { alive = false; };
     }, []);
 
-    // No pisarse con el recorrido de bienvenida: si el tour está pendiente o
-    // corriendo, las novedades esperan a la próxima apertura de la app.
+    // No pisarse con el recorrido de bienvenida: si al abrir la app el tour
+    // estaba pendiente (o está corriendo), las novedades esperan a la PRÓXIMA
+    // apertura — dos carteles seguidos agobian. Se evalúa al montar para que
+    // el popup no salte apenas la persona termina el recorrido.
+    const [tourYaVistoAlAbrir] = useState(() => tourVisto());
     const tourActivo = useTourStore((s) => s.activo);
-    if (tourActivo || !tourVisto()) return null;
+    if (tourActivo || !tourYaVistoAlAbrir) return null;
 
     if (cerrado || pendientes.length === 0) return null;
 

@@ -18,6 +18,7 @@ import {
     GraduationCap, PlayCircle
 } from 'lucide-react';
 import { useTourStore } from '@/components/OnboardingTour';
+import { resetTours } from '@/lib/tourSeen';
 
 // ─────────────────────────────────────────────────────────────
 // Guardrails del logo: la calidad del branding ya no pasa por Iara,
@@ -800,35 +801,32 @@ function TabPreferencias({ taller, setTaller, avisar }: {
         }
     };
 
+    // Rediseño compacto (pedido Iara 3-ago-2026): las preferencias se leen de
+    // un vistazo — grilla de 2 columnas en desktop, textos cortos, el ejemplo
+    // plegado. La información es la misma; el scroll, la mitad.
     return (
-        <div className="space-y-6 max-w-2xl">
+        <div className="grid gap-4 lg:grid-cols-2 items-start">
         <Card>
-            <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                    <ListChecks className="h-5 w-5 text-primary" />
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <ListChecks className="h-4 w-4 text-primary" />
                     Checklist de trabajos del service
                 </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                    Cada orden ya dice qué hay que hacerle a esa bici. Con esto activado, esos trabajos
-                    aparecen como una lista tildable en la Mesa de Trabajo: el mecánico marca cada cosa
-                    a medida que la termina, y al finalizar la app avisa si quedó algo sin tildar.
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                    Los trabajos de cada orden aparecen como lista tildable en la Mesa de Trabajo;
+                    al finalizar, la app avisa si quedó algo sin marcar.
                 </p>
             </CardHeader>
-            <CardContent className="space-y-5">
+            <CardContent className="space-y-3">
                 {!tienePlanChecklist && (
-                    <div className="flex items-start gap-2 p-3 rounded-md border border-amber-200 bg-amber-50 text-amber-900 text-sm">
-                        <Sparkles className="h-4 w-4 mt-0.5 shrink-0 text-amber-600" />
+                    <div className="flex items-center gap-2 p-2.5 rounded-md border border-amber-200 bg-amber-50 text-amber-900 text-xs">
+                        <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-600" />
                         Disponible en los planes Pro y Expert.
                     </div>
                 )}
 
-                <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/20">
-                    <div>
-                        <p className="font-semibold text-sm">Activar checklist de trabajos</p>
-                        <p className="text-xs text-muted-foreground">
-                            Es opcional: si tu taller no lo necesita, dejalo apagado y la app sigue igual que siempre.
-                        </p>
-                    </div>
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <p className="font-semibold text-sm pr-3">Activar checklist de trabajos</p>
                     <Switch
                         checked={habilitado}
                         onCheckedChange={setHabilitado}
@@ -836,127 +834,129 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     />
                 </div>
 
-                {/* Ejemplo concreto para que se entienda sin probarlo */}
-                <div className="rounded-lg border bg-slate-50 p-4 text-sm">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Ejemplo</p>
-                    <p className="text-slate-600 mb-2">Si la orden tiene cargado:</p>
-                    <ul className="space-y-1 text-slate-700">
-                        <li className="flex items-center gap-2"><Check size={14} className="text-green-600" /> Service Completo <span className="text-[10px] font-semibold px-1.5 rounded-full bg-primary/10 text-primary">Service</span></li>
-                        <li className="flex items-center gap-2"><Check size={14} className="text-green-600" /> Cambio de cadena <span className="text-[10px] font-semibold px-1.5 rounded-full bg-blue-50 text-blue-600">Mano de obra</span></li>
-                        <li className="flex items-center gap-2"><span className="w-3.5 h-3.5 border rounded-sm inline-block" /> Cadena Shimano 11v <span className="text-[10px] font-semibold px-1.5 rounded-full bg-slate-100 text-slate-500">Repuesto</span></li>
-                    </ul>
-                    <p className="text-slate-500 text-xs mt-2">
-                        …ese es el checklist de esa orden. Se agrega un trabajo a la orden → aparece solo en la lista.
-                    </p>
-                </div>
+                {/* Ejemplo concreto, plegado para no ocupar pantalla */}
+                <details className="rounded-lg border bg-slate-50">
+                    <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+                        Ver ejemplo
+                    </summary>
+                    <div className="px-3 pb-3">
+                        <p className="text-slate-600 text-xs mb-1.5">Si la orden tiene cargado:</p>
+                        <ul className="space-y-1 text-slate-700 text-xs">
+                            <li className="flex items-center gap-2"><Check size={13} className="text-green-600" /> Service Completo <span className="text-[10px] font-semibold px-1.5 rounded-full bg-primary/10 text-primary">Service</span></li>
+                            <li className="flex items-center gap-2"><Check size={13} className="text-green-600" /> Cambio de cadena <span className="text-[10px] font-semibold px-1.5 rounded-full bg-blue-50 text-blue-600">Mano de obra</span></li>
+                            <li className="flex items-center gap-2"><span className="w-3 h-3 border rounded-sm inline-block" /> Cadena Shimano 11v <span className="text-[10px] font-semibold px-1.5 rounded-full bg-slate-100 text-slate-500">Repuesto</span></li>
+                        </ul>
+                        <p className="text-slate-500 text-[11px] mt-1.5">
+                            …ese es el checklist de esa orden. Se agrega un trabajo → aparece solo en la lista.
+                        </p>
+                    </div>
+                </details>
 
-                <Button onClick={handleSave} disabled={saving || !tienePlanChecklist} className="w-full">
+                <Button size="sm" onClick={handleSave} disabled={saving || !tienePlanChecklist} className="w-full">
                     {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                    Guardar preferencias
+                    Guardar
                 </Button>
             </CardContent>
         </Card>
 
         {/* ── Tareas del service (todos los planes) — pedido Cronobikes ── */}
         <Card>
-            <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                    <Bell className="h-5 w-5 text-primary" />
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <Bell className="h-4 w-4 text-primary" />
                     Tareas del service
                 </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                    Dentro de cada orden, el mecánico puede anotar tareas para no olvidarse
-                    (ej: "colocar plato 34 con su cadena"). Aparecen como una lista tildable en la
-                    Mesa de Trabajo. Disponible en todos los planes.
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                    El mecánico anota tareas libres en cada orden para no olvidarse
+                    (ej: "colocar plato 34"). Todos los planes.
                 </p>
             </CardHeader>
-            <CardContent className="space-y-5">
-                <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/20">
-                    <div className="pr-3">
-                        <p className="font-semibold text-sm">Activar tareas del service</p>
-                        <p className="text-xs text-muted-foreground">
-                            Es opcional: si lo dejás apagado, la app sigue igual que siempre.
-                        </p>
-                    </div>
+            <CardContent className="space-y-3">
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <p className="font-semibold text-sm pr-3">Activar tareas del service</p>
                     <Switch checked={tareasHab} onCheckedChange={setTareasHab} />
                 </div>
 
-                <div className={`flex items-center justify-between p-4 rounded-lg border transition-opacity ${tareasHab ? 'bg-amber-50/50 border-amber-200' : 'bg-muted/20 opacity-50'}`}>
+                <div className={`flex items-center justify-between p-3 rounded-lg border transition-opacity ${tareasHab ? 'bg-amber-50/50 border-amber-200' : 'bg-muted/20 opacity-50'}`}>
                     <div className="pr-3">
                         <p className="font-semibold text-sm flex items-center gap-1.5">
-                            <Lock className="h-4 w-4 text-amber-600" /> No dejar finalizar hasta completar las tareas
+                            <Lock className="h-4 w-4 text-amber-600" /> Candado de finalización
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                            El botón verde "Finalizar service" queda bloqueado hasta que el mecánico
-                            tilde todas las tareas cargadas en esa orden.
+                        <p className="text-[11px] text-muted-foreground">
+                            "Finalizar service" se bloquea hasta tildar todas las tareas de la orden.
                         </p>
                     </div>
                     <Switch checked={bloqueo} onCheckedChange={setBloqueo} disabled={!tareasHab} />
                 </div>
 
-                <Button onClick={handleSaveTareas} disabled={savingTareas} className="w-full">
+                <Button size="sm" onClick={handleSaveTareas} disabled={savingTareas} className="w-full">
                     {savingTareas ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                    Guardar preferencias
+                    Guardar
                 </Button>
             </CardContent>
         </Card>
 
         {/* ── Registro del diagnóstico (todos los planes) ── */}
         <Card>
-            <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                    <HeartPulse className="h-5 w-5 text-primary" />
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <HeartPulse className="h-4 w-4 text-primary" />
                     Registro del diagnóstico
                     <NuevoBadge feature="registro-diagnostico" />
                 </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                    El diagnóstico genera los avisos de mantenimiento futuro que aparecen en Retención
-                    (por ejemplo, revisar la cadena en 3 meses). Elegí en qué momento del service el
-                    taller los registra.
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                    El diagnóstico genera los avisos de mantenimiento que aparecen en Retención.
+                    ¿En qué momento del service se registra?
                 </p>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-2">
                 {([
-                    { val: 'final', tit: 'Al finalizar el service', desc: 'Se registra al cerrar la orden. Opción por defecto.' },
-                    { val: 'durante', tit: 'Durante el service', desc: 'El mecánico lo registra mientras trabaja en la bicicleta.' },
-                    { val: 'ambos', tit: 'Durante y al finalizar', desc: 'Disponible en todo momento, con un repaso al cerrar.' },
+                    { val: 'final', tit: 'Al finalizar el service', desc: 'Al cerrar la orden. Por defecto.' },
+                    { val: 'durante', tit: 'Durante el service', desc: 'Mientras se trabaja en la bici.' },
+                    { val: 'ambos', tit: 'Durante y al finalizar', desc: 'Siempre disponible, con repaso al cerrar.' },
                 ] as const).map(opt => (
                     <button
                         key={opt.val}
                         type="button"
                         onClick={() => setMomentoDiag(opt.val)}
-                        className={`w-full text-left flex items-start gap-3 p-4 rounded-lg border transition-colors ${momentoDiag === opt.val ? 'border-primary bg-primary/5' : 'bg-muted/20 hover:border-primary/40'}`}
+                        className={`w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg border transition-colors ${momentoDiag === opt.val ? 'border-primary bg-primary/5' : 'bg-muted/20 hover:border-primary/40'}`}
                     >
-                        <span className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 ${momentoDiag === opt.val ? 'border-primary bg-primary' : 'border-muted-foreground/40'}`} />
-                        <span>
-                            <span className="block font-semibold text-sm">{opt.tit}</span>
-                            <span className="block text-xs text-muted-foreground">{opt.desc}</span>
+                        <span className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${momentoDiag === opt.val ? 'border-primary bg-primary' : 'border-muted-foreground/40'}`} />
+                        <span className="flex-1 flex items-baseline justify-between gap-2 flex-wrap">
+                            <span className="font-semibold text-sm">{opt.tit}</span>
+                            <span className="text-[11px] text-muted-foreground">{opt.desc}</span>
                         </span>
                     </button>
                 ))}
 
-                <Button onClick={handleSaveDiag} disabled={savingDiag} className="w-full">
+                <Button size="sm" onClick={handleSaveDiag} disabled={savingDiag} className="w-full !mt-3">
                     {savingDiag ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                    Guardar preferencias
+                    Guardar
                 </Button>
             </CardContent>
         </Card>
 
         {/* ── Recorrido de bienvenida (todos los planes) ── */}
         <Card>
-            <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                    <GraduationCap className="h-5 w-5 text-primary" />
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <GraduationCap className="h-4 w-4 text-primary" />
                     Recorrido de bienvenida
                 </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                    El tutorial guiado que aparece la primera vez que se abre la aplicación:
-                    recorre todas las secciones y explica para qué sirve cada una. Ideal para
-                    capacitar a alguien nuevo del equipo sin explicarle nada a mano.
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                    El tutorial guiado de la primera vez: recorre las secciones y explica su valor.
+                    Ideal para capacitar a alguien nuevo del equipo sin explicarle nada a mano.
+                    Reiniciarlo también reactiva las guías breves de cada pantalla (ficha del
+                    cliente, orden de trabajo y finalización).
                 </p>
             </CardHeader>
             <CardContent>
-                <Button variant="outline" className="w-full" onClick={() => useTourStore.getState().iniciar()}>
+                <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => { resetTours(); useTourStore.getState().iniciar('bienvenida'); }}
+                >
                     <PlayCircle className="h-4 w-4 mr-2" />
                     Ver el recorrido nuevamente
                 </Button>

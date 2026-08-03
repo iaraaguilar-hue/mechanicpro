@@ -20,6 +20,7 @@ import { TareasServiceEditor } from "@/components/TareasServiceEditor";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
 import { NuevoBadge } from "@/components/NuevoBadge";
 import { type TareaService } from "@/lib/planFeatures";
+import { lanzarTourContextual, tourBloqueaCierreDialog } from "@/components/OnboardingTour";
 
 // Service types (const object pattern for erasableSyntaxOnly compatibility)
 // export const ServiceType = {
@@ -316,6 +317,13 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
     const momentoDiag = taller?.config_notificaciones?.momento_diagnostico || 'final';
     const verDiagnostico = !!serviceId && (momentoDiag === 'durante' || momentoDiag === 'ambos');
 
+    // Tutorial contextual de la orden de trabajo: 1 vez por dispositivo, la
+    // primera vez que la persona llega a este formulario.
+    useEffect(() => {
+        const t = setTimeout(() => lanzarTourContextual('service'), 600);
+        return () => clearTimeout(t);
+    }, []);
+
     // Fetch config and existing services
     useEffect(() => {
         const fetchCatalogo = async () => {
@@ -482,7 +490,14 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
     }
 
     return (
-        <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
+        <DialogContent
+            className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden"
+            /* Mientras corre el tutorial contextual, el clic en el globo no
+               debe cerrar este modal (Radix lo toma como clic afuera). */
+            onPointerDownOutside={tourBloqueaCierreDialog}
+            onInteractOutside={tourBloqueaCierreDialog}
+            onEscapeKeyDown={tourBloqueaCierreDialog}
+        >
             {/* Header */}
             <div className="p-6 border-b z-10 bg-background">
                 <DialogHeader>
@@ -513,7 +528,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
 
             {/* Scrollable Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                <div>
+                <div data-tour="service-tipo">
                     <Label className="text-lg font-semibold mb-3 block">Tipo de Service</Label>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                         {catalogoServicios.length > 0 ? (
@@ -549,7 +564,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                         />
                     </div>
 
-                    <div>
+                    <div data-tour="service-items">
                         <div className="flex justify-between items-center mb-2">
                             <Label>Items Adicionales / Repuestos</Label>
                             <Button type="button" variant="outline" size="sm" onClick={addItem}>+ Agregar</Button>
@@ -631,15 +646,17 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                         />
                     </div>
 
-                    <CarreraSelector
-                        selectedId={selectedCarreraId}
-                        onSelect={setSelectedCarreraId}
-                    />
+                    <div data-tour="service-carrera">
+                        <CarreraSelector
+                            selectedId={selectedCarreraId}
+                            onSelect={setSelectedCarreraId}
+                        />
+                    </div>
                 </div>
 
                 {/* Diagnóstico durante el service (preferencia del taller, Tarea G-pref) */}
                 {verDiagnostico && (
-                    <div className="space-y-2">
+                    <div data-tour="service-diagnostico" className="space-y-2">
                         <Label className="text-lg font-semibold flex items-center gap-2">
                             Diagnóstico de mantenimiento
                             <NuevoBadge feature="registro-diagnostico" />
@@ -653,7 +670,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
             </div>
 
             {/* Footer */}
-            <div className="p-6 border-t bg-muted/10 z-10">
+            <div data-tour="service-confirmar" className="p-6 border-t bg-muted/10 z-10">
                 <Button size="lg" className="w-full text-lg h-12 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmit} disabled={isSaving}>
                     {isSaving ? "Guardando..." : (serviceId ? "GUARDAR CAMBIOS" : "CONFIRMAR INGRESO")}
                 </Button>

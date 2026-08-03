@@ -307,13 +307,13 @@ function AppContent() {
 
         <div className="flex-1 flex flex-col items-center space-y-4 justify-start">
           <div data-tour="notificaciones"><NotificationBell variant="desktop" /></div>
-          <Link to="/"><NavButton icon={<Wrench />} label="Taller Activo" /></Link>
-          <Link to="/clientes"><NavButton icon={<Users />} label="Clientes" /></Link>
-          <Link to="/history"><NavButton icon={<History />} label="Historial" /></Link>
-          <Link to="/reminders"><NavButton icon={<Repeat />} label="Retención" /></Link>
-          <Link to="/metrics"><NavButton icon={<BarChart3 />} label="Métricas" /></Link>
+          <Link to="/" data-tour="nav-taller"><NavButton icon={<Wrench />} label="Taller Activo" /></Link>
+          <Link to="/clientes" data-tour="nav-clientes"><NavButton icon={<Users />} label="Clientes" /></Link>
+          <Link to="/history" data-tour="nav-historial"><NavButton icon={<History />} label="Historial" /></Link>
+          <Link to="/reminders" data-tour="nav-retencion"><NavButton icon={<Repeat />} label="Retención" /></Link>
+          <Link to="/metrics" data-tour="nav-metricas"><NavButton icon={<BarChart3 />} label="Métricas" /></Link>
           {rol?.toLowerCase()?.trim() !== 'super_admin' && (
-            <Link to="/configuracion"><NavButton icon={<Settings />} label="Configuración" /></Link>
+            <Link to="/configuracion" data-tour="nav-config"><NavButton icon={<Settings />} label="Configuración" /></Link>
           )}
           {rol?.toLowerCase()?.trim() === 'admin' && tieneFeature(taller, 'auditoria') && (
             <Link to="/auditoria"><NavButton icon={<Trash2 />} label="Auditoría" /></Link>

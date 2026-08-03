@@ -20,6 +20,7 @@ import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthChec
 import { resolveOrdenWebhookUrl, resolveEntregadoWebhookUrl } from "@/lib/ordenWebhook";
 import { EtapasChecklist } from "@/components/EtapasChecklist";
 import { avancesActivos, trabajosPendientes, tareasActivas, bloqueoFinalizacionActivo, tareasLibresPendientes } from "@/lib/planFeatures";
+import { lanzarTourContextual, tourBloqueaCierreDialog } from "@/components/OnboardingTour";
 
 export const formatSafeDate = (dateString: string | null | undefined): string => {
     if (!dateString) return '-';
@@ -691,6 +692,14 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
     const [pendientesConfirm, setPendientesConfirm] = useState<string[] | null>(null);
     const [bloqueoPendientes, setBloqueoPendientes] = useState<string[] | null>(null);
 
+    // Tutorial contextual del cierre del service (incluye el diagnóstico):
+    // 1 vez por dispositivo, la primera vez que se abre este diálogo.
+    useEffect(() => {
+        if (!isOpen) return;
+        const t = setTimeout(() => lanzarTourContextual('finalizar'), 600);
+        return () => clearTimeout(t);
+    }, [isOpen]);
+
     const handleFinalize = async () => {
         if (!service) return;
 
@@ -850,7 +859,14 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+            <DialogContent
+                className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto"
+                /* Mientras corre el tutorial contextual, el clic en el globo no
+                   debe cerrar este modal (Radix lo toma como clic afuera). */
+                onPointerDownOutside={tourBloqueaCierreDialog}
+                onInteractOutside={tourBloqueaCierreDialog}
+                onEscapeKeyDown={tourBloqueaCierreDialog}
+            >
                 <DialogHeader>
                     <DialogTitle className="text-2xl text-primary">Finalizar Service: {job.client_name}</DialogTitle>
                     <p className="text-muted-foreground">{job.bike_brand} {job.bike_model} - {job.service_type}</p>
@@ -858,7 +874,7 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
 
                 <div className="grid gap-6 py-4">
                     <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
+                        <div data-tour="finalizar-resumen" className="space-y-2">
                             <Label>Detalle de Costos (Resumen)</Label>
                             <div className="bg-slate-50 rounded-lg p-4 border flex flex-col gap-2 h-32 overflow-y-auto">
                                 <div className="flex justify-between items-center text-sm">
@@ -877,7 +893,7 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                                 </div>
                             </div>
                         </div>
-                        <div className="space-y-2">
+                        <div data-tour="finalizar-obs" className="space-y-2">
                             <Label htmlFor="notes">Observaciones Finales</Label>
                             <Textarea id="notes" className="h-32" placeholder="Notas para el cliente..." value={notes} onChange={(e) => setNotes(e.target.value)} />
                         </div>
@@ -886,13 +902,13 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                     {/* Diagnóstico al finalizar: se muestra salvo que el taller haya
                         elegido registrarlo SOLO 'durante' el service (Tarea G-pref). */}
                     {!isCompleted && (taller?.config_notificaciones?.momento_diagnostico || 'final') !== 'durante' && (
-                        <div className="pt-2">
+                        <div data-tour="finalizar-diagnostico" className="pt-2">
                             <HealthCheckWidget onChange={setHealthCheckData} />
                         </div>
                     )}
                 </div>
 
-                <DialogFooter className="gap-2 sm:gap-0">
+                <DialogFooter data-tour="finalizar-boton" className="gap-2 sm:gap-0">
                     <Button variant="outline" onClick={onClose}>Cancelar</Button>
                     {isCompleted ? (
                         <>

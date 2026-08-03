@@ -805,8 +805,10 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     // un vistazo — grilla de 2 columnas en desktop, textos cortos, el ejemplo
     // plegado. La información es la misma; el scroll, la mitad.
     return (
-        <div className="grid gap-4 lg:grid-cols-2 items-start">
-        <Card>
+        /* Sin items-start: las 2 tarjetas de cada fila se estiran a la misma
+           altura y el Guardar queda anclado abajo (mt-auto) → columnas parejas. */
+        <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="flex flex-col">
             <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                     <ListChecks className="h-4 w-4 text-primary" />
@@ -817,7 +819,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     al finalizar, la app avisa si quedó algo sin marcar.
                 </p>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="flex-1 flex flex-col gap-3">
                 {!tienePlanChecklist && (
                     <div className="flex items-center gap-2 p-2.5 rounded-md border border-amber-200 bg-amber-50 text-amber-900 text-xs">
                         <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-600" />
@@ -852,7 +854,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     </div>
                 </details>
 
-                <Button size="sm" onClick={handleSave} disabled={saving || !tienePlanChecklist} className="w-full">
+                <Button size="sm" onClick={handleSave} disabled={saving || !tienePlanChecklist} className="w-full mt-auto">
                     {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                     Guardar
                 </Button>
@@ -860,7 +862,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
         </Card>
 
         {/* ── Tareas del service (todos los planes) — pedido Cronobikes ── */}
-        <Card>
+        <Card className="flex flex-col">
             <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                     <Bell className="h-4 w-4 text-primary" />
@@ -871,7 +873,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     (ej: "colocar plato 34"). Todos los planes.
                 </p>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="flex-1 flex flex-col gap-3">
                 <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
                     <p className="font-semibold text-sm pr-3">Activar tareas del service</p>
                     <Switch checked={tareasHab} onCheckedChange={setTareasHab} />
@@ -889,7 +891,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     <Switch checked={bloqueo} onCheckedChange={setBloqueo} disabled={!tareasHab} />
                 </div>
 
-                <Button size="sm" onClick={handleSaveTareas} disabled={savingTareas} className="w-full">
+                <Button size="sm" onClick={handleSaveTareas} disabled={savingTareas} className="w-full mt-auto">
                     {savingTareas ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                     Guardar
                 </Button>
@@ -897,7 +899,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
         </Card>
 
         {/* ── Registro del diagnóstico (todos los planes) ── */}
-        <Card>
+        <Card className="flex flex-col">
             <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                     <HeartPulse className="h-4 w-4 text-primary" />
@@ -909,7 +911,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     ¿En qué momento del service se registra?
                 </p>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="flex-1 flex flex-col gap-2">
                 {([
                     { val: 'final', tit: 'Al finalizar el service', desc: 'Al cerrar la orden. Por defecto.' },
                     { val: 'durante', tit: 'Durante el service', desc: 'Mientras se trabaja en la bici.' },
@@ -929,7 +931,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     </button>
                 ))}
 
-                <Button size="sm" onClick={handleSaveDiag} disabled={savingDiag} className="w-full !mt-3">
+                <Button size="sm" onClick={handleSaveDiag} disabled={savingDiag} className="w-full mt-auto">
                     {savingDiag ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                     Guardar
                 </Button>
@@ -937,7 +939,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
         </Card>
 
         {/* ── Recorrido de bienvenida (todos los planes) ── */}
-        <Card>
+        <Card className="flex flex-col">
             <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                     <GraduationCap className="h-4 w-4 text-primary" />
@@ -950,11 +952,11 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     cliente, orden de trabajo y finalización).
                 </p>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 flex flex-col">
                 <Button
                     size="sm"
                     variant="outline"
-                    className="w-full"
+                    className="w-full mt-auto"
                     onClick={() => { resetTours(); useTourStore.getState().iniciar('bienvenida'); }}
                 >
                     <PlayCircle className="h-4 w-4 mr-2" />

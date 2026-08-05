@@ -35,7 +35,24 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
     const bicicletas = useDataStore(s => s.bicicletas);
     const carreras = useDataStore(s => s.carreras);
     const taller = useAuthStore(s => s.taller);
+    const taller_id = useAuthStore(s => s.taller_id);
+    const registrarContacto = useDataStore(s => s.registrarContactoRetencion);
     const navigate = useNavigate();
+
+    // Deja constancia del recontacto también desde la campana (el botón de acá
+    // manda el mismo mensaje que el del Motor de Retención). Nunca bloquea:
+    // si falla el registro, WhatsApp se abre igual.
+    const registrarContactoDeAlerta = (a: any) => {
+        if (!taller_id) return;
+        registrarContacto({
+            taller_id,
+            cliente_id: a.clientId,
+            bicicleta_id: a.bikeId,
+            servicio_origen_id: a.servicioId,
+            componente: a.component,
+            canal: 'whatsapp_manual',
+        });
+    };
 
     // Novedades activas del proveedor (broadcast; tolera que la tabla no exista aún).
     useEffect(() => {
@@ -194,7 +211,16 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
                                                     <span className="block text-xs text-slate-500 truncate">{a.isPostCarrera ? 'Seguimiento' : 'Mantenimiento'}: {a.component}</span>
                                                 </span>
                                                 {a.clientPhone && (
-                                                    <a href={waLink(a.clientPhone, msg)} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="shrink-0 text-[11px] font-semibold text-amber-600 border border-amber-200 rounded-md px-2 py-1 hover:bg-amber-50">WhatsApp</a>
+                                                    <a
+                                                        href={waLink(a.clientPhone, msg)}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        // Mismo registro que en el Motor de Retención: desde acá sale el
+                                                        // mismo mensaje, así que tiene que contar igual. Si no, la campana
+                                                        // sería un agujero por donde los recontactos no se miden.
+                                                        onClick={e => { e.stopPropagation(); registrarContactoDeAlerta(a); }}
+                                                        className="shrink-0 text-[11px] font-semibold text-amber-600 border border-amber-200 rounded-md px-2 py-1 hover:bg-amber-50"
+                                                    >WhatsApp</a>
                                                 )}
                                             </div>
                                         );

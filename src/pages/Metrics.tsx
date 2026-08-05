@@ -6,6 +6,7 @@ import { useDataStore } from '@/store/dataStore';
 import ExpertMetrics from '@/components/ExpertMetrics';
 import { normalizeBikeData, normalizeServiceType } from '@/lib/bikeDataNormalizer';
 import { rankProducts } from '@/lib/productMatcher';
+import { servicioRevenue } from '@/lib/servicioRevenue';
 import {
     BarChart3,
     TrendingUp,
@@ -110,28 +111,12 @@ export function getSemanticCategory(rawDesc: string): string {
     return 'Otros';
 }
 
-// --- MODELO DE FACTURACIÓN (única fuente de verdad) ---
-// Facturación de un servicio = mano de obra (precio_base) + TODOS los items (repuestos y otros).
-// `precio_total` NO se usa para facturar: en algunos registros ya viene con los repuestos sumados,
-// así que re-sumar los items lo duplica (era el bug del período anterior: contaba los repuestos 2×).
-// Tanto el motor de `stats` como `previousPeriodRevenue` DEBEN pasar por esta función para que la
-// comparación de tendencia sea honesta (misma definición en las dos mitades).
-export function servicioRevenue(s: any): { facturacion: number; labor: number; parts: number } {
-    let labor = Number(s?.precio_base) || 0;
-    let parts = 0;
-    const items = Array.isArray(s?.servicio_items)
-        ? s.servicio_items
-        : (Array.isArray(s?.items_extra) ? s.items_extra : []);
-    for (const item of items) {
-        const itemPrecio = Number(item?.precio) || 0;
-        if (item?.categoria === 'part' || item?.categoria === 'producto' || item?.categoria === 'repuesto') {
-            parts += itemPrecio;
-        } else {
-            labor += itemPrecio;
-        }
-    }
-    return { facturacion: labor + parts, labor, parts };
-}
+// El modelo de facturación (base + items, sin `precio_total`) vive ahora en
+// `lib/servicioRevenue.ts` para que Workshop use exactamente la misma cuenta en
+// el candado de "orden en $0". Se re-exporta para no romper imports viejos.
+// Tanto el motor de `stats` como `previousPeriodRevenue` DEBEN pasar por esta
+// función para que la comparación de tendencia sea honesta.
+export { servicioRevenue };
 
 export default function Metrics() {
     const tallerId = useAuthStore(s => s.taller_id);

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useDataStore } from "@/store/dataStore";
+import { useAuthStore } from "@/store/authStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,35 @@ function perfilHref(alert: RetentionAlert): string | null {
     return null;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Deja constancia de que se mandó el mensaje de recontacto.
+//
+// Antes el botón abría wa.me y no quedaba rastro: el taller no sabía a
+// quién ya había llamado, y no había forma de medir cuántos de los
+// recontactados vuelven (la métrica de la única ventaja del producto).
+//
+// Se registra SOLO al abrir WhatsApp, no al copiar el mensaje: copiar no
+// es mandar. Preferimos contar de menos antes que inflar el número.
+// ─────────────────────────────────────────────────────────────
+function useRegistrarContacto() {
+    const registrar = useDataStore(s => s.registrarContactoRetencion);
+    const taller_id = useAuthStore(s => s.taller_id);
+
+    return (alert: RetentionAlert) => {
+        if (!taller_id) return;
+        // Sin await a propósito: no frenamos la apertura de WhatsApp por
+        // una fila de estadística (y la función nunca tira error).
+        registrar({
+            taller_id,
+            cliente_id: alert.clientId,
+            bicicleta_id: alert.bikeId,
+            servicio_origen_id: alert.servicioId,
+            componente: alert.component,
+            canal: 'whatsapp_manual',
+        });
+    };
+}
+
 export default function RetentionEngine() {
     const recordatorios = useDataStore(s => s.recordatorios);
     const bicicletas = useDataStore(s => s.bicicletas);
@@ -24,6 +54,7 @@ export default function RetentionEngine() {
     const servicios = useDataStore(s => s.servicios);
     const carreras = useDataStore(s => s.carreras);
     const isHydrating = useDataStore(s => s.isHydrating);
+    const registrarContacto = useRegistrarContacto();
 
     // Fuente única compartida con la campana (NotificationBell) → mismo
     // listado y mismo alertas_ocultas en los dos lados.
@@ -130,6 +161,7 @@ export default function RetentionEngine() {
                                                         }`}
                                                     target="_blank"
                                                     rel="noreferrer"
+                                                    onClick={() => registrarContacto(alert)}
                                                 >
                                                     <Phone className="h-4 w-4" />
                                                 </a>
@@ -153,6 +185,7 @@ function AlertCard({ alert }: { alert: RetentionAlert }) {
     const [isCopied, setIsCopied] = useState(false);
     const [isDismissing, setIsDismissing] = useState(false);
     const dismissAlert = useDataStore(s => s.dismissAlert);
+    const registrarContacto = useRegistrarContacto();
 
     // Dynamic message template based on alert type
     const messageText = alert.isPostCarrera
@@ -223,6 +256,7 @@ function AlertCard({ alert }: { alert: RetentionAlert }) {
                             href={`https://wa.me/${alert.clientPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(messageText)}`}
                             target="_blank"
                             rel="noreferrer"
+                            onClick={() => registrarContacto(alert)}
                         >
                             <Phone className="mr-2 h-4 w-4" /> Contactar por WhatsApp
                         </a>

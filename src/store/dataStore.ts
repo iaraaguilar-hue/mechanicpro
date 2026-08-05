@@ -28,6 +28,18 @@ export interface SupabaseBike {
     notas?: string;
 }
 
+// Lo que se guarda cuando sale un mensaje del Motor de Retención.
+// Tabla `contactos_retencion` (migración 20260805143000).
+export interface ContactoRetencionInput {
+    taller_id: string;
+    cliente_id?: string | null;
+    bicicleta_id?: string | null;
+    servicio_origen_id?: string | null;
+    componente?: string | null;
+    /** 'whatsapp_manual' = lo apretó una persona · 'whatsapp_auto' = lo mandó el sistema. */
+    canal?: string;
+}
+
 export interface SupabaseService {
     id: string;
     taller_id: string;
@@ -101,6 +113,7 @@ interface DataState {
     updateServicio: (id: string, data: Partial<SupabaseService>) => Promise<void>;
     deleteServicio: (id: string) => Promise<void>;
     dismissAlert: (servicioId: string, alertId: string) => Promise<void>;
+    registrarContactoRetencion: (data: ContactoRetencionInput) => Promise<void>;
 
     // ── CRUD: Recordatorios ──
     createRecordatorio: (data: Omit<SupabaseReminder, 'id'>) => Promise<SupabaseReminder>;
@@ -458,6 +471,37 @@ export const useDataStore = create<DataState>((set, get) => ({
                 servicios: get().servicios.map(s => s.id === servicioId ? { ...s, alertas_ocultas: currentAlerts } : s)
             });
             throw new Error(`Error ocultando alerta: ${error.message}`);
+        }
+    },
+
+    // ─────────────────────────────────────────────────────────────
+    // Deja constancia de que salió un mensaje de recontacto.
+    //
+    // POR QUÉ: hasta hoy el Motor armaba el link de wa.me y ahí terminaba.
+    // Sin este registro el taller no sabe a quién ya llamó (la lista se
+    // vuelve ruido) y no hay forma de medir cuántos de los recontactados
+    // vuelven, que es la métrica de la única ventaja del producto.
+    //
+    // NUNCA TIRA ERROR NI BLOQUEA. Si el insert falla, el mensaje al cliente
+    // se manda igual: perder una fila de estadística no puede costarle una
+    // venta al taller. Ojo con la semántica: esto registra que se MANDÓ, no
+    // que el cliente lo haya recibido.
+    // ─────────────────────────────────────────────────────────────
+    registrarContactoRetencion: async (data) => {
+        if (!data?.taller_id) return;
+        try {
+            const { error } = await supabase.from('contactos_retencion').insert({
+                taller_id: data.taller_id,
+                cliente_id: data.cliente_id || null,
+                bicicleta_id: data.bicicleta_id || null,
+                servicio_origen_id: data.servicio_origen_id || null,
+                componente: data.componente || null,
+                canal: data.canal || 'whatsapp_manual',
+                fecha_contacto: new Date().toISOString(),
+            });
+            if (error) console.error('No se pudo registrar el contacto de retención:', error.message);
+        } catch (e: any) {
+            console.error('No se pudo registrar el contacto de retención:', e?.message || e);
         }
     },
 

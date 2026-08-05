@@ -9,8 +9,9 @@ import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock } from "lucide-react";
+import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { servicioRevenue } from "@/lib/servicioRevenue";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -691,6 +692,7 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
     const [isSaving, setIsSaving] = useState(false);
     const [pendientesConfirm, setPendientesConfirm] = useState<string[] | null>(null);
     const [bloqueoPendientes, setBloqueoPendientes] = useState<string[] | null>(null);
+    const [precioCeroConfirm, setPrecioCeroConfirm] = useState(false);
 
 
     const handleFinalize = async () => {
@@ -716,6 +718,29 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                 setPendientesConfirm(pendientes);
                 return;
             }
+        }
+        await chequearPrecioYFinalizar();
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // Segundo eslabón antes de cerrar: la orden no se cierra en $0 sin que
+    // alguien lo vea. Nace del cierre de Crono Bikes (4-ago-2026): con el
+    // catálogo vacío la orden salió tipo "OTRO", tipearon 6 ítems por
+    // $296.625 en el campo de notas y el sistema la guardó en CERO. El
+    // equipo vio ese comprobante el primer día. No bloquea (puede ser una
+    // garantía o un ajuste sin cargo), pero obliga a decidirlo a propósito.
+    //
+    // Usa la MISMA cuenta que las métricas (base + items, sin precio_total)
+    // para que las dos pantallas nunca se contradigan.
+    // ─────────────────────────────────────────────────────────────
+    const chequearPrecioYFinalizar = async () => {
+        if (!service) return;
+        const estadoActual = (service.estado || '').toLowerCase();
+        const yaCerrado = estadoActual === 'ready' || estadoActual === 'delivered';
+
+        if (!yaCerrado && servicioRevenue(service).facturacion <= 0) {
+            setPrecioCeroConfirm(true);
+            return;
         }
         await doFinalize();
     };
@@ -925,7 +950,7 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                 <ConfirmDialog
                     open={!!pendientesConfirm}
                     onClose={() => setPendientesConfirm(null)}
-                    onConfirm={() => { setPendientesConfirm(null); doFinalize(); }}
+                    onConfirm={() => { setPendientesConfirm(null); chequearPrecioYFinalizar(); }}
                     icon={<ListChecks className="h-7 w-7" />}
                     iconClassName="bg-primary/10 text-primary"
                     title={`Quedaron ${pendientesConfirm.length} trabajo(s) sin tildar`}
@@ -968,6 +993,33 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                     confirmLabel="Ir a la lista de tareas"
                     confirmClassName="bg-primary hover:bg-primary/90 text-primary-foreground"
                     cancelLabel="Volver"
+                />
+            )}
+
+            {/* Candado del precio en $0: avisa antes de cerrar un comprobante vacío. */}
+            {precioCeroConfirm && (
+                <ConfirmDialog
+                    open={precioCeroConfirm}
+                    onClose={() => { setPrecioCeroConfirm(false); onClose(); }}
+                    onConfirm={() => { setPrecioCeroConfirm(false); doFinalize(); }}
+                    icon={<CircleDollarSign className="h-7 w-7" />}
+                    iconClassName="bg-amber-100 text-amber-600"
+                    title="Esta orden va a quedar en $0"
+                    description={
+                        <div className="text-left bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                            <p className="text-slate-700">
+                                No tiene cargada ni mano de obra ni repuestos, así que el comprobante
+                                del cliente va a salir en cero y no va a sumar a tus métricas.
+                            </p>
+                            <p className="text-slate-500 text-xs">
+                                Si todavía no cargaste tus services con sus precios, se hace una sola vez
+                                desde Configuración y después salen solos en cada orden.
+                            </p>
+                        </div>
+                    }
+                    confirmLabel="Cerrar en $0 igual"
+                    confirmClassName="bg-green-600 hover:bg-green-700 text-white"
+                    cancelLabel="Volver y cargar el precio"
                 />
             )}
         </Dialog>

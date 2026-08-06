@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing, Flag, Copy, User } from "lucide-react";
+import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing, Flag, Copy, User, Loader2 } from "lucide-react";
 import { buildRetentionAlerts, type RetentionAlert } from "@/lib/retentionAlerts";
 
 // Acceso rápido al perfil del cliente desde la alerta: si tenemos la bici,
@@ -19,20 +19,29 @@ function perfilHref(alert: RetentionAlert): string | null {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Deja constancia de que se mandó el mensaje de recontacto.
+// Contactar al cliente y dejar constancia de que salió el mensaje.
 //
-// Antes el botón abría wa.me y no quedaba rastro: el taller no sabía a
-// quién ya había llamado, y no había forma de medir cuántos de los
-// recontactados vuelven (la métrica de la única ventaja del producto).
+// Sin este registro el taller no sabe a quién ya llamó (la lista se vuelve
+// ruido) y no hay forma de medir cuántos de los recontactados vuelven, que
+// es la métrica de la única ventaja del producto.
 //
-// Se registra SOLO al abrir WhatsApp, no al copiar el mensaje: copiar no
-// es mandar. Preferimos contar de menos antes que inflar el número.
-// ─────────────────────────────────────────────────────────────
-function useRegistrarContacto() {
+// Se registra SOLO al contactar, no al copiar el mensaje: copiar no es
+// mandar. Preferimos contar de menos antes que inflar el número.
+//
+// Cuando el taller tiene su WhatsApp conectado (`wa_activo`), el mensaje sale
+// solo por la API oficial y llegan los estados reales (entregado, leído).
+// Mientras no lo tenga, sigue el camino de siempre: abrir wa.me.
+//
+// 🚩 Si el envío por API falla, SE ABRE wa.me igual. Que se caiga la API no
+// puede dejar al taller sin poder contactar a su cliente.
+function useContactarWhatsApp() {
     const registrar = useDataStore(s => s.registrarContactoRetencion);
+    const enviar = useDataStore(s => s.enviarWhatsAppPlantilla);
     const taller_id = useAuthStore(s => s.taller_id);
+    const taller = useAuthStore(s => s.taller);
+    const modoAuto = taller?.wa_activo === true;
 
-    return (alert: RetentionAlert) => {
+    const registrarManual = (alert: RetentionAlert, mensaje_whatsapp_id?: string) => {
         if (!taller_id) return;
         // Sin await a propósito: no frenamos la apertura de WhatsApp por
         // una fila de estadística (y la función nunca tira error).
@@ -42,9 +51,53 @@ function useRegistrarContacto() {
             bicicleta_id: alert.bikeId,
             servicio_origen_id: alert.servicioId,
             componente: alert.component,
-            canal: 'whatsapp_manual',
+            canal: mensaje_whatsapp_id ? 'whatsapp_auto' : 'whatsapp_manual',
+            mensaje_whatsapp_id: mensaje_whatsapp_id ?? null,
         });
     };
+
+    const abrirWaMe = (alert: RetentionAlert, texto: string) => {
+        const tel = (alert.clientPhone || '').replace(/[^0-9]/g, '');
+        window.open(`https://wa.me/${tel}?text=${encodeURIComponent(texto)}`, '_blank');
+    };
+
+    // Devuelve 'enviado' | 'manual' | 'error'. El llamador decide qué mostrar.
+    const contactar = async (alert: RetentionAlert, texto: string): Promise<'enviado' | 'manual'> => {
+        if (!modoAuto) {                       // camino de siempre
+            registrarManual(alert);
+            abrirWaMe(alert, texto);
+            return 'manual';
+        }
+
+        const plantilla = alert.isPostCarrera ? 'seguimiento_evento'
+            : alert.isPreCarrera ? 'pre_carrera'
+                : 'recordatorio_mantenimiento';
+        const parametros = alert.isPostCarrera
+            ? [alert.clientName, alert.carreraName]
+            : alert.isPreCarrera
+                ? [alert.clientName, alert.carreraName, alert.bikeModel]
+                // El nombre del taller va en el mensaje: cuando lo manda un
+                // sistema y no una persona, no decir de quién es se lee como spam.
+                : [alert.clientName, taller?.nombre || 'tu taller', alert.component, alert.bikeModel];
+
+        const r = await enviar({
+            proposito: alert.isPostCarrera ? 'evento' : 'retencion',
+            plantilla,
+            destino: alert.clientPhone,
+            parametros,
+            cliente_id: alert.clientId ?? null,
+            bicicleta_id: alert.bikeId ?? null,
+            servicio_id: alert.servicioId ?? null,
+        });
+
+        if (r.ok) { registrarManual(alert, r.mensaje_id); return 'enviado'; }
+
+        registrarManual(alert);
+        abrirWaMe(alert, texto);
+        return 'manual';
+    };
+
+    return { modoAuto, contactar };
 }
 
 export default function RetentionEngine() {
@@ -54,7 +107,8 @@ export default function RetentionEngine() {
     const servicios = useDataStore(s => s.servicios);
     const carreras = useDataStore(s => s.carreras);
     const isHydrating = useDataStore(s => s.isHydrating);
-    const registrarContacto = useRegistrarContacto();
+    const { modoAuto, contactar } = useContactarWhatsApp();
+    const [enviando, setEnviando] = useState<string | null>(null);
 
     // Fuente única compartida con la campana (NotificationBell) → mismo
     // listado y mismo alertas_ocultas en los dos lados.
@@ -153,18 +207,22 @@ export default function RetentionEngine() {
                                                     </Link>
                                                 </Button>
                                             )}
-                                            <Button variant="ghost" size="sm" asChild className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50">
-                                                <a
-                                                    href={`https://wa.me/${alert.clientPhone.replace(/[^0-9]/g, '')}?text=${alert.isPreCarrera
-                                                        ? encodeURIComponent(`¡Hola ${alert.clientName}! Vi que se acerca el ${alert.carreraName}, ¿querés que le demos una revisada a la ${alert.bikeModel} antes de viajar?`)
-                                                        : ""
-                                                        }`}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    onClick={() => registrarContacto(alert)}
-                                                >
-                                                    <Phone className="h-4 w-4" />
-                                                </a>
+                                            <Button
+                                                variant="ghost" size="sm"
+                                                className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                                title={modoAuto ? 'Enviar el recordatorio por WhatsApp' : 'Abrir WhatsApp con el mensaje'}
+                                                disabled={enviando === alert.id}
+                                                onClick={async () => {
+                                                    setEnviando(alert.id);
+                                                    await contactar(alert, alert.isPreCarrera
+                                                        ? `¡Hola ${alert.clientName}! Vi que se acerca el ${alert.carreraName}, ¿querés que le demos una revisada a la ${alert.bikeModel} antes de viajar?`
+                                                        : '');
+                                                    setEnviando(null);
+                                                }}
+                                            >
+                                                {enviando === alert.id
+                                                    ? <Loader2 className="h-4 w-4 animate-spin" />
+                                                    : <Phone className="h-4 w-4" />}
                                             </Button>
                                         </TableCell>
                                     </TableRow>
@@ -185,7 +243,9 @@ function AlertCard({ alert }: { alert: RetentionAlert }) {
     const [isCopied, setIsCopied] = useState(false);
     const [isDismissing, setIsDismissing] = useState(false);
     const dismissAlert = useDataStore(s => s.dismissAlert);
-    const registrarContacto = useRegistrarContacto();
+    const { modoAuto, contactar } = useContactarWhatsApp();
+    const [enviando, setEnviando] = useState(false);
+    const [enviado, setEnviado] = useState(false);
 
     // Dynamic message template based on alert type
     const messageText = alert.isPostCarrera
@@ -251,15 +311,24 @@ function AlertCard({ alert }: { alert: RetentionAlert }) {
                     </div>
                 </div>
                 <div data-tour="retencion-contactar" className="flex flex-col gap-2">
-                    <Button className={`w-full font-semibold ${alert.isPostCarrera ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`} asChild>
-                        <a
-                            href={`https://wa.me/${alert.clientPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(messageText)}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={() => registrarContacto(alert)}
-                        >
-                            <Phone className="mr-2 h-4 w-4" /> Contactar por WhatsApp
-                        </a>
+                    <Button
+                        className={`w-full font-semibold ${enviado ? 'bg-slate-400 hover:bg-slate-400 text-white' : alert.isPostCarrera ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                        disabled={enviando || enviado}
+                        onClick={async () => {
+                            setEnviando(true);
+                            const r = await contactar(alert, messageText);
+                            setEnviando(false);
+                            // Solo se marca "enviado" cuando salió por la API. Si cayó
+                            // a wa.me, el envío lo termina la persona en su WhatsApp y
+                            // el sistema no puede afirmar que se mandó.
+                            if (r === 'enviado') setEnviado(true);
+                        }}
+                    >
+                        {enviando
+                            ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando...</>
+                            : enviado
+                                ? <><CheckCircle2 className="mr-2 h-4 w-4" /> Mensaje enviado</>
+                                : <><Phone className="mr-2 h-4 w-4" /> {modoAuto ? 'Enviar recordatorio' : 'Contactar por WhatsApp'}</>}
                     </Button>
                     <Button
                         variant="outline"

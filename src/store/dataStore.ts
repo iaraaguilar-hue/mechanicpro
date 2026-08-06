@@ -38,6 +38,28 @@ export interface ContactoRetencionInput {
     componente?: string | null;
     /** 'whatsapp_manual' = lo apretó una persona · 'whatsapp_auto' = lo mandó el sistema. */
     canal?: string;
+    /** Solo cuando salió por la API oficial. En null si fue por el link wa.me. */
+    mensaje_whatsapp_id?: string | null;
+}
+
+export interface EnvioWhatsAppInput {
+    proposito: 'retencion' | 'comprobante' | 'evento';
+    /** Nombre de la plantilla aprobada en Meta. La Edge Function tiene su propia allowlist. */
+    plantilla: string;
+    destino: string;
+    parametros?: string[];
+    cliente_id?: string | null;
+    bicicleta_id?: string | null;
+    servicio_id?: string | null;
+}
+
+export interface EnvioWhatsAppResultado {
+    ok: boolean;
+    /** id de la fila en mensajes_whatsapp, para enganchar el contacto de retención. */
+    mensaje_id?: string;
+    /** Código corto para decidir qué hacer. 'whatsapp_no_conectado' = este taller todavía no lo activó. */
+    error?: string;
+    detalle?: string;
 }
 
 export interface SupabaseService {
@@ -114,6 +136,7 @@ interface DataState {
     deleteServicio: (id: string) => Promise<void>;
     dismissAlert: (servicioId: string, alertId: string) => Promise<void>;
     registrarContactoRetencion: (data: ContactoRetencionInput) => Promise<void>;
+    enviarWhatsAppPlantilla: (input: EnvioWhatsAppInput) => Promise<EnvioWhatsAppResultado>;
 
     // ── CRUD: Recordatorios ──
     createRecordatorio: (data: Omit<SupabaseReminder, 'id'>) => Promise<SupabaseReminder>;
@@ -487,6 +510,39 @@ export const useDataStore = create<DataState>((set, get) => ({
     // venta al taller. Ojo con la semántica: esto registra que se MANDÓ, no
     // que el cliente lo haya recibido.
     // ─────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────
+    // Manda un mensaje por la API oficial de WhatsApp.
+    //
+    // POR QUÉ PASA POR UNA EDGE FUNCTION Y NO DE ACÁ: el token de Meta
+    // permite mandar en nombre de todos los talleres. En el navegador
+    // cualquiera lo copia del inspector. Vive como secreto del servidor.
+    //
+    // NUNCA TIRA ERROR: devuelve { ok:false, error } para que el llamador
+    // pueda caer de vuelta al link de wa.me. Que la API falle no puede
+    // dejar al taller sin poder contactar a su cliente.
+    // ─────────────────────────────────────────────────────────────
+    enviarWhatsAppPlantilla: async (input) => {
+        try {
+            const { data, error } = await supabase.functions.invoke('whatsapp-enviar', { body: input });
+            if (error) {
+                // El cuerpo del error trae el motivo real (ej: whatsapp_no_conectado).
+                let detalle = error.message;
+                let codigo = 'fallo_envio';
+                try {
+                    const j = await (error as any)?.context?.json?.();
+                    if (j?.error) { codigo = j.error; detalle = j.detalle || j.error; }
+                } catch { /* el cuerpo no era JSON */ }
+                console.error('WhatsApp no se pudo enviar:', codigo, detalle);
+                return { ok: false, error: codigo, detalle };
+            }
+            if (!data?.ok) return { ok: false, error: data?.error || 'fallo_envio', detalle: data?.detalle };
+            return { ok: true, mensaje_id: data.mensaje_id };
+        } catch (e: any) {
+            console.error('WhatsApp no se pudo enviar:', e?.message || e);
+            return { ok: false, error: 'fallo_envio', detalle: e?.message };
+        }
+    },
+
     registrarContactoRetencion: async (data) => {
         if (!data?.taller_id) return;
         try {
@@ -497,6 +553,7 @@ export const useDataStore = create<DataState>((set, get) => ({
                 servicio_origen_id: data.servicio_origen_id || null,
                 componente: data.componente || null,
                 canal: data.canal || 'whatsapp_manual',
+                mensaje_whatsapp_id: data.mensaje_whatsapp_id || null,
                 fecha_contacto: new Date().toISOString(),
             });
             if (error) console.error('No se pudo registrar el contacto de retención:', error.message);

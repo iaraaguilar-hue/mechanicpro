@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing, Flag, Copy, User, Loader2 } from "lucide-react";
 import { buildRetentionAlerts, type RetentionAlert } from "@/lib/retentionAlerts";
+import PanelRetorno from "@/components/PanelRetorno";
+import BandejaRespuestas from "@/components/BandejaRespuestas";
 
 // Acceso rápido al perfil del cliente desde la alerta: si tenemos la bici,
 // abrimos esa bici (el perfil muestra igual al cliente con TODAS sus bicis en
@@ -16,6 +18,20 @@ function perfilHref(alert: RetentionAlert): string | null {
     if (alert.bikeId) return `/bikes/${alert.bikeId}`;
     if (alert.clientId) return `/clients/${alert.clientId}`;
     return null;
+}
+
+// El mensaje de siempre: el que sale cuando la IA está apagada o falló.
+// Vive en un solo lugar porque las dos vistas (tarjeta y tabla) tienen que
+// mandar exactamente lo mismo — antes la tabla abría wa.me con el texto
+// vacío para los avisos que no eran de carrera.
+function mensajeFijo(alert: RetentionAlert): string {
+    if (alert.isPostCarrera) {
+        return `¡Hola ${alert.clientName}! ¿Cómo te fue en el ${alert.carreraName}? Contanos cómo se portó la bici.`;
+    }
+    if (alert.isPreCarrera) {
+        return `¡Hola ${alert.clientName}! Vi que se acerca el ${alert.carreraName}, ¿querés que le demos una revisada a la ${alert.bikeModel} antes de viajar?`;
+    }
+    return `¡Hola ${alert.clientName}! Te escribo del taller para recordarte que toca revisar: ${alert.component} en tu ${alert.bikeModel}. ¿Querés que coordinemos un turno?`;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -37,11 +53,16 @@ function perfilHref(alert: RetentionAlert): string | null {
 function useContactarWhatsApp() {
     const registrar = useDataStore(s => s.registrarContactoRetencion);
     const enviar = useDataStore(s => s.enviarWhatsAppPlantilla);
+    const redactar = useDataStore(s => s.redactarMensajePersonal);
     const taller_id = useAuthStore(s => s.taller_id);
     const taller = useAuthStore(s => s.taller);
     const modoAuto = taller?.wa_activo === true;
 
-    const registrarManual = (alert: RetentionAlert, mensaje_whatsapp_id?: string) => {
+    const registrarManual = (
+        alert: RetentionAlert,
+        mensaje_whatsapp_id?: string,
+        extra?: { variante?: string | null; texto_enviado?: string | null },
+    ) => {
         if (!taller_id) return;
         // Sin await a propósito: no frenamos la apertura de WhatsApp por
         // una fila de estadística (y la función nunca tira error).
@@ -53,6 +74,8 @@ function useContactarWhatsApp() {
             componente: alert.component,
             canal: mensaje_whatsapp_id ? 'whatsapp_auto' : 'whatsapp_manual',
             mensaje_whatsapp_id: mensaje_whatsapp_id ?? null,
+            variante: extra?.variante ?? null,
+            texto_enviado: extra?.texto_enviado ?? null,
         });
     };
 
@@ -61,24 +84,66 @@ function useContactarWhatsApp() {
         window.open(`https://wa.me/${tel}?text=${encodeURIComponent(texto)}`, '_blank');
     };
 
-    // Devuelve 'enviado' | 'manual' | 'error'. El llamador decide qué mostrar.
+    // ─────────────────────────────────────────────────────────
+    // El mensaje personalizado, escrito con el historial del cliente.
+    //
+    // Devuelve null si la IA está apagada o falló, y entonces todo sigue
+    // como antes con el texto fijo. Es a propósito: la personalización es
+    // una mejora del mensaje, no un requisito para poder mandarlo.
+    // ─────────────────────────────────────────────────────────
+    const redactarPersonal = async (alert: RetentionAlert) => {
+        if (!alert.clientId) return null;
+        // Si el taller no la activó, ni se llama: es un viaje de ida y vuelta
+        // al servidor que el mecánico espera con el dedo en el botón, para
+        // recibir "está apagada".
+        if (taller?.ia_mensajes_activa !== true) return null;
+        const r = await redactar({
+            cliente_id: alert.clientId,
+            motivo: alert.isPostCarrera ? 'post_carrera' : alert.isPreCarrera ? 'pre_carrera' : 'retencion',
+            componente: alert.component,
+            carrera: alert.carreraName || undefined,
+        });
+        return r.ok && r.linea ? r : null;
+    };
+
+    // Devuelve 'enviado' | 'manual'. El llamador decide qué mostrar.
     const contactar = async (alert: RetentionAlert, texto: string): Promise<'enviado' | 'manual'> => {
-        if (!modoAuto) {                       // camino de siempre
-            registrarManual(alert);
-            abrirWaMe(alert, texto);
+        const personal = await redactarPersonal(alert);
+        const primerNombre = (alert.clientName || '').trim().split(/\s+/)[0] || alert.clientName;
+
+        if (!modoAuto) {
+            // Sin la API de Meta el texto es libre: acá la personalización
+            // entra entera, sin plantilla que la limite. El taller no tiene
+            // que esperar a Meta para que sus mensajes dejen de sonar a robot.
+            const cuerpo = personal
+                ? `Hola ${primerNombre}, ¿cómo va? Acá ${personal.firma}. ${personal.linea}`
+                : texto;
+            registrarManual(alert, undefined, {
+                variante: personal?.variante ?? 'fijo_wame',
+                texto_enviado: cuerpo,
+            });
+            abrirWaMe(alert, cuerpo);
             return 'manual';
         }
 
-        const plantilla = alert.isPostCarrera ? 'seguimiento_evento'
-            : alert.isPreCarrera ? 'pre_carrera'
-                : 'recordatorio_mantenimiento';
-        const parametros = alert.isPostCarrera
-            ? [alert.clientName, alert.carreraName]
-            : alert.isPreCarrera
-                ? [alert.clientName, alert.carreraName, alert.bikeModel]
-                // El nombre del taller va en el mensaje: cuando lo manda un
-                // sistema y no una persona, no decir de quién es se lee como spam.
-                : [alert.clientName, taller?.nombre || 'tu taller', alert.component, alert.bikeModel];
+        // Con la API oficial, fuera de la ventana de 24hs Meta SOLO acepta
+        // plantillas aprobadas. La personalizada tiene el andamiaje fijo y
+        // dentro la línea que escribió la IA: es la única forma legal de
+        // mandar algo distinto a cada cliente.
+        const plantilla = personal ? 'recontacto_personal'
+            : alert.isPostCarrera ? 'seguimiento_evento'
+                : alert.isPreCarrera ? 'pre_carrera'
+                    : 'recordatorio_mantenimiento';
+
+        const parametros = personal
+            ? [primerNombre, `${personal.firma} de ${taller?.nombre || 'tu taller'}`, personal.linea!]
+            : alert.isPostCarrera
+                ? [alert.clientName, alert.carreraName]
+                : alert.isPreCarrera
+                    ? [alert.clientName, alert.carreraName, alert.bikeModel]
+                    // El nombre del taller va en el mensaje: cuando lo manda un
+                    // sistema y no una persona, no decir de quién es se lee como spam.
+                    : [alert.clientName, taller?.nombre || 'tu taller', alert.component, alert.bikeModel];
 
         const r = await enviar({
             proposito: alert.isPostCarrera ? 'evento' : 'retencion',
@@ -88,12 +153,25 @@ function useContactarWhatsApp() {
             cliente_id: alert.clientId ?? null,
             bicicleta_id: alert.bikeId ?? null,
             servicio_id: alert.servicioId ?? null,
+            variante: personal?.variante ?? `fijo_${plantilla}`,
+            generado_por_ia: !!personal,
         });
 
-        if (r.ok) { registrarManual(alert, r.mensaje_id); return 'enviado'; }
+        if (r.ok) {
+            registrarManual(alert, r.mensaje_id, {
+                variante: personal?.variante ?? `fijo_${plantilla}`,
+                texto_enviado: personal ? personal.linea : null,
+            });
+            return 'enviado';
+        }
 
-        registrarManual(alert);
-        abrirWaMe(alert, texto);
+        // 🚩 Si el envío por API falla, se abre wa.me igual: que se caiga la
+        // API no puede dejar al taller sin poder contactar a su cliente.
+        registrarManual(alert, undefined, {
+            variante: personal?.variante ?? 'fijo_wame',
+            texto_enviado: personal ? `Hola ${primerNombre}, ¿cómo va? Acá ${personal.firma}. ${personal.linea}` : texto,
+        });
+        abrirWaMe(alert, personal ? `Hola ${primerNombre}, ¿cómo va? Acá ${personal.firma}. ${personal.linea}` : texto);
         return 'manual';
     };
 
@@ -131,6 +209,15 @@ export default function RetentionEngine() {
                 </h1>
                 <p className="text-muted-foreground mt-1">Gestiona los vencimientos de componentes y genera re-compras.</p>
             </div>
+
+            {/* El resultado va arriba del trabajo: si el taller entra y lo
+                primero que ve es una lista de pendientes, el sistema le pide.
+                Si ve lo que le trajo, el sistema le da. */}
+            <PanelRetorno />
+
+            {/* Lo que contestaron va antes que lo que falta mandar: hay una
+                ventana de 24hs para responder y después se cierra. */}
+            <BandejaRespuestas />
 
             {alerts.length === 0 && (
                 <Card className="border-dashed border-2 py-12 flex flex-col items-center justify-center text-center">
@@ -214,9 +301,7 @@ export default function RetentionEngine() {
                                                 disabled={enviando === alert.id}
                                                 onClick={async () => {
                                                     setEnviando(alert.id);
-                                                    await contactar(alert, alert.isPreCarrera
-                                                        ? `¡Hola ${alert.clientName}! Vi que se acerca el ${alert.carreraName}, ¿querés que le demos una revisada a la ${alert.bikeModel} antes de viajar?`
-                                                        : '');
+                                                    await contactar(alert, mensajeFijo(alert));
                                                     setEnviando(null);
                                                 }}
                                             >
@@ -247,10 +332,10 @@ function AlertCard({ alert }: { alert: RetentionAlert }) {
     const [enviando, setEnviando] = useState(false);
     const [enviado, setEnviado] = useState(false);
 
-    // Dynamic message template based on alert type
-    const messageText = alert.isPostCarrera
-        ? `¡Hola ${alert.clientName}! ¿Cómo te fue en el ${alert.carreraName}? Contanos cómo se portó la bici.`
-        : `¡Hola ${alert.clientName}! Te escribo del taller para recordarte que toca revisar: ${alert.component} en tu ${alert.bikeModel}. ¿Querés que coordinemos un turno?`;
+    // El texto de siempre. Es lo que se copia con el botón y lo que sale si
+    // la IA está apagada; cuando está prendida, el mensaje real lo escribe
+    // la Edge Function con el historial del cliente.
+    const messageText = mensajeFijo(alert);
 
     const handleCopy = async () => {
         try {

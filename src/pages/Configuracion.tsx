@@ -163,6 +163,9 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
         color_secundario: taller.color_secundario || '#03adef',
         mensaje_informe: taller.mensaje_informe || '',
         politica_pago: (taller as any).politica_pago || '',
+        firma_nombre: (taller as any).firma_nombre || '',
+        voz_taller: (taller as any).voz_taller || '',
+        ia_mensajes_activa: (taller as any).ia_mensajes_activa === true,
     });
     const [isUploading, setIsUploading] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -216,6 +219,9 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                     color_secundario: form.color_secundario,
                     mensaje_informe: form.mensaje_informe,
                     politica_pago: form.politica_pago,
+                    firma_nombre: form.firma_nombre.trim() || null,
+                    voz_taller: form.voz_taller.trim() || null,
+                    ia_mensajes_activa: form.ia_mensajes_activa,
                 })
                 .eq('id', taller.id);
             if (error) throw error;
@@ -361,6 +367,67 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                                 disabled={!puedeEditar}
                             />
                         </div>
+                        <Button onClick={handleSave} disabled={saving || !puedeEditar} className="w-full">
+                            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                            Guardar cambios
+                        </Button>
+                    </CardContent>
+                </Card>
+
+                {/* Quién firma los WhatsApp y cómo habla.
+                    Sin un nombre, el mensaje arranca sin dueño y el cliente lo
+                    lee como un sistema — y a un sistema no se le contesta. */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-lg">Cómo le escribís a tus clientes</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>¿Quién firma los mensajes?</Label>
+                            <Input
+                                value={form.firma_nombre}
+                                onChange={(e) => setForm({ ...form, firma_nombre: e.target.value })}
+                                placeholder="Luis"
+                                disabled={!puedeEditar}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                El nombre de pila del que atiende. Los mensajes van a empezar con
+                                “Hola Marcos, acá {form.firma_nombre.trim() || '…'} de {taller.nombre || 'tu taller'}”.
+                                Si lo dejás vacío, se firma con el nombre del taller.
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Cómo hablás</Label>
+                            <textarea
+                                className="w-full min-h-[80px] p-2 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+                                value={form.voz_taller}
+                                onChange={(e) => setForm({ ...form, voz_taller: e.target.value })}
+                                placeholder="Tuteamos, somos directos y cortos. No decimos 'estimado' ni 'aguardamos su respuesta'. Al cliente le hablamos como a un compañero de salida."
+                                disabled={!puedeEditar}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Escribilo en tus palabras: si tuteás, qué muletillas usás, y sobre todo qué NO decís nunca.
+                                Es lo que hace que tus mensajes suenen a vos y no a todos los talleres iguales.
+                            </p>
+                        </div>
+
+                        <div className="flex items-start justify-between gap-4 rounded-lg border p-3 bg-slate-50">
+                            <div className="space-y-0.5">
+                                <Label className="text-sm">Mensajes personalizados uno por uno</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Cada recordatorio se escribe mirando el historial de ese cliente: su bici,
+                                    la carrera que corrió, lo que le hicimos la última vez. Apagado, sale el
+                                    texto de siempre igual para todos.
+                                </p>
+                            </div>
+                            <Switch
+                                checked={form.ia_mensajes_activa}
+                                onCheckedChange={(v) => setForm({ ...form, ia_mensajes_activa: v })}
+                                disabled={!puedeEditar}
+                            />
+                        </div>
+
                         <Button onClick={handleSave} disabled={saving || !puedeEditar} className="w-full">
                             {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
                             Guardar cambios

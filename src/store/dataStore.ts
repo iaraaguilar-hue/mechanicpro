@@ -40,17 +40,52 @@ export interface ContactoRetencionInput {
     canal?: string;
     /** Solo cuando salió por la API oficial. En null si fue por el link wa.me. */
     mensaje_whatsapp_id?: string | null;
+    /** Qué ángulo de mensaje se usó. Es lo que hace medible "cuál trae más plata". */
+    variante?: string | null;
+    /** El texto que se le mandó, para poder leerlo desde el panel. */
+    texto_enviado?: string | null;
+}
+
+/** Lo que se le pide a la IA para que escriba el mensaje. */
+export interface RedaccionInput {
+    cliente_id: string;
+    motivo: 'retencion' | 'pre_carrera' | 'post_carrera' | 'respuesta';
+    componente?: string;
+    carrera?: string;
+    ultimo_mensaje_cliente?: string;
+}
+
+export interface RedaccionResultado {
+    ok: boolean;
+    /** El cuerpo del mensaje, ya saneado para viajar como parámetro de Meta. */
+    linea?: string;
+    /** Con qué nombre firma el taller. */
+    firma?: string;
+    variante?: string;
+    /** El dato del expediente en el que se apoyó. Para auditar que no inventó. */
+    dato_usado?: string | null;
+    error?: string;
 }
 
 export interface EnvioWhatsAppInput {
     proposito: 'retencion' | 'comprobante' | 'evento';
+    /**
+     * 'texto' = mensaje libre, SOLO válido dentro de las 24hs desde que el
+     * cliente escribió. Fuera de esa ventana Meta únicamente acepta
+     * plantillas, y la Edge Function lo verifica del lado del servidor.
+     */
+    tipo?: 'plantilla' | 'texto';
+    /** El mensaje libre, cuando tipo === 'texto'. */
+    texto?: string;
     /** Nombre de la plantilla aprobada en Meta. La Edge Function tiene su propia allowlist. */
-    plantilla: string;
+    plantilla?: string;
     destino: string;
     parametros?: string[];
     cliente_id?: string | null;
     bicicleta_id?: string | null;
     servicio_id?: string | null;
+    variante?: string | null;
+    generado_por_ia?: boolean;
 }
 
 export interface EnvioWhatsAppResultado {
@@ -137,6 +172,7 @@ interface DataState {
     dismissAlert: (servicioId: string, alertId: string) => Promise<void>;
     registrarContactoRetencion: (data: ContactoRetencionInput) => Promise<void>;
     enviarWhatsAppPlantilla: (input: EnvioWhatsAppInput) => Promise<EnvioWhatsAppResultado>;
+    redactarMensajePersonal: (input: RedaccionInput) => Promise<RedaccionResultado>;
 
     // ── CRUD: Recordatorios ──
     createRecordatorio: (data: Omit<SupabaseReminder, 'id'>) => Promise<SupabaseReminder>;
@@ -543,6 +579,42 @@ export const useDataStore = create<DataState>((set, get) => ({
         }
     },
 
+    // ─────────────────────────────────────────────────────────
+    // La IA escribe el mensaje mirando el historial del cliente.
+    //
+    // NUNCA tira error hacia arriba: si la IA no está disponible, está
+    // apagada, o escribe algo que no pasa el control, devuelve ok:false y
+    // el que llama manda el texto fijo de siempre. Que falle la redacción
+    // no puede dejar al taller sin poder contactar a su cliente.
+    // ─────────────────────────────────────────────────────────
+    redactarMensajePersonal: async (input) => {
+        try {
+            const { data, error } = await supabase.functions.invoke('mensaje-ia', { body: input });
+            if (error) {
+                let codigo = 'fallo_redaccion';
+                try {
+                    const j = await (error as any)?.context?.json?.();
+                    if (j?.error) codigo = j.error;
+                } catch { /* el cuerpo no era JSON */ }
+                // 'ia_apagada' es la respuesta normal de un taller que no la
+                // activó, no un problema: no ensucia la consola.
+                if (codigo !== 'ia_apagada') console.warn('Mensaje personalizado no disponible:', codigo);
+                return { ok: false, error: codigo };
+            }
+            if (!data?.ok || !data?.linea) return { ok: false, error: data?.error || 'fallo_redaccion' };
+            return {
+                ok: true,
+                linea: data.linea,
+                firma: data.firma,
+                variante: data.variante,
+                dato_usado: data.dato_usado ?? null,
+            };
+        } catch (e: any) {
+            console.warn('Mensaje personalizado no disponible:', e?.message || e);
+            return { ok: false, error: 'fallo_redaccion' };
+        }
+    },
+
     registrarContactoRetencion: async (data) => {
         if (!data?.taller_id) return;
         try {
@@ -554,6 +626,8 @@ export const useDataStore = create<DataState>((set, get) => ({
                 componente: data.componente || null,
                 canal: data.canal || 'whatsapp_manual',
                 mensaje_whatsapp_id: data.mensaje_whatsapp_id || null,
+                variante: data.variante || null,
+                texto_enviado: data.texto_enviado || null,
                 fecha_contacto: new Date().toISOString(),
             });
             if (error) console.error('No se pudo registrar el contacto de retención:', error.message);

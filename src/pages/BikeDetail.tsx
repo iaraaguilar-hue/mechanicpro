@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { AddBikeDialog } from "@/components/AddBikeDialog";
 import { ServiceModal } from "@/components/ServiceModal";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import FichaCliente from "@/components/FichaCliente";
 
 export default function BikeDetail() {
     const { id, clientId } = useParams<{ id: string, clientId: string }>();
@@ -272,6 +273,11 @@ export default function BikeDetail() {
                         </div>
                     )}
                 </div>
+
+                {/* Todo lo que sabemos de este cliente, junto y arriba: es lo
+                    que hay que tener a mano cuando lo tenés del otro lado del
+                    mostrador o estás por escribirle. */}
+                {client && <FichaCliente clienteId={client.id} />}
             </div>
 
             {isClientMode ? (

@@ -111,13 +111,18 @@ function useContactarWhatsApp() {
         const personal = await redactarPersonal(alert);
         const primerNombre = (alert.clientName || '').trim().split(/\s+/)[0] || alert.clientName;
 
+        // El mensaje completo para el camino manual (wa.me). Es el MISMO
+        // texto que arma la plantilla aprobada de Meta: el cliente tiene
+        // que recibir lo mismo salga por donde salga.
+        const mensajePersonal = personal
+            ? `¡Hola ${primerNombre}! ¿Cómo va? Te escribo yo, ${personal.firma} de ${taller?.nombre || 'tu taller'}, por tu bici. ${personal.linea} Si querés lo vemos, escribime por acá.`
+            : null;
+
         if (!modoAuto) {
             // Sin la API de Meta el texto es libre: acá la personalización
             // entra entera, sin plantilla que la limite. El taller no tiene
             // que esperar a Meta para que sus mensajes dejen de sonar a robot.
-            const cuerpo = personal
-                ? `Hola ${primerNombre}, ¿cómo va? Acá ${personal.firma}. ${personal.linea}`
-                : texto;
+            const cuerpo = mensajePersonal ?? texto;
             registrarManual(alert, undefined, {
                 variante: personal?.variante ?? 'fijo_wame',
                 texto_enviado: cuerpo,
@@ -169,9 +174,9 @@ function useContactarWhatsApp() {
         // API no puede dejar al taller sin poder contactar a su cliente.
         registrarManual(alert, undefined, {
             variante: personal?.variante ?? 'fijo_wame',
-            texto_enviado: personal ? `Hola ${primerNombre}, ¿cómo va? Acá ${personal.firma}. ${personal.linea}` : texto,
+            texto_enviado: mensajePersonal ?? texto,
         });
-        abrirWaMe(alert, personal ? `Hola ${primerNombre}, ¿cómo va? Acá ${personal.firma}. ${personal.linea}` : texto);
+        abrirWaMe(alert, mensajePersonal ?? texto);
         return 'manual';
     };
 

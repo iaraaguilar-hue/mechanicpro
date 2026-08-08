@@ -114,6 +114,31 @@ function diasHasta(fecha?: string | null): number | null {
 }
 
 /**
+ * Texto del taller listo para mostrar.
+ *
+ * La descripción del catálogo y las notas del mecánico se cargan en un editor
+ * con formato, así que llegan con etiquetas HTML adentro. Mostrarlas crudas
+ * llena la ficha de `<p>` y `<strong>` — y, peor, ese ruido también viajaba
+ * al mensaje que escribe la IA.
+ */
+function limpiarTexto(t: string, tope = 140): string {
+    const plano = t
+        .replace(/<br\s*\/?>/gi, ' ')
+        .replace(/<\/p>/gi, ' ')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&amp;/gi, '&')
+        .replace(/&lt;/gi, '<')
+        .replace(/&gt;/gi, '>')
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/\s+/g, ' ')
+        .replace(/\s+([,.;:])/g, '$1')
+        .trim();
+    return plano.length > tope ? plano.slice(0, tope).trimEnd() + '…' : plano;
+}
+
+/**
  * Qué se le hizo en una orden, en las palabras que usa el taller.
  *
  * El "qué se hizo" vive repartido: el tipo de servicio, la descripción del
@@ -123,16 +148,18 @@ function diasHasta(fecha?: string | null): number | null {
 function trabajosDe(s: SupabaseService): string[] {
     const out: string[] = [];
 
-    // La descripción del catálogo es más específica que el tipo suelto
-    // ("Service completo + sangrado" vs "completo"), así que gana.
-    if (s.descripcion_catalogo) out.push(s.descripcion_catalogo);
-    else if (s.tipo_servicio) out.push(s.tipo_servicio);
+    // El tipo de servicio es el NOMBRE del trabajo ("Service Sport"); la
+    // descripción del catálogo es el detalle completo de todo lo que incluye,
+    // que en la ficha se lee como un muro de texto. Va el nombre, y la
+    // descripción solo si no hay nombre.
+    if (s.tipo_servicio) out.push(s.tipo_servicio);
+    else if (s.descripcion_catalogo) out.push(limpiarTexto(s.descripcion_catalogo));
 
     for (const item of s.items_extra || []) {
-        if (item?.descripcion) out.push(item.descripcion);
+        if (item?.descripcion) out.push(limpiarTexto(item.descripcion, 60));
     }
     for (const t of s.tareas_extra || []) {
-        if (t?.texto) out.push(t.texto);
+        if (t?.texto) out.push(limpiarTexto(t.texto, 60));
     }
 
     // Sin duplicados: el mismo trabajo suele aparecer como ítem y como tarea.
@@ -195,7 +222,8 @@ export function construirDossier({
             biciId: bici?.id,
             bici: nombreBici(bici),
             trabajos: trabajosDe(s),
-            notasMecanico: s.notas_mecanico || undefined,
+            // La nota del mecánico también sale del editor con formato.
+            notasMecanico: s.notas_mecanico ? limpiarTexto(s.notas_mecanico, 200) : undefined,
             precio: s.precio_total || 0,
             carrera: carrera?.nombre,
         };
@@ -263,9 +291,13 @@ export function construirDossier({
             email: cliente.email,
             tipoCiclista: cliente.tipo_ciclista,
             numeroCliente: cliente.numero_cliente,
+            // Hace cuánto es cliente = desde su primer service. La ficha no
+            // guarda fecha de alta, y la primera vez que trajo la bici mide la
+            // relación de verdad, no cuándo alguien lo cargó al sistema.
             antiguedadMeses: (() => {
-                const d = diasDesde(cliente.created_at);
-                return d === null ? null : Math.floor(d / 30);
+                const primero = misServicios[misServicios.length - 1]?.fecha_ingreso;
+                const d = diasDesde(primero);
+                return d === null || d <= 0 ? null : Math.floor(d / 30);
             })(),
         },
         bicis,

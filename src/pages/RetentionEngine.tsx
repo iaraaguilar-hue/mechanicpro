@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useDataStore } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing, Flag, Copy, User, Loader2 } from "lucide-react";
 import { buildRetentionAlerts, type RetentionAlert } from "@/lib/retentionAlerts";
+import { carreraEnFrase, nombreBiciAmigable, nombresBicisAmigables, primerNombre } from "@/lib/nombreAmigable";
 import PanelRetorno from "@/components/PanelRetorno";
 import BandejaRespuestas from "@/components/BandejaRespuestas";
 
@@ -20,18 +21,35 @@ function perfilHref(alert: RetentionAlert): string | null {
     return null;
 }
 
+// Cómo se llama la bici de esta alerta CUANDO LE ESCRIBIMOS AL CLIENTE.
+// En la tabla y en la tarjeta sigue el nombre completo (ahí lo lee el
+// mecánico y le sirve el detalle); en el mensaje va el nombre corto, que
+// es el que usa el dueño. Se resuelve contra todas las bicis del cliente
+// porque si tiene dos Rockhopper, acortar lo dejaría sin saber cuál es.
+function useNombreBici() {
+    const bicicletas = useDataStore(s => s.bicicletas);
+    return useCallback((alert: RetentionAlert): string => {
+        const bici = bicicletas.find(b => b.id === alert.bikeId);
+        if (!bici) return nombreBiciAmigable(null, alert.bikeModel);
+        const delCliente = bicicletas.filter(b => b.cliente_id === bici.cliente_id);
+        return nombresBicisAmigables(delCliente).get(bici.id)
+            ?? nombreBiciAmigable(bici.marca, bici.modelo);
+    }, [bicicletas]);
+}
+
 // El mensaje de siempre: el que sale cuando la IA está apagada o falló.
 // Vive en un solo lugar porque las dos vistas (tarjeta y tabla) tienen que
 // mandar exactamente lo mismo — antes la tabla abría wa.me con el texto
 // vacío para los avisos que no eran de carrera.
-function mensajeFijo(alert: RetentionAlert): string {
+function mensajeFijo(alert: RetentionAlert, bici: string): string {
+    const hola = `¡Hola ${primerNombre(alert.clientName)}!`;
     if (alert.isPostCarrera) {
-        return `¡Hola ${alert.clientName}! ¿Cómo te fue en el ${alert.carreraName}? Contanos cómo se portó la bici.`;
+        return `${hola} ¿Cómo te fue en ${carreraEnFrase(alert.carreraName)}? Contanos cómo se portó la bici.`;
     }
     if (alert.isPreCarrera) {
-        return `¡Hola ${alert.clientName}! Vi que se acerca el ${alert.carreraName}, ¿querés que le demos una revisada a la ${alert.bikeModel} antes de viajar?`;
+        return `${hola} Vi que se acerca ${carreraEnFrase(alert.carreraName)}, ¿querés que le demos una revisada a la ${bici} antes de viajar?`;
     }
-    return `¡Hola ${alert.clientName}! Te escribo del taller para recordarte que toca revisar: ${alert.component} en tu ${alert.bikeModel}. ¿Querés que coordinemos un turno?`;
+    return `${hola} Te escribo del taller para recordarte que toca revisar: ${alert.component} en tu ${bici}. ¿Querés que coordinemos un turno?`;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -54,6 +72,7 @@ function useContactarWhatsApp() {
     const registrar = useDataStore(s => s.registrarContactoRetencion);
     const enviar = useDataStore(s => s.enviarWhatsAppPlantilla);
     const redactar = useDataStore(s => s.redactarMensajePersonal);
+    const nombreBici = useNombreBici();
     const taller_id = useAuthStore(s => s.taller_id);
     const taller = useAuthStore(s => s.taller);
     const modoAuto = taller?.wa_activo === true;
@@ -109,13 +128,17 @@ function useContactarWhatsApp() {
     // Devuelve 'enviado' | 'manual'. El llamador decide qué mostrar.
     const contactar = async (alert: RetentionAlert, texto: string): Promise<'enviado' | 'manual'> => {
         const personal = await redactarPersonal(alert);
-        const primerNombre = (alert.clientName || '').trim().split(/\s+/)[0] || alert.clientName;
+        const nombre = primerNombre(alert.clientName);
+        // Los parámetros son lo único que el cliente lee: van con los nombres
+        // como se dicen, no como están cargados en el sistema.
+        const bici = nombreBici(alert);
+        const carrera = carreraEnFrase(alert.carreraName);
 
         // El mensaje completo para el camino manual (wa.me). Es el MISMO
         // texto que arma la plantilla aprobada de Meta: el cliente tiene
         // que recibir lo mismo salga por donde salga.
         const mensajePersonal = personal
-            ? `¡Hola ${primerNombre}! ¿Cómo va? Te escribo yo, ${personal.firma} de ${taller?.nombre || 'tu taller'}, por tu bici. ${personal.linea} Si querés lo vemos, escribime por acá.`
+            ? `¡Hola ${nombre}! ¿Cómo va? Te escribo yo, ${personal.firma} de ${taller?.nombre || 'tu taller'}, por tu bici. ${personal.linea} Si querés lo vemos, escribime por acá.`
             : null;
 
         if (!modoAuto) {
@@ -141,14 +164,14 @@ function useContactarWhatsApp() {
                     : 'recordatorio_mantenimiento';
 
         const parametros = personal
-            ? [primerNombre, `${personal.firma} de ${taller?.nombre || 'tu taller'}`, personal.linea!]
+            ? [nombre, `${personal.firma} de ${taller?.nombre || 'tu taller'}`, personal.linea!]
             : alert.isPostCarrera
-                ? [alert.clientName, alert.carreraName]
+                ? [nombre, carrera]
                 : alert.isPreCarrera
-                    ? [alert.clientName, alert.carreraName, alert.bikeModel]
+                    ? [nombre, carrera, bici]
                     // El nombre del taller va en el mensaje: cuando lo manda un
                     // sistema y no una persona, no decir de quién es se lee como spam.
-                    : [alert.clientName, taller?.nombre || 'tu taller', alert.component, alert.bikeModel];
+                    : [nombre, taller?.nombre || 'tu taller', alert.component, bici];
 
         const r = await enviar({
             proposito: alert.isPostCarrera ? 'evento' : 'retencion',
@@ -191,6 +214,7 @@ export default function RetentionEngine() {
     const carreras = useDataStore(s => s.carreras);
     const isHydrating = useDataStore(s => s.isHydrating);
     const { modoAuto, contactar } = useContactarWhatsApp();
+    const nombreBici = useNombreBici();
     const [enviando, setEnviando] = useState<string | null>(null);
 
     // Fuente única compartida con la campana (NotificationBell) → mismo
@@ -306,7 +330,7 @@ export default function RetentionEngine() {
                                                 disabled={enviando === alert.id}
                                                 onClick={async () => {
                                                     setEnviando(alert.id);
-                                                    await contactar(alert, mensajeFijo(alert));
+                                                    await contactar(alert, mensajeFijo(alert, nombreBici(alert)));
                                                     setEnviando(null);
                                                 }}
                                             >
@@ -334,13 +358,14 @@ function AlertCard({ alert }: { alert: RetentionAlert }) {
     const [isDismissing, setIsDismissing] = useState(false);
     const dismissAlert = useDataStore(s => s.dismissAlert);
     const { modoAuto, contactar } = useContactarWhatsApp();
+    const nombreBici = useNombreBici();
     const [enviando, setEnviando] = useState(false);
     const [enviado, setEnviado] = useState(false);
 
     // El texto de siempre. Es lo que se copia con el botón y lo que sale si
     // la IA está apagada; cuando está prendida, el mensaje real lo escribe
     // la Edge Function con el historial del cliente.
-    const messageText = mensajeFijo(alert);
+    const messageText = mensajeFijo(alert, nombreBici(alert));
 
     const handleCopy = async () => {
         try {

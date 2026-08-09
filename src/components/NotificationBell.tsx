@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase';
 import { avancesActivos, tareasActivas, trabajosPendientes, tareasLibresPendientes } from '@/lib/planFeatures';
 import { buildRetentionAlerts } from '@/lib/retentionAlerts';
+import { carreraEnFrase, nombreBiciAmigable, primerNombre } from '@/lib/nombreAmigable';
 import { getNovedadesVistas, saveNovedadesVistas } from '@/lib/novedadesSeen';
 import { Bell, Wrench, PackageCheck, HeartPulse, Megaphone } from 'lucide-react';
 
@@ -184,7 +185,7 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
                                     {paraAvisar.map(s => {
                                         const cli = clienteDe(s.bicicleta_id);
                                         const bike = bikeDe(s.bicicleta_id);
-                                        const msg = `Hola ${cli?.nombre || ''}! Tu ${bike?.marca || 'bici'} ${bike?.modelo || ''} ya está lista para retirar. Te esperamos 🚲`;
+                                        const msg = `Hola ${primerNombre(cli?.nombre)}! Tu ${nombreBiciAmigable(bike?.marca, bike?.modelo)} ya está lista para retirar. Te esperamos 🚲`;
                                         return (
                                             <div key={`r-${s.id}`} className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-slate-50 transition-colors">
                                                 <span className="mt-0.5 p-1.5 rounded-md bg-green-100 text-green-600 shrink-0"><PackageCheck size={14} /></span>
@@ -201,8 +202,8 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
 
                                     {vencidos.map(a => {
                                         const msg = a.isPostCarrera
-                                            ? `Hola ${a.clientName}! ¿Cómo te fue en ${a.carreraName}? Contanos cómo se portó la bici 🚲`
-                                            : `Hola ${a.clientName}! Pasó el tiempo recomendado para ${a.component || 'el mantenimiento'} de tu ${a.bikeModel || 'bici'}. ¿Coordinamos una revisión? 🔧`;
+                                            ? `Hola ${primerNombre(a.clientName)}! ¿Cómo te fue en ${carreraEnFrase(a.carreraName)}? Contanos cómo se portó la bici 🚲`
+                                            : `Hola ${primerNombre(a.clientName)}! Pasó el tiempo recomendado para ${a.component || 'el mantenimiento'} de tu ${nombreBiciAmigable(null, a.bikeModel)}. ¿Coordinamos una revisión? 🔧`;
                                         return (
                                             <div key={`m-${a.id}`} className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-slate-50 transition-colors">
                                                 <span className="mt-0.5 p-1.5 rounded-md bg-amber-100 text-amber-600 shrink-0"><HeartPulse size={14} /></span>

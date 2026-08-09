@@ -17,6 +17,7 @@ import { AddClientDialog } from "@/components/AddClientDialog";
 import { AddBikeDialog } from "@/components/AddBikeDialog";
 import { EditBikeDialog } from "@/components/EditBikeDialog";
 import { TareasServiceEditor } from "@/components/TareasServiceEditor";
+import { BuscadorProducto } from "@/components/BuscadorProducto";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
 import { NuevoBadge } from "@/components/NuevoBadge";
 import { type TareaService } from "@/lib/planFeatures";
@@ -594,7 +595,18 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                                                 <div className="scale-75">🛠️</div>
                                             </Button>
                                         </div>
-                                        <Input placeholder="Descripción" value={item.description} onChange={(e) => updateItem(item.id, 'description', e.target.value)} />
+                                        <BuscadorProducto
+                                            value={item.description}
+                                            categoria={item.category === 'labor' ? 'labor' : 'part'}
+                                            placeholder={item.category === 'labor' ? 'Buscá el trabajo o escribilo' : 'Buscá el repuesto o escribilo'}
+                                            onChange={(nombre) => updateItem(item.id, 'description', nombre)}
+                                            onSeleccionar={(p) => {
+                                                // El precio se completa solo, pero NUNCA pisa uno ya
+                                                // escrito: el del catálogo puede estar viejo y el que
+                                                // puso el mecánico es el que va a cobrar.
+                                                if (p.precio && item.price === 0) updateItem(item.id, 'price', p.precio);
+                                            }}
+                                        />
                                         <Input
                                             type="text"
                                             placeholder="$ 0"

@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
+import { claveProducto, type ProductoTaller } from '@/lib/buscadorProductos';
+
+export type { ProductoTaller };
 
 // ─────────────────────────────────────────────────────────────
 // Supabase shape types (columnas de la BD de producción)
@@ -151,6 +154,9 @@ interface DataState {
     servicios: SupabaseService[];
     recordatorios: SupabaseReminder[];
     carreras: SupabaseCarrera[];
+    /** Catálogo de productos del taller — lo que alimenta el buscador de repuestos. */
+    productos: ProductoTaller[];
+    productosCargados: boolean;
     isHydrating: boolean;
     hydrateError: string | null;
     lastHydratedAt: number | null;
@@ -158,6 +164,11 @@ interface DataState {
     // Hidratación
     fetchDashboardData: (tallerId: string) => Promise<void>;
     invalidate: () => void;
+
+    // ── Catálogo de productos (buscador de repuestos) ──
+    fetchProductos: (tallerId: string, opciones?: { forzar?: boolean }) => Promise<void>;
+    registrarProductosUsados: (items: { descripcion: string; precio?: number; categoria?: string }[]) => Promise<void>;
+    ocultarProducto: (id: string) => Promise<void>;
 
     // ── CRUD: Clientes ──
     createCliente: (data: Omit<SupabaseClient, 'id'>) => Promise<SupabaseClient>;
@@ -220,6 +231,8 @@ export const useDataStore = create<DataState>((set, get) => ({
     servicios: [],
     recordatorios: [],
     carreras: [],
+    productos: [],
+    productosCargados: false,
     isHydrating: false,
     hydrateError: null,
     lastHydratedAt: null,
@@ -290,6 +303,11 @@ export const useDataStore = create<DataState>((set, get) => ({
             });
 
             console.log(`[DataStore] ✅ Hidratación completa: ${resC.data?.length} clientes, ${resB.data?.length} bicicletas, ${serviciosMapeados.length} servicios, ${resR.data?.length} recordatorios, ${resCar.data?.length} carreras`);
+
+            // El catálogo del buscador va aparte y SIN await: puede pesar miles
+            // de filas y no tiene por qué demorar la pantalla. Mientras no esté,
+            // el campo de repuestos funciona como texto libre, igual que antes.
+            void get().fetchProductos(tallerId, { forzar: true });
         } catch (error: any) {
             console.error('[DataStore] ❌ Error en hidratación:', error.message);
             set({ isHydrating: false, hydrateError: error.message });
@@ -298,8 +316,129 @@ export const useDataStore = create<DataState>((set, get) => ({
 
     invalidate: () => set({
         clientes: [], bicicletas: [], servicios: [], recordatorios: [], carreras: [],
+        productos: [], productosCargados: false,
         isHydrating: false, hydrateError: null, lastHydratedAt: null,
     }),
+
+    // ═════════════════════════════════════════════════════════
+    // CATÁLOGO DE PRODUCTOS — el buscador de repuestos
+    //
+    // Se baja ENTERO una vez y la búsqueda corre en memoria (ver
+    // `buscadorProductos.ts`): con 5.400 productos son ~4 ms por tecla, o sea
+    // que la lista se mueve mientras se escribe. Consultar al servidor por cada
+    // letra tardaría 10× más y no andaría con el wifi de un taller.
+    //
+    // Va DESPUÉS de la hidratación principal y sin bloquearla: si tarda o falla,
+    // la app entra igual y el mecánico escribe a mano como siempre.
+    // ═════════════════════════════════════════════════════════
+    fetchProductos: async (tallerId: string, opciones = {}) => {
+        if (!tallerId) return;
+        if (get().productosCargados && !opciones.forzar) return;
+
+        // Techo de seguridad: si un taller llegara a tener un catálogo enorme,
+        // se traen los más usados y el resto queda afuera (ordenado por uso, así
+        // que lo que queda afuera es justamente lo que nunca se usa).
+        const TOPE = 30_000;
+        const PAGINA = 1_000;
+
+        try {
+            const acumulado: ProductoTaller[] = [];
+            for (let desde = 0; desde < TOPE; desde += PAGINA) {
+                const { data, error } = await supabase
+                    .from('productos_taller')
+                    .select('id,nombre,clave,sku,precio,categoria,veces_usado,ultima_vez')
+                    .eq('taller_id', tallerId)
+                    .eq('activo', true)
+                    .order('veces_usado', { ascending: false })
+                    .order('nombre', { ascending: true })
+                    .range(desde, desde + PAGINA - 1);
+                if (error) throw error;
+                acumulado.push(...((data as ProductoTaller[]) ?? []));
+                if (!data || data.length < PAGINA) break;
+            }
+            set({ productos: acumulado, productosCargados: true });
+            console.log(`[DataStore] 🔎 Buscador de repuestos listo: ${acumulado.length} productos`);
+        } catch (error: any) {
+            // No es crítico: sin catálogo el campo sigue siendo de texto libre.
+            console.warn('[DataStore] ⚠️ No se pudo cargar el catálogo de productos:', error?.message);
+            set({ productosCargados: true });
+        }
+    },
+
+    /**
+     * Le avisa al buscador qué acaba de cargar el taller. Es lo que hace que
+     * aprenda solo: sube `veces_usado`, guarda el último precio y da de alta lo
+     * que todavía no estaba. En un taller SIN ERP esto ES el catálogo.
+     *
+     * Nunca rompe el guardado de la orden: si falla, se loguea y sigue.
+     */
+    registrarProductosUsados: async (items) => {
+        const payload = (items || [])
+            .map(i => ({
+                nombre: (i.descripcion || '').trim(),
+                precio: i.precio ?? null,
+                categoria: i.categoria === 'labor' ? 'labor' : 'part',
+            }))
+            .filter(i => claveProducto(i.nombre));
+        if (!payload.length) return;
+
+        try {
+            const { error } = await supabase.rpc('registrar_productos_usados', { p_items: payload });
+            if (error) throw error;
+
+            // Reflejarlo en memoria para que el ranking se acomode ya, sin
+            // esperar a la próxima carga de la app.
+            const productos = get().productos.slice();
+            const ahora = new Date().toISOString();
+            for (const it of payload) {
+                const clave = claveProducto(it.nombre);
+                const i = productos.findIndex(p => p.clave === clave);
+                if (i >= 0) {
+                    productos[i] = {
+                        ...productos[i],
+                        veces_usado: (productos[i].veces_usado || 0) + 1,
+                        ultima_vez: ahora,
+                        precio: it.precio || productos[i].precio,
+                    };
+                } else {
+                    productos.push({
+                        // Id provisorio: la fila real ya existe en la base y llega
+                        // con su uuid en la próxima carga. Acá solo hace falta que
+                        // sea único para las listas de React.
+                        id: `nuevo:${clave}`,
+                        nombre: it.nombre,
+                        clave,
+                        sku: null,
+                        precio: it.precio,
+                        categoria: it.categoria,
+                        origen: 'aprendido',
+                        veces_usado: 1,
+                        ultima_vez: ahora,
+                    });
+                }
+            }
+            set({ productos });
+        } catch (error: any) {
+            console.warn('[DataStore] ⚠️ No se pudo registrar el uso de productos:', error?.message);
+        }
+    },
+
+    /**
+     * Saca un producto de las sugerencias sin borrarlo (las órdenes viejas lo
+     * siguen nombrando). Es la salida para la basura que quedó en el historial
+     * — un "asdas $123" cargado de prueba no puede vivir para siempre arriba de
+     * la lista.
+     */
+    ocultarProducto: async (id: string) => {
+        const antes = get().productos;
+        set({ productos: antes.filter(p => p.id !== id) });
+        const { error } = await supabase.from('productos_taller').update({ activo: false }).eq('id', id);
+        if (error) {
+            console.error('[DataStore] ❌ No se pudo ocultar el producto:', error.message);
+            set({ productos: antes });  // volver atrás: la lista tiene que decir la verdad
+            throw new Error('No se pudo ocultar el producto.');
+        }
+    },
 
     // ═════════════════════════════════════════════════════════
     // CRUD: CLIENTES
@@ -442,6 +581,9 @@ export const useDataStore = create<DataState>((set, get) => ({
             }));
             const { error: itemsError } = await supabase.from('servicio_items').insert(itemsToInsert);
             if (itemsError) console.error('Error insertando items:', itemsError.message);
+
+            // El buscador aprende de esta orden (no bloquea el alta si falla).
+            await get().registrarProductosUsados(itemsToInsert);
         }
 
         // Update Zustand state with items attached
@@ -474,6 +616,16 @@ export const useDataStore = create<DataState>((set, get) => ({
 
         // Step 2: If items were provided, replace them (delete old + insert new)
         if (items_extra !== undefined) {
+            // Qué items tenía ANTES, para no contarle al buscador dos veces el
+            // mismo producto: editar una orden tres veces borra y reinserta sus
+            // items tres veces, pero el taller usó ese repuesto UNA sola vez.
+            // Solo se registran los que no estaban.
+            const antes = new Set(
+                (get().servicios.find(s => s.id === id)?.items_extra || [])
+                    .map((i: any) => claveProducto(i.descripcion || ''))
+                    .filter(Boolean)
+            );
+
             // Delete existing items for this service
             await supabase.from('servicio_items').delete().eq('servicio_id', id);
 
@@ -491,6 +643,9 @@ export const useDataStore = create<DataState>((set, get) => ({
                 }));
                 const { error: itemsError } = await supabase.from('servicio_items').insert(itemsToInsert);
                 if (itemsError) console.error('Error insertando items:', itemsError.message);
+
+                const nuevos = itemsToInsert.filter((i: any) => !antes.has(claveProducto(i.descripcion || '')));
+                if (nuevos.length) await get().registrarProductosUsados(nuevos);
             }
         }
 

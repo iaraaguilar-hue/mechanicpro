@@ -291,11 +291,10 @@ export function construirDossier({
             email: cliente.email,
             tipoCiclista: cliente.tipo_ciclista,
             numeroCliente: cliente.numero_cliente,
-            // Hace cuánto es cliente = desde su primer service. La ficha no
-            // guarda fecha de alta, y la primera vez que trajo la bici mide la
-            // relación de verdad, no cuándo alguien lo cargó al sistema.
+            // Hace cuánto es cliente: la fecha de alta, y si no está, la primera
+            // vez que trajo una bici.
             antiguedadMeses: (() => {
-                const primero = misServicios[misServicios.length - 1]?.fecha_ingreso;
+                const primero = cliente.fecha_registro ?? misServicios[misServicios.length - 1]?.fecha_ingreso;
                 const d = diasDesde(primero);
                 return d === null || d <= 0 ? null : Math.floor(d / 30);
             })(),

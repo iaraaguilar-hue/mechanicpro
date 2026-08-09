@@ -14,7 +14,11 @@ export interface SupabaseClient {
     email?: string;
     tipo_ciclista?: string;
     eliminado_en?: string | null;
-    created_at?: string;
+    /** Fecha de alta del cliente. La columna se llama así en la base: no hay created_at. */
+    fecha_registro?: string;
+    /** El taller las anota a mano en la ficha del cliente. */
+    nombre_proxima_carrera?: string | null;
+    fecha_proxima_carrera?: string | null;
 }
 
 export interface SupabaseBike {

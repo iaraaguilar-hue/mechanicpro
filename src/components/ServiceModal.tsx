@@ -604,7 +604,9 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
                                                 // El precio se completa solo, pero NUNCA pisa uno ya
                                                 // escrito: el del catálogo puede estar viejo y el que
                                                 // puso el mecánico es el que va a cobrar.
-                                                if (p.precio && item.price === 0) updateItem(item.id, 'price', p.precio);
+                                                // Redondeado: el precio del ERP trae centavos y el
+                                                // campo del importe solo acepta pesos enteros.
+                                                if (p.precio && item.price === 0) updateItem(item.id, 'price', Math.round(p.precio));
                                             }}
                                         />
                                         <Input

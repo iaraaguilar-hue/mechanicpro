@@ -83,11 +83,16 @@ export default function BikeDetail() {
     );
 
     // Client total services (completed)
+    // 🔴 Cuenta TODAS las órdenes no borradas del cliente, igual que la ficha
+    //    de abajo (10-ago-2026). Antes contaba solo las terminadas, así que la
+    //    misma pantalla decía "Total Services: 8" arriba y "VISITAS 10" abajo,
+    //    con "Sus bicis" sumando 5+5: tres números para lo mismo, dos de ellos
+    //    contradiciéndose. Una bici que está AHORA en el taller también es una
+    //    visita. El criterio único es el de `dossierCliente`: no borradas.
     const clientTotalServices = useMemo(() => {
-        const completedStatuses = ['completed', 'finalizado', 'entregado', 'ready', 'delivered'];
         const clientBikeIds = clientBikes.map(b => b.id);
         return storeServicios.filter(s =>
-            clientBikeIds.includes(s.bicicleta_id) && completedStatuses.includes((s.estado || '').toLowerCase()) && !s.eliminado_en
+            clientBikeIds.includes(s.bicicleta_id) && !s.eliminado_en
         ).length;
     }, [storeServicios, clientBikes]);
 

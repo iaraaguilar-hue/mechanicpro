@@ -173,7 +173,15 @@ export default function FichaCliente({ clienteId }: { clienteId: string }) {
 
                 {/* Los últimos trabajos, con la nota del mecánico. Esto es lo
                     que convierte "un cliente" en "el de la Tarmac que vino con
-                    el cambio saltando". */}
+                    el cambio saltando".
+
+                    🔴 CADA LÍNEA DICE DE QUÉ BICI ES (Iara, 10-ago-2026). Antes
+                    solo mostraba fecha + trabajos, así que en un cliente con tres
+                    bicis las tres últimas órdenes se leían como el historial de
+                    UNA sola: el mecánico creía que a esa bici le habían hecho
+                    piñón, aro y cadena, cuando cada cosa fue a una bici distinta.
+                    El dato siempre estuvo en el dossier (y el texto que lee la IA
+                    sí lo decía) — faltaba en la pantalla, que es donde se decide. */}
                 {historial.length > 0 && (
                     <div>
                         <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1.5 flex items-center gap-1.5">
@@ -182,10 +190,16 @@ export default function FichaCliente({ clienteId }: { clienteId: string }) {
                         <div className="space-y-1.5">
                             {historial.slice(0, 3).map(v => (
                                 <div key={v.servicioId} className="text-sm border-l-2 border-slate-200 pl-2">
+                                    <div className="text-xs text-muted-foreground leading-tight">
+                                        {v.fecha ? new Date(v.fecha).toLocaleDateString("es-AR") : "sin fecha"}
+                                        {v.bici && (
+                                            <>
+                                                {" · "}
+                                                <span className="font-semibold text-slate-600">{v.bici}</span>
+                                            </>
+                                        )}
+                                    </div>
                                     <div className="text-slate-800">
-                                        <span className="text-xs text-muted-foreground mr-1.5">
-                                            {v.fecha ? new Date(v.fecha).toLocaleDateString("es-AR") : "sin fecha"}
-                                        </span>
                                         {v.trabajos.join(", ") || "Service"}
                                     </div>
                                     {v.notasMecanico && (

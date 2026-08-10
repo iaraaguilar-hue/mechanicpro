@@ -386,7 +386,10 @@ function FilaProducto({
                 'shrink-0 font-mono text-sm tabular-nums',
                 producto.precio ? 'font-semibold text-foreground' : 'text-muted-foreground/50'
             )}>
-                {producto.precio ? `$ ${producto.precio.toLocaleString('es-AR')}` : '—'}
+                {/* Redondeado a pesos enteros: el ERP guarda centavos porque el
+                    precio sale de un costo, pero en el mostrador se cobra
+                    redondo y "$ 17.893,4" se lee como un error. */}
+                {producto.precio ? `$ ${Math.round(producto.precio).toLocaleString('es-AR')}` : '—'}
             </span>
         </div>
     );

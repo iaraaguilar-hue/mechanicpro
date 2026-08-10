@@ -173,16 +173,24 @@ const numero = (v) => {
         const nombre = (f[iNombre] || '').trim();
         const clave = claveProducto(nombre);
         if (!clave) { sinNombre++; continue; }
+        // 🔴 Solo viajan las columnas que el CSV TRAE de verdad.
+        //    El UPDATE del upsert pisa exactamente las columnas del payload, así
+        //    que mandar un campo en null porque "no está en este archivo" le
+        //    borra al taller un dato que ya tenía. Ya pasó con `precio` (una
+        //    importación sin precios borró 34 que el taller había aprendido); el
+        //    mismo agujero estaba abierto para `sku` e `id_externo`: importar el
+        //    CSV de precios, que no trae idConcepto, habría vaciado los 5.380
+        //    ids del ERP.
         const fila = {
             taller_id: taller.id,
             nombre,
-            sku: iSku >= 0 ? (f[iSku] || '').trim() || null : null,
-            id_externo: iExt >= 0 ? (f[iExt] || '').trim() || null : null,
-            precio: iPre >= 0 ? numero(f[iPre]) : null,
             categoria: OPT.categoria,
             origen: OPT.origen,
             activo: true,
         };
+        if (iSku >= 0) fila.sku = (f[iSku] || '').trim() || null;
+        if (iExt >= 0) fila.id_externo = (f[iExt] || '').trim() || null;
+        if (iPre >= 0) fila.precio = numero(f[iPre]);
         if (porClave.has(clave)) colapsados.push({ clave, descartado: fila.sku, se_queda: porClave.get(clave).sku });
         else porClave.set(clave, fila);
     }
@@ -218,8 +226,8 @@ const numero = (v) => {
     //        sabía de haberlo cargado a mano. Pasó en la primera corrida.
     //    PostgREST exige que todos los objetos de un lote tengan las MISMAS
     //    claves, así que van en dos tandas: con precio y sin precio.
-    const sinPrecio = productos.filter(p => p.precio === null).map(({ precio, ...resto }) => resto);
-    const conPrecioFilas = productos.filter(p => p.precio !== null);
+    const sinPrecio = productos.filter(p => p.precio == null).map(({ precio, ...resto }) => resto);
+    const conPrecioFilas = productos.filter(p => p.precio != null);
 
     const LOTE = 500;
     let escritos = 0;

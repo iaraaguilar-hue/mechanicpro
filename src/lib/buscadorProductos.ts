@@ -236,7 +236,12 @@ export function buscarProductos(
                     if (tok[0] !== t[0]) continue;              // bloqueo barato
                     mejor = Math.max(mejor, similitud(t, tok.slice(0, t.length + 2)));
                 }
-                if (mejor < 0.6) { todosMatchean = false; break; }
+                // Umbral 0,70 y no 0,60: con 0,60 "bujes" traía "BONES TEE"
+                // (dos letras de diferencia sobre cinco da exactamente 0,60).
+                // Medido contra el catálogo real de Probikes. Los errores de
+                // tipeo de verdad quedan muy por encima: pastila→pastilla 0,88 ·
+                // shimno→shimano 0,86 · cadna→cadena 0,83.
+                if (mejor < 0.70) { todosMatchean = false; break; }
                 cobertura += 8 * mejor;
             }
             if (!todosMatchean) continue;

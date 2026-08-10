@@ -335,27 +335,43 @@ export const useDataStore = create<DataState>((set, get) => ({
         if (!tallerId) return;
         if (get().productosCargados && !opciones.forzar) return;
 
-        // Techo de seguridad: si un taller llegara a tener un catálogo enorme,
-        // se traen los más usados y el resto queda afuera (ordenado por uso, así
-        // que lo que queda afuera es justamente lo que nunca se usa).
+        // Supabase corta en 1.000 filas por pedido, así que un catálogo grande
+        // viene por páginas. Techo de seguridad: si un taller llegara a tener un
+        // catálogo enorme, se traen los más usados y el resto queda afuera
+        // (ordenado por uso, o sea que lo que queda afuera es lo que nunca usa).
         const TOPE = 30_000;
         const PAGINA = 1_000;
 
+        const pagina = (desde: number) => supabase
+            .from('productos_taller')
+            .select('id,nombre,clave,sku,precio,categoria,veces_usado,ultima_vez', { count: 'exact' })
+            .eq('taller_id', tallerId)
+            .eq('activo', true)
+            .order('veces_usado', { ascending: false })
+            .order('nombre', { ascending: true })
+            .range(desde, desde + PAGINA - 1);
+
         try {
-            const acumulado: ProductoTaller[] = [];
-            for (let desde = 0; desde < TOPE; desde += PAGINA) {
-                const { data, error } = await supabase
-                    .from('productos_taller')
-                    .select('id,nombre,clave,sku,precio,categoria,veces_usado,ultima_vez')
-                    .eq('taller_id', tallerId)
-                    .eq('activo', true)
-                    .order('veces_usado', { ascending: false })
-                    .order('nombre', { ascending: true })
-                    .range(desde, desde + PAGINA - 1);
-                if (error) throw error;
-                acumulado.push(...((data as ProductoTaller[]) ?? []));
-                if (!data || data.length < PAGINA) break;
+            // La primera página trae además el total, así que ya sabemos cuántas
+            // faltan y se piden TODAS JUNTAS. En fila, las 6 páginas de Probikes
+            // tardaban 3,5 s en frío: 3,5 s con el buscador vacío justo cuando el
+            // mecánico está cargando la orden.
+            const { data: primera, error, count } = await pagina(0);
+            if (error) throw error;
+
+            let acumulado = (primera as ProductoTaller[]) ?? [];
+            const total = Math.min(count ?? acumulado.length, TOPE);
+
+            if (total > PAGINA) {
+                const desdes: number[] = [];
+                for (let d = PAGINA; d < total; d += PAGINA) desdes.push(d);
+                const restantes = await Promise.all(desdes.map(d => pagina(d)));
+                for (const r of restantes) {
+                    if (r.error) throw r.error;
+                    acumulado = acumulado.concat((r.data as ProductoTaller[]) ?? []);
+                }
             }
+
             set({ productos: acumulado, productosCargados: true });
             console.log(`[DataStore] 🔎 Buscador de repuestos listo: ${acumulado.length} productos`);
         } catch (error: any) {

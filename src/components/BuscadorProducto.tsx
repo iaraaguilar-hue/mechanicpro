@@ -265,8 +265,14 @@ export function BuscadorProducto({
                                         Icono={Icono}
                                         onElegir={() => elegir(p)}
                                         onApuntar={() => setActivo(i)}
+                                        // Se puede ocultar CUALQUIER producto, no solo
+                                        // los que el taller ya usó: justamente lo que
+                                        // ensucia la lista es el catálogo importado
+                                        // (bicis enteras, ropa), que nunca tiene usos.
+                                        // Lo único que no se oculta es una fila que
+                                        // todavía no existe en la base.
                                         onOcultar={
-                                            p.veces_usado > 0 && !p.id.startsWith('nuevo:')
+                                            !p.id.startsWith('nuevo:')
                                                 ? () => { void ocultarProducto(p.id).catch(() => { }); }
                                                 : undefined
                                         }
@@ -373,10 +379,16 @@ function FilaProducto({
             {onOcultar && (
                 <button
                     type="button"
-                    title="No sugerir más este producto"
+                    // El título dice que se puede deshacer y dónde: la acción es de
+                    // un clic y sin confirmación, así que la salida tiene que estar
+                    // escrita ahí mismo.
+                    title="No sugerir más este producto (se puede volver a mostrar desde Configuración → Preferencias)"
                     aria-label={`No sugerir más ${producto.nombre}`}
                     onClick={e => { e.stopPropagation(); onOcultar(); }}
-                    className="hidden h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground/60 hover:bg-destructive/10 hover:text-destructive group-hover:flex"
+                    // Atenuado pero SIEMPRE visible, no `group-hover` a secas: en la
+                    // tablet del taller no hay mouse que pase por encima, así que un
+                    // botón que solo aparece al hover ahí no existe.
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground/40 opacity-60 transition hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
                 >
                     <EyeOff className="h-3.5 w-3.5" />
                 </button>

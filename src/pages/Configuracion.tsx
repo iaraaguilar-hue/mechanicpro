@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useTourStore } from '@/components/OnboardingTour';
 import { resetTours } from '@/lib/tourSeen';
+import { ProductosOcultos } from '@/components/ProductosOcultos';
 
 // ─────────────────────────────────────────────────────────────
 // Guardrails del logo: la calidad del branding ya no pasa por Iara,
@@ -1031,6 +1032,11 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                 </Button>
             </CardContent>
         </Card>
+
+        {/* La vuelta atrás del "no sugerir más" del buscador de repuestos.
+            Sin esto, ocultar un producto era una acción de un clic, permanente
+            y sin deshacer. */}
+        <ProductosOcultos avisar={avisar} />
         </div>
     );
 }

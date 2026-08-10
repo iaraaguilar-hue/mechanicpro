@@ -342,11 +342,16 @@ export const useDataStore = create<DataState>((set, get) => ({
         const TOPE = 30_000;
         const PAGINA = 1_000;
 
+        // `activo` = el taller lo ocultó a mano (se deshace en Configuración).
+        // `sugerible` = es un repuesto de taller. En un catálogo importado del
+        // ERP la mayoría NO lo es: bicicletas completas, ropa, cascos, calzado
+        // (en Probikes, 3.428 de 5.632). Ver `mp_clasificar_familias.cjs`.
         const pagina = (desde: number) => supabase
             .from('productos_taller')
             .select('id,nombre,clave,sku,precio,categoria,veces_usado,ultima_vez', { count: 'exact' })
             .eq('taller_id', tallerId)
             .eq('activo', true)
+            .eq('sugerible', true)
             .order('veces_usado', { ascending: false })
             .order('nombre', { ascending: true })
             .range(desde, desde + PAGINA - 1);

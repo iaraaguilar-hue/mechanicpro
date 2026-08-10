@@ -34,6 +34,7 @@ export function ProductosOcultos({ avisar }: { avisar: (tipo: 'ok' | 'error', ms
     const fetchProductos = useDataStore(s => s.fetchProductos);
 
     const [ocultos, setOcultos] = useState<Oculto[]>([]);
+    const [noRepuestos, setNoRepuestos] = useState(0);
     const [cargando, setCargando] = useState(true);
     const [filtro, setFiltro] = useState('');
     const [restaurando, setRestaurando] = useState<string | null>(null);
@@ -49,6 +50,17 @@ export function ProductosOcultos({ avisar }: { avisar: (tipo: 'ok' | 'error', ms
             .order('nombre');
         if (error) avisar('error', 'No pude leer los productos ocultos.');
         setOcultos((data as Oculto[]) ?? []);
+
+        // Los que no se ofrecen por no ser repuesto de taller (bicis, ropa,
+        // cascos) se cuentan aparte: son miles y no son decisiones de nadie,
+        // pero tampoco pueden ser invisibles.
+        const { count } = await supabase
+            .from('productos_taller')
+            .select('*', { count: 'exact', head: true })
+            .eq('taller_id', tallerId)
+            .eq('activo', true)
+            .eq('sugerible', false);
+        setNoRepuestos(count ?? 0);
         setCargando(false);
     };
 
@@ -135,6 +147,16 @@ export function ProductosOcultos({ avisar }: { avisar: (tipo: 'ok' | 'error', ms
                             )}
                         </div>
                     </>
+                )}
+
+                {noRepuestos > 0 && (
+                    <p className="text-xs text-muted-foreground leading-relaxed border-t pt-3 mt-auto">
+                        Además, <span className="font-semibold text-slate-700">{noRepuestos.toLocaleString('es-AR')} productos</span> de
+                        tu catálogo (bicicletas completas, ropa, cascos y calzado) no se ofrecen en el
+                        buscador de repuestos, porque no son cosas que se carguen en una orden de service.
+                        Siguen en tu ERP y se pueden vender igual. Si alguna vez cargás una en una orden,
+                        vuelve a aparecer sola.
+                    </p>
                 )}
             </CardContent>
         </Card>

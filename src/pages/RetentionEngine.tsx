@@ -443,7 +443,11 @@ function AlertCard({ alert }: { alert: RetentionAlert }) {
                             ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando...</>
                             : enviado
                                 ? <><CheckCircle2 className="mr-2 h-4 w-4" /> Mensaje enviado</>
-                                : <><Phone className="mr-2 h-4 w-4" /> {modoAuto ? 'Enviar recordatorio' : 'Contactar por WhatsApp'}</>}
+                                {/* "Escribir" va en el rótulo a propósito: las instrucciones que se
+                                    le entregaron a Meta en el App Review dicen textual «press
+                                    "Escribir"», y esa solicitud ya no se puede editar. El resto de la
+                                    frase queda porque para el mecánico "Escribir" solo es ambiguo. */}
+                                : <><Phone className="mr-2 h-4 w-4" /> {modoAuto ? 'Escribir recordatorio' : 'Escribir por WhatsApp'}</>}
                     </Button>
                     <Button
                         variant="outline"

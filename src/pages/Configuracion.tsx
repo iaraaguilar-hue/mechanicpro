@@ -20,6 +20,7 @@ import {
 import { useTourStore } from '@/components/OnboardingTour';
 import { resetTours } from '@/lib/tourSeen';
 import { ProductosOcultos } from '@/components/ProductosOcultos';
+import ConectarWhatsApp from '@/pages/ConectarWhatsApp';
 
 // ─────────────────────────────────────────────────────────────
 // Guardrails del logo: la calidad del branding ya no pasa por Iara,
@@ -121,9 +122,10 @@ export default function Configuracion() {
             )}
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-4">
                     <TabsTrigger value="taller">Mi Taller</TabsTrigger>
                     <TabsTrigger value="servicios">Menú de Services</TabsTrigger>
+                    <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
                     <TabsTrigger value="preferencias">Preferencias</TabsTrigger>
                 </TabsList>
 
@@ -132,6 +134,9 @@ export default function Configuracion() {
                 </TabsContent>
                 <TabsContent value="servicios" className="mt-6">
                     <TabMenuServices taller={taller} taller_id={taller_id} puedeEditar={puedeEditar} avisar={avisar} />
+                </TabsContent>
+                <TabsContent value="whatsapp" className="mt-6">
+                    <ConectarWhatsApp taller={taller} avisar={avisar} />
                 </TabsContent>
                 <TabsContent value="preferencias" className="mt-6">
                     <TabPreferencias taller={taller} setTaller={setTaller} avisar={avisar} />
@@ -804,12 +809,24 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     );
     const [savingDiag, setSavingDiag] = useState(false);
 
-    const handleSaveDiag = async () => {
+    // Autoguardado (pedido Iara 16-ago-2026): tocar el interruptor GUARDA. Antes
+    // cada tarjeta tenía su propio botón "Guardar" y era fácil cambiar algo, irse, y
+    // que no quedara guardado.
+    //
+    // Las tres son atómicas (un switch, una opción), así que no hay estado a medio
+    // escribir que proteger. Van optimistas para que el control responda al toque,
+    // PERO si el guardado falla el control VUELVE ATRÁS: un interruptor que quedó
+    // prendido sin haber guardado es peor que el botón que sacamos, porque el taller
+    // cree que la preferencia está aplicada.
+
+    const guardarDiag = async (valor: 'final' | 'durante' | 'ambos') => {
+        const anterior = momentoDiag;
+        setMomentoDiag(valor);
         try {
             setSavingDiag(true);
             const config_notificaciones = {
                 ...(taller.config_notificaciones || {}),
-                momento_diagnostico: momentoDiag,
+                momento_diagnostico: valor,
             };
             const { error } = await supabase
                 .from('talleres')
@@ -819,19 +836,27 @@ function TabPreferencias({ taller, setTaller, avisar }: {
             setTaller({ ...taller, config_notificaciones: config_notificaciones as any });
             avisar('ok', 'Preferencia de diagnóstico guardada.');
         } catch (error: any) {
-            avisar('error', 'Error guardando: ' + error.message);
+            setMomentoDiag(anterior);
+            avisar('error', 'No se pudo guardar: ' + error.message);
         } finally {
             setSavingDiag(false);
         }
     };
 
-    const handleSaveTareas = async () => {
+    const guardarTareas = async (patch: { tareas?: boolean; bloqueo?: boolean }) => {
+        const antesTareas = tareasHab;
+        const antesBloqueo = bloqueo;
+        const nuevoTareas = patch.tareas ?? tareasHab;
+        // Sin tareas no hay candado posible: apagar una apaga la otra.
+        const nuevoBloqueo = nuevoTareas ? (patch.bloqueo ?? bloqueo) : false;
+        setTareasHab(nuevoTareas);
+        setBloqueo(nuevoBloqueo);
         try {
             setSavingTareas(true);
             const config_notificaciones = {
                 ...(taller.config_notificaciones || {}),
-                tareas_habilitado: tareasHab,
-                bloquear_finalizacion: tareasHab ? bloqueo : false,
+                tareas_habilitado: nuevoTareas,
+                bloquear_finalizacion: nuevoBloqueo,
             };
             const { error } = await supabase
                 .from('talleres')
@@ -839,31 +864,36 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                 .eq('id', taller.id);
             if (error) throw error;
             setTaller({ ...taller, config_notificaciones: config_notificaciones as any });
-            avisar('ok', tareasHab
+            avisar('ok', nuevoTareas
                 ? 'Tareas del service activadas. El mecánico ya puede anotar tareas en cada orden.'
                 : 'Tareas del service desactivadas.');
         } catch (error: any) {
-            avisar('error', 'Error guardando: ' + error.message);
+            setTareasHab(antesTareas);
+            setBloqueo(antesBloqueo);
+            avisar('error', 'No se pudo guardar: ' + error.message);
         } finally {
             setSavingTareas(false);
         }
     };
 
-    const handleSave = async () => {
+    const guardarAvances = async (valor: boolean) => {
+        const anterior = habilitado;
+        setHabilitado(valor);
         try {
             setSaving(true);
-            const config_avances = { habilitado };
+            const config_avances = { habilitado: valor };
             const { error } = await supabase
                 .from('talleres')
                 .update({ config_avances })
                 .eq('id', taller.id);
             if (error) throw error;
             setTaller({ ...taller, config_avances: config_avances as any });
-            avisar('ok', habilitado
+            avisar('ok', valor
                 ? 'Checklist de trabajos activado. Lo vas a ver en cada orden de la Mesa de Trabajo.'
                 : 'Checklist de trabajos desactivado.');
         } catch (error: any) {
-            avisar('error', 'Error guardando: ' + error.message);
+            setHabilitado(anterior);
+            avisar('error', 'No se pudo guardar: ' + error.message);
         } finally {
             setSaving(false);
         }
@@ -899,8 +929,8 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     <p className="font-semibold text-sm pr-3">Activar checklist de trabajos</p>
                     <Switch
                         checked={habilitado}
-                        onCheckedChange={setHabilitado}
-                        disabled={!tienePlanChecklist}
+                        onCheckedChange={guardarAvances}
+                        disabled={!tienePlanChecklist || saving}
                     />
                 </div>
 
@@ -921,11 +951,6 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                         </p>
                     </div>
                 </details>
-
-                <Button size="sm" onClick={handleSave} disabled={saving || !tienePlanChecklist} className="w-full mt-auto">
-                    {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                    Guardar
-                </Button>
             </CardContent>
         </Card>
 
@@ -944,7 +969,11 @@ function TabPreferencias({ taller, setTaller, avisar }: {
             <CardContent className="flex-1 flex flex-col gap-3">
                 <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
                     <p className="font-semibold text-sm pr-3">Activar tareas del service</p>
-                    <Switch checked={tareasHab} onCheckedChange={setTareasHab} />
+                    <Switch
+                        checked={tareasHab}
+                        onCheckedChange={v => guardarTareas({ tareas: v })}
+                        disabled={savingTareas}
+                    />
                 </div>
 
                 <div className={`flex items-center justify-between p-3 rounded-lg border transition-opacity ${tareasHab ? 'bg-amber-50/50 border-amber-200' : 'bg-muted/20 opacity-50'}`}>
@@ -956,13 +985,12 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                             "Finalizar service" se bloquea hasta tildar todas las tareas de la orden.
                         </p>
                     </div>
-                    <Switch checked={bloqueo} onCheckedChange={setBloqueo} disabled={!tareasHab} />
+                    <Switch
+                        checked={bloqueo}
+                        onCheckedChange={v => guardarTareas({ bloqueo: v })}
+                        disabled={!tareasHab || savingTareas}
+                    />
                 </div>
-
-                <Button size="sm" onClick={handleSaveTareas} disabled={savingTareas} className="w-full mt-auto">
-                    {savingTareas ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                    Guardar
-                </Button>
             </CardContent>
         </Card>
 
@@ -988,7 +1016,8 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     <button
                         key={opt.val}
                         type="button"
-                        onClick={() => setMomentoDiag(opt.val)}
+                        onClick={() => guardarDiag(opt.val)}
+                        disabled={savingDiag}
                         className={`w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg border transition-colors ${momentoDiag === opt.val ? 'border-primary bg-primary/5' : 'bg-muted/20 hover:border-primary/40'}`}
                     >
                         <span className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${momentoDiag === opt.val ? 'border-primary bg-primary' : 'border-muted-foreground/40'}`} />
@@ -998,11 +1027,6 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                         </span>
                     </button>
                 ))}
-
-                <Button size="sm" onClick={handleSaveDiag} disabled={savingDiag} className="w-full mt-auto">
-                    {savingDiag ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                    Guardar
-                </Button>
             </CardContent>
         </Card>
 

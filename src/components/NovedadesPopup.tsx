@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getNovedadesVistas, marcarNovedadesVistas } from '@/lib/novedadesSeen';
 import { tourVisto } from '@/lib/tourSeen';
-import { useTourStore } from '@/components/OnboardingTour';
+import { useTourStore, CUENTA_REVISOR_META } from '@/components/OnboardingTour';
+import { useAuthStore } from '@/store/authStore';
 import { Megaphone, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -21,6 +22,7 @@ interface Novedad { id: string; titulo: string; cuerpo: string; fecha: string; a
 export function NovedadesPopup() {
     const [pendientes, setPendientes] = useState<Novedad[]>([]);
     const [cerrado, setCerrado] = useState(false);
+    const emailSesion = useAuthStore(s => s.session?.user?.email);
 
     useEffect(() => {
         let alive = true;
@@ -41,6 +43,12 @@ export function NovedadesPopup() {
     const [tourYaVistoAlAbrir] = useState(() => tourVisto());
     const tourActivo = useTourStore((s) => s.activo);
     if (tourActivo || !tourYaVistoAlAbrir) return null;
+
+    // Al revisor de Meta tampoco: este cartel tapa la pantalla entera y bloquea
+    // los clics, y su botón principal RELANZA el recorrido de 36 pasos. Con el
+    // tour desactivado para esa cuenta esto ya no saltaría, pero se deja escrito
+    // y no colgado de un efecto colateral.
+    if (emailSesion?.toLowerCase() === CUENTA_REVISOR_META) return null;
 
     if (cerrado || pendientes.length === 0) return null;
 

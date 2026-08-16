@@ -24,6 +24,12 @@ import { useAuthStore } from '@/store/authStore';
 // cambiamos de pestaña"). Pasos `opcional` se saltean solos si su
 // elemento no existe (feature apagada, garage vacío): nunca se rompe.
 //
+// La cuenta de prueba que Meta usa para revisar la app queda EXCLUIDA del
+// auto-arranque (ver el useEffect de abajo).
+
+/** Cuenta de prueba entregada a Meta en la solicitud de App Review. */
+export const CUENTA_REVISOR_META = 'demo@mechanicpro.com.ar';
+//
 // Los contextuales corren SOBRE modales Radix: el contenedor fuerza
 // pointer-events auto (Radix pone none en el body) y los DialogContent
 // involucrados previenen su cierre mientras el tour está activo
@@ -105,6 +111,11 @@ export function OnboardingTour() {
     useEffect(() => {
         if (!session || !taller || activo) return;
         if (rol?.toLowerCase()?.trim() === 'super_admin') return;
+        // La cuenta que usa el revisor de Meta tampoco: nuestras instrucciones del
+        // App Review dicen "vas a aterrizar en el panel del taller", y un tutorial
+        // de 36 pasos tapando la pantalla es lo contrario de eso. Verificado el
+        // 16-ago: el velo bloquea los clics hasta que se omite.
+        if (session.user?.email?.toLowerCase() === CUENTA_REVISOR_META) return;
         if (tourVisto('bienvenida')) return;
         // Pequeña espera para que la pantalla termine de hidratar datos.
         const t = setTimeout(() => iniciar('bienvenida'), 1200);

@@ -289,14 +289,22 @@ function EstadoConectado({ taller }: { taller: TallerData }) {
                         {cortada ? "Conexión interrumpida" : "Conectado"}
                     </CardTitle>
                     <CardDescription>
-                        {taller.wa_numero_display ?? "Tu número del taller"}
+                        {taller.wa_numero_display ?? "Número conectado"}
                         {desde && ` · desde el ${desde}`}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                    {/*
+                      Si todavía no llegó ningún evento de Meta no se escribe "sin
+                      datos" a secas, que se lee como que algo se rompió: se dice qué
+                      significa. La marca la pone el webhook con cada evento que
+                      manda Meta, así que aparece con el primer mensaje.
+                    */}
                     <p className="text-sm text-muted-foreground flex items-center gap-2">
                         <Clock className="h-4 w-4" />
-                        Última sincronización: {hace(ultimaSync)}
+                        {ultimaSync
+                            ? `Última sincronización: ${hace(ultimaSync)}`
+                            : "Todavía no hubo movimiento. Aparece acá con el primer mensaje."}
                     </p>
 
                     <div className="flex items-start gap-3 p-4 rounded-lg border border-slate-200 bg-slate-50">

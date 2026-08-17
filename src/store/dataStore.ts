@@ -98,9 +98,14 @@ export interface OrdenDictada {
     ok: boolean;
     /** Nombre EXACTO de un tipo del catálogo del taller, o null. */
     tipo_servicio?: string | null;
-    items?: { texto: string; categoria: 'part' | 'labor' }[];
+    /** precio = SOLO el que el mecánico DIJO en el dictado; null si no lo dijo. */
+    items?: { texto: string; categoria: 'part' | 'labor'; precio?: number | null }[];
     tareas?: string[];
     notas?: string | null;
+    /** El cliente nombrado en el dictado ("la Tarmac de Martín"), si lo hubo. */
+    cliente?: string | null;
+    /** Cómo describió la bici, si la describió. */
+    bici_dictada?: string | null;
     error?: string;
 }
 
@@ -895,6 +900,8 @@ export const useDataStore = create<DataState>((set, get) => ({
                 items: data.items ?? [],
                 tareas: data.tareas ?? [],
                 notas: data.notas ?? null,
+                cliente: data.cliente ?? null,
+                bici_dictada: data.bici_dictada ?? null,
             };
         } catch (e: any) {
             console.warn('Orden dictada no disponible:', e?.message || e);

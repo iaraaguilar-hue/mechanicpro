@@ -47,11 +47,13 @@ const usarReconocedor = !!Reconocedor && !esIOS;
 const TIMEOUT_ARMADO_MS = 30000;
 const VIGIA_SIN_AUDIO_MS = 6000;
 
-export default function DictadoOrden({ bici, onAplicar }: {
+export default function DictadoOrden({ bici, onAplicar, completo = false }: {
     /** Cómo describir la bici en el prompt ("Specialized Tarmac SL7"). */
     bici?: string;
     /** Recibe el borrador estructurado y lo vuelca al formulario. */
     onAplicar: (r: OrdenDictada) => void;
+    /** Modo "dictar todo de una": también el cliente y la bici, desde el paso 1. */
+    completo?: boolean;
 }) {
     const estructurar = useDataStore(s => s.estructurarOrdenDictada);
     type Modo = 'inicial' | 'grabando' | 'texto' | 'armando' | 'listo';
@@ -194,11 +196,13 @@ export default function DictadoOrden({ bici, onAplicar }: {
                 )}
                 <span className="text-xs text-muted-foreground">
                     {modo === 'grabando'
-                        ? "Escuchando… decí qué le vas a hacer y qué le ponés."
+                        ? (completo ? "Escuchando… decí de quién es la bici y qué le hacés." : "Escuchando… decí qué le vas a hacer y qué le ponés.")
                         : modo === 'listo'
                             ? <span className="inline-flex items-center gap-1 text-green-700 font-medium"><CheckCircle2 className="w-3.5 h-3.5" /> Borrador cargado abajo. Revisalo antes de guardar.</span>
                             : modo === 'inicial'
-                                ? "Decilo en veinte segundos y el formulario se arma solo. Después lo revisás."
+                                ? (completo
+                                    ? "Decí de quién es, qué bici es y qué le hacés: si el cliente ya está cargado, no hace falta ni buscarlo."
+                                    : "Decilo en veinte segundos y el formulario se arma solo. Después lo revisás.")
                                 : null}
                 </span>
             </div>
@@ -217,7 +221,9 @@ export default function DictadoOrden({ bici, onAplicar }: {
                         autoFocus
                         value={texto}
                         onChange={e => setTexto(e.target.value)}
-                        placeholder={'Tocá el micrófono del teclado 🎤 y dictá: "cadena estirada, pastillas al límite, le pongo cadena Ultegra y pastillas"'}
+                        placeholder={completo
+                            ? 'Tocá el micrófono del teclado 🎤 y dictá: "la Tarmac de Martín, cadena estirada, le pongo cadena y pastillas, la mano de obra se la cobro veinticinco mil"'
+                            : 'Tocá el micrófono del teclado 🎤 y dictá: "cadena estirada, pastillas al límite, le pongo cadena Ultegra y pastillas"'}
                         className="min-h-[70px] bg-white text-sm"
                     />
                     <div className="flex gap-2">

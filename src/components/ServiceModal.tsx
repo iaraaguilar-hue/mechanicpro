@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useDataStore, type SupabaseClient, type SupabaseBike } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
 import { supabase } from "@/lib/supabase";
@@ -59,6 +59,75 @@ export function ServiceModal({
     const [selectedClient, setSelectedClient] = useState<SupabaseClient | null>(initialClientData || null);
     const [selectedBike, setSelectedBike] = useState<SupabaseBike | null>(initialBikeData || null);
 
+    // ─────────────────────────────────────────────────────────
+    // El dictado completo (pedido de Iara, 17-ago): "que Luis no tenga ni
+    // que seleccionarlo, que pueda dictar todo de una". Si el dictado
+    // nombra al cliente y es UNO solo en la base, se saltean los pasos de
+    // buscar cliente y elegir bici; el resto del dictado queda pendiente
+    // y se vuelca al formulario cuando ese paso abre.
+    //
+    // La regla de seguridad: con dos "Martín" NO se adivina — elegir el
+    // cliente equivocado es colgarle la orden al historial de otro. En
+    // ese caso el buscador queda prefiltrado con el nombre dictado y
+    // Luis toca el correcto (un toque, no una búsqueda).
+    // ─────────────────────────────────────────────────────────
+    const clientes = useDataStore(s => s.clientes);
+    const bicicletas = useDataStore(s => s.bicicletas);
+    const [dictadoPendiente, setDictadoPendiente] = useState<OrdenDictada | null>(null);
+    const [busquedaInicial, setBusquedaInicial] = useState("");
+    const [avisoDictado, setAvisoDictado] = useState<string | null>(null);
+
+    const sinTildes = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+    const elegirBici = (cliente: SupabaseClient, r: OrdenDictada) => {
+        const delCliente = bicicletas.filter(b => b.cliente_id === cliente.id);
+        if (delCliente.length === 1) return delCliente[0];
+        if (r.bici_dictada) {
+            const tokens = sinTildes(r.bici_dictada).split(/\s+/).filter(t => t.length >= 3);
+            const candidatas = delCliente.filter(b => {
+                const nombre = sinTildes(`${b.marca ?? ''} ${b.modelo ?? ''}`);
+                return tokens.some(t => nombre.includes(t));
+            });
+            if (candidatas.length === 1) return candidatas[0];
+        }
+        return null;
+    };
+
+    const manejarDictadoCompleto = (r: OrdenDictada) => {
+        setDictadoPendiente(r);
+        setAvisoDictado(null);
+        if (!r.cliente) {
+            setAvisoDictado("No escuché de quién es la bici. Elegí el cliente y el borrador se carga solo.");
+            return;
+        }
+        const tokens = sinTildes(r.cliente).split(/\s+/).filter(Boolean);
+        const activos = clientes.filter(c => !c.eliminado_en);
+        const exactos = activos.filter(c => sinTildes(c.nombre) === sinTildes(r.cliente!));
+        const candidatos = exactos.length
+            ? exactos
+            : activos.filter(c => {
+                const nombre = sinTildes(c.nombre);
+                return tokens.every(t => nombre.includes(t));
+            });
+        if (candidatos.length === 1) {
+            const cliente = candidatos[0];
+            setSelectedClient(cliente);
+            const bici = elegirBici(cliente, r);
+            if (bici) {
+                setSelectedBike(bici);
+                setStep("DEFINE_SERVICE");
+            } else {
+                setStep("SELECT_BIKE");
+            }
+        } else if (candidatos.length > 1) {
+            setBusquedaInicial(r.cliente);
+            setAvisoDictado(`Hay ${candidatos.length} clientes que se llaman así: tocá el correcto y el borrador se carga solo.`);
+        } else {
+            setBusquedaInicial(r.cliente);
+            setAvisoDictado(`No encontré a "${r.cliente}" entre tus clientes. Buscalo o crealo, y el borrador se carga solo.`);
+        }
+    };
+
     useEffect(() => {
         if (isOpen) {
             if (preSelectedServiceId) {
@@ -75,6 +144,9 @@ export function ServiceModal({
                 setSelectedClient(null);
                 setSelectedBike(null);
             }
+            setDictadoPendiente(null);
+            setBusquedaInicial("");
+            setAvisoDictado(null);
         }
     }, [isOpen, initialClientData, initialBikeData, preSelectedClientId, preSelectedBikeId, preSelectedServiceId]);
 
@@ -89,6 +161,7 @@ export function ServiceModal({
                 <ServiceDefinitionStep
                     bike={selectedBike || null}
                     serviceId={preSelectedServiceId}
+                    dictadoInicial={dictadoPendiente}
                     clientName={selectedClient?.nombre || initialClientData?.nombre || ""}
                     onReset={() => {
                         setSelectedClient(null);
@@ -130,11 +203,27 @@ export function ServiceModal({
 
                     <div className="flex-1 py-4">
                         {step === "SEARCH_CLIENT" && (
-                            <div data-tour="sm-cliente">
+                            <div data-tour="sm-cliente" className="space-y-4">
+                                {/* Dictar TODO de una: cliente + bici + trabajos. Si el
+                                    cliente es uno solo, saltea la búsqueda entera. */}
+                                {!preSelectedServiceId && (
+                                    <DictadoOrden completo onAplicar={manejarDictadoCompleto} />
+                                )}
+                                {avisoDictado && (
+                                    <p className="text-xs font-medium text-amber-700">{avisoDictado}</p>
+                                )}
                                 <ClientSearchStep
+                                    initialQuery={busquedaInicial}
                                     onClientSelect={(client) => {
                                         setSelectedClient(client);
-                                        setStep("SELECT_BIKE");
+                                        // Si venimos de un dictado, intentar saltear también la bici.
+                                        const bici = dictadoPendiente ? elegirBici(client, dictadoPendiente) : null;
+                                        if (bici) {
+                                            setSelectedBike(bici);
+                                            setStep("DEFINE_SERVICE");
+                                        } else {
+                                            setStep("SELECT_BIKE");
+                                        }
                                     }}
                                 />
                             </div>
@@ -162,8 +251,11 @@ export function ServiceModal({
 // ─────────────────────────────────────────────────────────────
 // Client Search — reads from store
 // ─────────────────────────────────────────────────────────────
-function ClientSearchStep({ onClientSelect }: { onClientSelect: (c: SupabaseClient) => void }) {
-    const [query, setQuery] = useState("");
+function ClientSearchStep({ onClientSelect, initialQuery = "" }: { onClientSelect: (c: SupabaseClient) => void, initialQuery?: string }) {
+    const [query, setQuery] = useState(initialQuery);
+    // El dictado puede prefiltrar la lista DESPUÉS de que este paso montó
+    // (el nombre llega cuando la IA contesta): el prop manda.
+    useEffect(() => { if (initialQuery) setQuery(initialQuery); }, [initialQuery]);
     const clientes = useDataStore(s => s.clientes);
 
     const filtered = useMemo(() => {
@@ -299,10 +391,12 @@ function BikeSelectionStep({ client, onBikeSelect, onBack }: { client: SupabaseC
 // ─────────────────────────────────────────────────────────────
 // Service Definition — create/update via store
 // ─────────────────────────────────────────────────────────────
-function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess, onBack }: {
+function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, onReset, onSuccess, onBack }: {
     bike: SupabaseBike | null,
     serviceId?: string,
     clientName: string,
+    /** Dictado completo hecho ANTES de llegar acá (saltó la búsqueda de cliente). */
+    dictadoInicial?: OrdenDictada | null,
     onReset?: () => void,
     onSuccess: () => void,
     onBack: () => void
@@ -393,6 +487,21 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
         setBasePrice(catalogoServicios[0].precio);
     }, [catalogoServicios, serviceId]);
 
+    // El dictado completo hecho en el paso del cliente se vuelca acá, UNA
+    // vez, y recién cuando el catálogo y los productos están cargados (si
+    // no, el tipo no matchea y los precios no se encuentran). Declarado
+    // DESPUÉS del preselect de arriba para que el tipo dictado gane.
+    const productosCargados = useDataStore(s => s.productosCargados);
+    const dictadoAplicado = useRef(false);
+    useEffect(() => {
+        if (!dictadoInicial || dictadoAplicado.current) return;
+        if (serviceId) return; // solo en órdenes nuevas
+        if (catalogoServicios.length === 0 || !productosCargados) return;
+        dictadoAplicado.current = true;
+        aplicarDictado(dictadoInicial);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dictadoInicial, catalogoServicios, productosCargados, serviceId]);
+
     const totalPrice = basePrice + extraItems.reduce((acc, item) => acc + item.price, 0);
 
     const handleTypeChange = (type: string, price: number) => {
@@ -409,11 +518,11 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
     // ─────────────────────────────────────────────────────────
     // Volcar el dictado al formulario (idea 1). Reglas:
     // - SUMA, no pisa: lo ya cargado queda intacto.
-    // - El precio de cada ítem lo pone el catálogo del taller (el mismo
-    //   buscador que usa la carga a mano); si no hay match, queda el
-    //   texto dictado con precio 0 y el mecánico lo completa.
-    // - El tipo de service solo se toca si el dictado lo trajo Y el
-    //   mecánico no había elegido otro distinto del default.
+    // - El precio de cada ítem: 1º el que el mecánico DIJO en el dictado
+    //   (feedback de Iara 17-ago: "le dije el precio y no lo puso" — un
+    //   precio dictado es un dato, no un invento), 2º el del catálogo
+    //   (el mismo buscador que la carga a mano), 3º queda en 0 y lo
+    //   completa el mecánico.
     // ─────────────────────────────────────────────────────────
     const aplicarDictado = (r: OrdenDictada) => {
         if (r.tipo_servicio) {
@@ -424,8 +533,12 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
             const match = buscarProductos(productos, it.texto, { categoria: it.categoria, limite: 1 })[0];
             return {
                 id: `${Date.now()}_${idx}`,
-                description: match ? match.nombre : it.texto,
-                price: match?.precio != null ? Math.round(match.precio) : 0,
+                // Si el mecánico dictó el precio, se respeta también SU nombre
+                // del ítem: dijo qué cobra y cuánto, el catálogo no lo corrige.
+                description: it.precio != null ? it.texto : (match ? match.nombre : it.texto),
+                price: it.precio != null
+                    ? it.precio
+                    : (match?.precio != null ? Math.round(match.precio) : 0),
                 category: it.categoria,
             };
         });

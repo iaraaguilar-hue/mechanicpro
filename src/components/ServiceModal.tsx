@@ -22,6 +22,9 @@ import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthChec
 import { NuevoBadge } from "@/components/NuevoBadge";
 import { type TareaService } from "@/lib/planFeatures";
 import { tourBloqueaCierreDialog } from "@/components/OnboardingTour";
+import DictadoOrden from "@/components/DictadoOrden";
+import { buscarProductos } from "@/lib/buscadorProductos";
+import { type OrdenDictada } from "@/store/dataStore";
 
 // Service types (const object pattern for erasableSyntaxOnly compatibility)
 // export const ServiceType = {
@@ -401,6 +404,39 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
         setExtraItems([...extraItems, { id: Date.now().toString(), description: "", price: 0, category: 'part' }]);
     };
 
+    const productos = useDataStore(s => s.productos);
+
+    // ─────────────────────────────────────────────────────────
+    // Volcar el dictado al formulario (idea 1). Reglas:
+    // - SUMA, no pisa: lo ya cargado queda intacto.
+    // - El precio de cada ítem lo pone el catálogo del taller (el mismo
+    //   buscador que usa la carga a mano); si no hay match, queda el
+    //   texto dictado con precio 0 y el mecánico lo completa.
+    // - El tipo de service solo se toca si el dictado lo trajo Y el
+    //   mecánico no había elegido otro distinto del default.
+    // ─────────────────────────────────────────────────────────
+    const aplicarDictado = (r: OrdenDictada) => {
+        if (r.tipo_servicio) {
+            const cat = catalogoServicios.find(c => c.nombre === r.tipo_servicio);
+            if (cat) { setServiceType(cat.nombre); setBasePrice(cat.precio ?? 0); }
+        }
+        const nuevos = (r.items ?? []).map((it, idx) => {
+            const match = buscarProductos(productos, it.texto, { categoria: it.categoria, limite: 1 })[0];
+            return {
+                id: `${Date.now()}_${idx}`,
+                description: match ? match.nombre : it.texto,
+                price: match?.precio != null ? Math.round(match.precio) : 0,
+                category: it.categoria,
+            };
+        });
+        if (nuevos.length) setExtraItems(prev => [...prev, ...nuevos]);
+        const tareasNuevas: TareaService[] = (r.tareas ?? []).map(t => ({
+            id: crypto.randomUUID(), texto: t, hecha: false,
+        }));
+        if (tareasNuevas.length) setTareasExtra(prev => [...prev, ...tareasNuevas]);
+        if (r.notas) setNotes(prev => prev ? `${prev}\n${r.notas}` : r.notas!);
+    };
+
     const updateItem = (id: string, field: string, value: any) => {
         setExtraItems(items => items.map(item =>
             item.id === id ? { ...item, [field]: value } : item
@@ -535,6 +571,13 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, onReset, onSuccess
 
             {/* Scrollable Body */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* La orden dictada (idea 1): precarga el formulario, no lo pisa.
+                    Si el navegador no tiene reconocimiento de voz, no aparece. */}
+                <DictadoOrden
+                    bici={[bike?.marca, bike?.modelo].filter(Boolean).join(' ') || undefined}
+                    onAplicar={aplicarDictado}
+                />
+
                 <div data-tour="service-tipo">
                     <Label className="text-lg font-semibold mb-3 block">Tipo de Service</Label>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

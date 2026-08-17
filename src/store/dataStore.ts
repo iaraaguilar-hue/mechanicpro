@@ -93,6 +93,17 @@ export interface SugerenciasResultado {
     error?: string;
 }
 
+/** El borrador estructurado que devuelve la orden dictada (idea 1). */
+export interface OrdenDictada {
+    ok: boolean;
+    /** Nombre EXACTO de un tipo del catálogo del taller, o null. */
+    tipo_servicio?: string | null;
+    items?: { texto: string; categoria: 'part' | 'labor' }[];
+    tareas?: string[];
+    notas?: string | null;
+    error?: string;
+}
+
 export interface EnvioWhatsAppInput {
     proposito: 'retencion' | 'comprobante' | 'evento';
     /**
@@ -209,6 +220,7 @@ interface DataState {
     redactarMensajePersonal: (input: RedaccionInput) => Promise<RedaccionResultado>;
     sugerirPresupuesto: (servicioId: string) => Promise<SugerenciasResultado>;
     responderSugerencia: (id: string, estado: 'aceptada' | 'no_aplica') => Promise<boolean>;
+    estructurarOrdenDictada: (texto: string, bici?: string) => Promise<OrdenDictada>;
 
     // ── CRUD: Recordatorios ──
     createRecordatorio: (data: Omit<SupabaseReminder, 'id'>) => Promise<SupabaseReminder>;
@@ -852,6 +864,41 @@ export const useDataStore = create<DataState>((set, get) => ({
         } catch (e: any) {
             console.warn('Segundo par de ojos no disponible:', e?.message || e);
             return { ok: false, sugerencias: [], error: 'fallo_sugerencias' };
+        }
+    },
+
+    // ─────────────────────────────────────────────────────────
+    // La orden que se carga hablando (idea 1): manda el texto dictado y
+    // vuelve el borrador estructurado (tipo del catálogo, ítems, tareas,
+    // notas). Los precios NO vienen de acá: los completa el buscador de
+    // productos, igual que cuando se tipea. NUNCA tira error hacia
+    // arriba: si falla, el mecánico sigue cargando a mano como siempre.
+    // ─────────────────────────────────────────────────────────
+    estructurarOrdenDictada: async (texto, bici) => {
+        try {
+            const { data, error } = await supabase.functions.invoke('orden-dictada', {
+                body: { texto, bici },
+            });
+            if (error) {
+                let codigo = 'fallo_dictado';
+                try {
+                    const j = await (error as any)?.context?.json?.();
+                    if (j?.error) codigo = j.error;
+                } catch { /* el cuerpo no era JSON */ }
+                console.warn('Orden dictada no disponible:', codigo);
+                return { ok: false, error: codigo };
+            }
+            if (!data?.ok) return { ok: false, error: data?.error || 'fallo_dictado' };
+            return {
+                ok: true,
+                tipo_servicio: data.tipo_servicio ?? null,
+                items: data.items ?? [],
+                tareas: data.tareas ?? [],
+                notas: data.notas ?? null,
+            };
+        } catch (e: any) {
+            console.warn('Orden dictada no disponible:', e?.message || e);
+            return { ok: false, error: 'fallo_dictado' };
         }
     },
 

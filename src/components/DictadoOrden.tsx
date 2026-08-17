@@ -1,34 +1,51 @@
 import { useEffect, useRef, useState } from "react";
 import { useDataStore, type OrdenDictada } from "@/store/dataStore";
 import { Button } from "@/components/ui/button";
-import { Mic, Square, Loader2, CheckCircle2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Mic, Square, Loader2, CheckCircle2, Keyboard } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
 // LA ORDEN QUE SE CARGA HABLANDO (idea 1).
 //
-// El mecánico aprieta el micrófono con las manos sucias, dicta veinte
-// segundos y el formulario se precarga: tipo de service del catálogo,
-// ítems con el precio del buscador, tareas y notas. Repara la causa de
-// muerte de Crono (6 ítems tipeados a mano, orden guardada en $0).
+// Dos caminos para dictar, porque los celulares mienten:
 //
-// Decisiones:
-// - La transcripción la hace el NAVEGADOR (Web Speech API): gratis, en
-//   vivo, y el audio no sale del taller. Si el navegador no la tiene,
-//   el botón directamente no aparece y todo sigue como siempre.
-// - El resultado es un BORRADOR editable. La IA no guarda nada sola:
-//   el mecánico revisa, corrige y guarda como siempre.
-// - Los precios NO los pone la IA: el ítem dictado se busca en el
-//   catálogo del taller con el mismo buscador de siempre. Un precio
-//   inventado es peor que un campo vacío.
-// - El dictado SUMA, no pisa: lo que ya estaba cargado en el
-//   formulario queda intacto.
+// 1. EL MICRÓFONO DEL TELADO (el camino seguro). Un campo de texto donde
+//    el mecánico dicta con el micrófono del teclado del celular, que es
+//    el dictado del sistema operativo y anda SIEMPRE. En iPhone/iPad es
+//    el único camino: el reconocedor del navegador existe pero arranca
+//    sin escuchar nada y sin tirar error (probado el 17-ago en el
+//    celular de Iara: "no me escuchó y se trabó").
+//
+// 2. EL RECONOCEDOR DEL NAVEGADOR (la mejora, donde funciona). Escucha
+//    en vivo sin tocar el teclado. Solo se ofrece fuera de iOS, y con
+//    dos redes de seguridad que la primera versión no tenía:
+//    - todo fallo SE DICE en pantalla (permiso denegado, no escucha):
+//      el silencio se percibe como "se trabó la app";
+//    - un vigía: si a los 6 segundos no entró ni una palabra, avisa y
+//      abre el campo de texto para seguir con el teclado.
+//
+// Y la llamada al servidor tiene TIMEOUT: un botón que queda girando
+// para siempre es una app colgada, aunque técnicamente esté esperando.
+//
+// El resultado sigue siendo un borrador: la IA nunca guarda sola.
 // ─────────────────────────────────────────────────────────────
 
-// El tipo del reconocedor no está en los DOM types de este target.
 const Reconocedor: any =
     typeof window !== 'undefined'
         ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
         : null;
+
+// En iOS TODOS los navegadores son WebKit y el reconocedor está roto de la
+// misma manera. iPad moderno se anuncia como "Macintosh" con touch.
+const esIOS = typeof navigator !== 'undefined' && (
+    /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+);
+
+const usarReconocedor = !!Reconocedor && !esIOS;
+
+const TIMEOUT_ARMADO_MS = 30000;
+const VIGIA_SIN_AUDIO_MS = 6000;
 
 export default function DictadoOrden({ bici, onAplicar }: {
     /** Cómo describir la bici en el prompt ("Specialized Tarmac SL7"). */
@@ -37,98 +54,182 @@ export default function DictadoOrden({ bici, onAplicar }: {
     onAplicar: (r: OrdenDictada) => void;
 }) {
     const estructurar = useDataStore(s => s.estructurarOrdenDictada);
-    const [grabando, setGrabando] = useState(false);
-    const [armando, setArmando] = useState(false);
-    const [listo, setListo] = useState(false);
-    const [fallo, setFallo] = useState(false);
-    const [transcript, setTranscript] = useState("");
+    type Modo = 'inicial' | 'grabando' | 'texto' | 'armando' | 'listo';
+    const [modo, setModo] = useState<Modo>('inicial');
+    const [aviso, setAviso] = useState<string | null>(null);
+    const [texto, setTexto] = useState("");
     const recRef = useRef<any>(null);
     const finalRef = useRef("");
+    const vigiaRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    useEffect(() => () => { try { recRef.current?.stop(); } catch { /* ya parado */ } }, []);
+    const limpiarVigia = () => { if (vigiaRef.current) { clearTimeout(vigiaRef.current); vigiaRef.current = null; } };
+    useEffect(() => () => { limpiarVigia(); try { recRef.current?.stop(); } catch { /* ya parado */ } }, []);
 
-    if (!Reconocedor) return null;
+    const aTexto = (mensaje: string | null) => {
+        limpiarVigia();
+        try { recRef.current?.stop(); } catch { /* ya parado */ }
+        setAviso(mensaje);
+        setModo('texto');
+    };
 
-    const empezar = () => {
-        setListo(false);
-        setFallo(false);
+    const empezarReconocedor = () => {
+        setAviso(null);
         finalRef.current = "";
-        setTranscript("");
-        const rec = new Reconocedor();
-        rec.lang = 'es-AR';
-        rec.continuous = true;
-        rec.interimResults = true;
+        setTexto("");
+        let rec: any;
+        try {
+            rec = new Reconocedor();
+            rec.lang = 'es-AR';
+            rec.continuous = true;
+            rec.interimResults = true;
+        } catch {
+            aTexto("El reconocedor de este navegador no arrancó. Dictá con el micrófono del teclado acá abajo.");
+            return;
+        }
         rec.onresult = (e: any) => {
+            limpiarVigia(); // entró audio: el vigía ya no hace falta
             let interim = "";
             for (let i = e.resultIndex; i < e.results.length; i++) {
                 const r = e.results[i];
                 if (r.isFinal) finalRef.current += r[0].transcript + " ";
                 else interim += r[0].transcript;
             }
-            setTranscript((finalRef.current + interim).trim());
+            setTexto((finalRef.current + interim).trim());
         };
-        rec.onerror = () => { setGrabando(false); };
-        rec.onend = () => { setGrabando(false); };
+        rec.onerror = (e: any) => {
+            // El silencio acá es lo que se percibe como "se trabó la app":
+            // todo error se dice, y el teclado queda como salida.
+            const motivo = e?.error === 'not-allowed' || e?.error === 'service-not-allowed'
+                ? "El navegador no tiene permiso para usar el micrófono. Dictá con el micrófono del teclado acá abajo (o dale permiso en el candadito de la barra de dirección)."
+                : e?.error === 'no-speech'
+                    ? "No se escuchó nada. Probá con el micrófono del teclado acá abajo."
+                    : "El micrófono del navegador falló. Dictá con el micrófono del teclado acá abajo.";
+            aTexto(motivo);
+        };
+        rec.onend = () => {
+            // Si terminó solo (silencio, permiso, red) y seguíamos "grabando",
+            // no dejar la pantalla muda: pasar al teclado con lo que haya.
+            setModo(m => {
+                if (m !== 'grabando') return m;
+                limpiarVigia();
+                setAviso("El micrófono se cortó. Seguí con el micrófono del teclado, o tocá Armar si ya está todo dicho.");
+                return 'texto';
+            });
+        };
         recRef.current = rec;
-        rec.start();
-        setGrabando(true);
+        try {
+            rec.start();
+        } catch {
+            aTexto("El micrófono del navegador no arrancó. Dictá con el micrófono del teclado acá abajo.");
+            return;
+        }
+        setModo('grabando');
+        // El vigía: si en 6 segundos no entró ni una palabra, no lo dejamos
+        // hablándole a una pantalla que no escucha.
+        vigiaRef.current = setTimeout(() => {
+            setModo(m => {
+                if (m !== 'grabando' || finalRef.current) return m;
+                try { recRef.current?.stop(); } catch { /* ya parado */ }
+                setAviso("No te estoy escuchando. Dictá con el micrófono del teclado acá abajo, que anda siempre.");
+                return 'texto';
+            });
+        }, VIGIA_SIN_AUDIO_MS);
     };
 
-    const parar = async () => {
+    const armar = async (dictado: string) => {
+        const limpio = dictado.trim();
+        if (limpio.length < 8) {
+            setAviso("No llegó nada para armar. Contá qué le vas a hacer a la bici y qué le ponés.");
+            setModo('texto');
+            return;
+        }
+        limpiarVigia();
         try { recRef.current?.stop(); } catch { /* ya parado */ }
-        setGrabando(false);
-        const texto = (finalRef.current || transcript).trim();
-        if (texto.length < 8) return; // no se dictó nada usable
-        setArmando(true);
-        const r = await estructurar(texto, bici);
-        setArmando(false);
+        setModo('armando');
+        setAviso(null);
+        // Con timeout: un botón girando para siempre es una app colgada.
+        const r = await Promise.race([
+            estructurar(limpio, bici),
+            new Promise<OrdenDictada>(res => setTimeout(() => res({ ok: false, error: 'timeout' }), TIMEOUT_ARMADO_MS)),
+        ]);
         if (r.ok) {
             onAplicar(r);
-            setListo(true);
+            setModo('listo');
         } else {
-            setFallo(true);
+            setAviso(r.error === 'timeout'
+                ? "Tardó demasiado y lo cortamos. Tu dictado quedó acá abajo: tocá Armar para reintentar, o cargala a mano."
+                : "No se pudo armar el borrador. Tu dictado quedó acá abajo: reintentá o cargala a mano.");
+            setModo('texto');
         }
     };
 
     return (
         <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 space-y-2">
             <div className="flex items-center gap-2 flex-wrap">
-                {!grabando ? (
-                    <Button
-                        type="button"
-                        size="sm"
-                        className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                        onClick={empezar}
-                        disabled={armando}
-                    >
-                        {armando
-                            ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Armando la orden…</>
-                            : <><Mic className="w-4 h-4 mr-1.5" /> Dictar la orden</>}
+                {modo === 'grabando' ? (
+                    <Button type="button" size="sm" variant="destructive" onClick={() => armar(texto)}>
+                        <Square className="w-3.5 h-3.5 mr-1.5" /> Listo, armala
                     </Button>
                 ) : (
                     <Button
                         type="button"
                         size="sm"
-                        variant="destructive"
-                        onClick={parar}
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                        disabled={modo === 'armando'}
+                        onClick={() => (usarReconocedor ? empezarReconocedor() : (setAviso(null), setModo('texto')))}
                     >
-                        <Square className="w-3.5 h-3.5 mr-1.5" /> Listo, armala
+                        {modo === 'armando'
+                            ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Armando la orden…</>
+                            : <><Mic className="w-4 h-4 mr-1.5" /> Dictar la orden</>}
                     </Button>
                 )}
+                {usarReconocedor && modo === 'inicial' && (
+                    <button
+                        type="button"
+                        className="text-xs text-primary underline underline-offset-2"
+                        onClick={() => { setAviso(null); setModo('texto'); }}
+                    >
+                        <Keyboard className="w-3 h-3 inline mr-0.5" /> prefiero escribirla
+                    </button>
+                )}
                 <span className="text-xs text-muted-foreground">
-                    {grabando
+                    {modo === 'grabando'
                         ? "Escuchando… decí qué le vas a hacer y qué le ponés."
-                        : listo
+                        : modo === 'listo'
                             ? <span className="inline-flex items-center gap-1 text-green-700 font-medium"><CheckCircle2 className="w-3.5 h-3.5" /> Borrador cargado abajo. Revisalo antes de guardar.</span>
-                            : fallo
-                                ? "No se pudo armar el borrador. Cargala a mano como siempre."
-                                : "Decilo en veinte segundos y el formulario se arma solo. Después lo revisás."}
+                            : modo === 'inicial'
+                                ? "Decilo en veinte segundos y el formulario se arma solo. Después lo revisás."
+                                : null}
                 </span>
             </div>
-            {(grabando || (armando && transcript)) && transcript && (
+
+            {aviso && <p className="text-xs font-medium text-amber-700">{aviso}</p>}
+
+            {modo === 'grabando' && texto && (
                 <p className="text-sm text-slate-700 bg-white rounded-md border border-primary/15 px-3 py-2">
-                    {transcript}
+                    {texto}
                 </p>
+            )}
+
+            {modo === 'texto' && (
+                <div className="space-y-2">
+                    <Textarea
+                        autoFocus
+                        value={texto}
+                        onChange={e => setTexto(e.target.value)}
+                        placeholder={'Tocá el micrófono del teclado 🎤 y dictá: "cadena estirada, pastillas al límite, le pongo cadena Ultegra y pastillas"'}
+                        className="min-h-[70px] bg-white text-sm"
+                    />
+                    <div className="flex gap-2">
+                        <Button type="button" size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => armar(texto)}>
+                            Armar la orden
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" className="text-slate-500"
+                            onClick={() => { setModo('inicial'); setAviso(null); setTexto(""); }}>
+                            Cancelar
+                        </Button>
+                    </div>
+                </div>
             )}
         </div>
     );

@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/authStore';
 import { useDataStore } from '@/store/dataStore';
 import ExpertMetrics from '@/components/ExpertMetrics';
+import PanelSugerencias from '@/components/PanelSugerencias';
 import { normalizeBikeData, normalizeServiceType } from '@/lib/bikeDataNormalizer';
 import { rankProducts } from '@/lib/productMatcher';
 import { servicioRevenue } from '@/lib/servicioRevenue';
@@ -588,6 +589,7 @@ export default function Metrics() {
             <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
                 {header}
                 {kpiCards}
+                <PanelSugerencias />
                 {analysisPanels}
             </div>
         );
@@ -598,6 +600,7 @@ export default function Metrics() {
         <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
             {header}
             {kpiCards}
+            <PanelSugerencias />
             {analysisPanels}
             <ExpertMetrics
                 tallerId={tallerId || ''}

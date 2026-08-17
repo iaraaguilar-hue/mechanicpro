@@ -74,6 +74,25 @@ export interface RedaccionResultado {
     error?: string;
 }
 
+/** Una sugerencia del segundo par de ojos (idea 7), como viene de la base. */
+export interface SugerenciaPresupuesto {
+    id: string;
+    servicio_id: string;
+    texto: string;
+    /** El dato del historial en que se apoyó. Es la evidencia de que no inventó. */
+    dato_usado: string | null;
+    descripcion_item: string | null;
+    categoria_item: 'part' | 'labor';
+    precio_sugerido: number | null;
+    estado: 'sugerida' | 'aceptada' | 'no_aplica';
+}
+
+export interface SugerenciasResultado {
+    ok: boolean;
+    sugerencias: SugerenciaPresupuesto[];
+    error?: string;
+}
+
 export interface EnvioWhatsAppInput {
     proposito: 'retencion' | 'comprobante' | 'evento';
     /**
@@ -188,6 +207,8 @@ interface DataState {
     registrarContactoRetencion: (data: ContactoRetencionInput) => Promise<void>;
     enviarWhatsAppPlantilla: (input: EnvioWhatsAppInput) => Promise<EnvioWhatsAppResultado>;
     redactarMensajePersonal: (input: RedaccionInput) => Promise<RedaccionResultado>;
+    sugerirPresupuesto: (servicioId: string) => Promise<SugerenciasResultado>;
+    responderSugerencia: (id: string, estado: 'aceptada' | 'no_aplica') => Promise<boolean>;
 
     // ── CRUD: Recordatorios ──
     createRecordatorio: (data: Omit<SupabaseReminder, 'id'>) => Promise<SupabaseReminder>;
@@ -620,19 +641,24 @@ export const useDataStore = create<DataState>((set, get) => ({
         delete (serviceData as any).servicio_items;
 
         // Step 1: Update the service — maybeSingle() to avoid crash on 0 rows (RLS or stale ID)
-        const { data: row, error } = await supabase
-            .from('servicios')
-            .update(serviceData)
-            .eq('id', id)
-            .select()
-            .maybeSingle();
-        if (error) {
-            console.error('[DataStore] ❌ Error actualizando servicio en Supabase:', error);
-            throw new Error(`Error actualizando servicio: ${error.message}`);
-        }
-        if (!row) {
-            console.error('[DataStore] ❌ updateServicio: 0 filas afectadas. Verifica RLS o el ID:', id);
-            throw new Error('No se pudo actualizar el servicio. Verifica permisos RLS o el ID del registro.');
+        // Si SOLO vienen items (ej: el segundo par de ojos agrega un ítem), no
+        // hay nada que actualizar en `servicios` y un UPDATE vacío es un 400
+        // de PostgREST: se saltea y se va directo a los items.
+        if (Object.keys(serviceData).length > 0) {
+            const { data: row, error } = await supabase
+                .from('servicios')
+                .update(serviceData)
+                .eq('id', id)
+                .select()
+                .maybeSingle();
+            if (error) {
+                console.error('[DataStore] ❌ Error actualizando servicio en Supabase:', error);
+                throw new Error(`Error actualizando servicio: ${error.message}`);
+            }
+            if (!row) {
+                console.error('[DataStore] ❌ updateServicio: 0 filas afectadas. Verifica RLS o el ID:', id);
+                throw new Error('No se pudo actualizar el servicio. Verifica permisos RLS o el ID del registro.');
+            }
         }
 
         // Step 2: If items were provided, replace them (delete old + insert new)
@@ -793,6 +819,55 @@ export const useDataStore = create<DataState>((set, get) => ({
             console.warn('Mensaje personalizado no disponible:', e?.message || e);
             return { ok: false, error: 'fallo_redaccion' };
         }
+    },
+
+    // ─────────────────────────────────────────────────────────
+    // El segundo par de ojos sobre el presupuesto (idea 7).
+    //
+    // La Edge Function genera Y registra las sugerencias en el mismo
+    // movimiento (idempotente por orden: reabrir el modal no regenera ni
+    // vuelve a gastar). NUNCA tira error hacia arriba: si la IA no está,
+    // el modal de finalizar sigue exactamente igual que siempre — una
+    // sugerencia que demora el botón verde es una feature que se apaga.
+    // ─────────────────────────────────────────────────────────
+    sugerirPresupuesto: async (servicioId) => {
+        try {
+            const { data, error } = await supabase.functions.invoke('sugerir-presupuesto', {
+                body: { servicio_id: servicioId },
+            });
+            if (error) {
+                let codigo = 'fallo_sugerencias';
+                try {
+                    const j = await (error as any)?.context?.json?.();
+                    if (j?.error) codigo = j.error;
+                } catch { /* el cuerpo no era JSON */ }
+                // Apagada o plan sin IA son respuestas normales, no problemas.
+                if (codigo !== 'ia_apagada' && codigo !== 'plan_sin_ia') {
+                    console.warn('Segundo par de ojos no disponible:', codigo);
+                }
+                return { ok: false, sugerencias: [], error: codigo };
+            }
+            if (!data?.ok) return { ok: false, sugerencias: [], error: data?.error || 'fallo_sugerencias' };
+            return { ok: true, sugerencias: data.sugerencias ?? [] };
+        } catch (e: any) {
+            console.warn('Segundo par de ojos no disponible:', e?.message || e);
+            return { ok: false, sugerencias: [], error: 'fallo_sugerencias' };
+        }
+    },
+
+    // Responder una sugerencia (aceptada / no_aplica). El trigger de la base
+    // congela todo lo demás: de una sugerencia solo se cambia la respuesta,
+    // una sola vez. Devuelve false si no se pudo (y no rompe nada).
+    responderSugerencia: async (id, estado) => {
+        const { error } = await supabase
+            .from('sugerencias_presupuesto')
+            .update({ estado })
+            .eq('id', id);
+        if (error) {
+            console.warn('No se pudo responder la sugerencia:', error.message);
+            return false;
+        }
+        return true;
     },
 
     registrarContactoRetencion: async (data) => {

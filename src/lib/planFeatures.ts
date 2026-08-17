@@ -23,6 +23,10 @@ const FEATURES: Record<string, Plan[]> = {
     etapas: ['Pro', 'Expert'],
     /** Tareas libres del service + candado de finalización. Todos los planes. */
     tareas_service: ['Sport', 'Pro', 'Expert'],
+    /** El segundo par de ojos sobre el presupuesto (idea 7). La IA es lo que
+     *  separa a Pro/Expert del Sport (decisión de pricing 17-ago-2026):
+     *  el Motor completo va en Sport, el impulso por IA no. */
+    segundo_ojos: ['Pro', 'Expert'],
 };
 
 export type Feature = keyof typeof FEATURES;

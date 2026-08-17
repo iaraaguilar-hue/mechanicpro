@@ -172,6 +172,8 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
         firma_nombre: (taller as any).firma_nombre || '',
         voz_taller: (taller as any).voz_taller || '',
         ia_mensajes_activa: (taller as any).ia_mensajes_activa === true,
+        // El default de la base es true: solo queda apagado si el taller lo apagó.
+        ia_presupuesto_activa: (taller as any).ia_presupuesto_activa !== false,
     });
     const [isUploading, setIsUploading] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -228,6 +230,7 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                     firma_nombre: form.firma_nombre.trim() || null,
                     voz_taller: form.voz_taller.trim() || null,
                     ia_mensajes_activa: form.ia_mensajes_activa,
+                    ia_presupuesto_activa: form.ia_presupuesto_activa,
                 })
                 .eq('id', taller.id);
             if (error) throw error;
@@ -430,6 +433,22 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                             <Switch
                                 checked={form.ia_mensajes_activa}
                                 onCheckedChange={(v) => setForm({ ...form, ia_mensajes_activa: v })}
+                                disabled={!puedeEditar}
+                            />
+                        </div>
+
+                        <div className="flex items-start justify-between gap-4 rounded-lg border p-3 bg-slate-50">
+                            <div className="space-y-0.5">
+                                <Label className="text-sm">Segundo par de ojos sobre el presupuesto</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Al finalizar una orden, el sistema mira el historial de esa bici y avisa
+                                    lo que se está escapando ("la cadena es de hace 14 meses, preguntale").
+                                    Sugiere, nunca agrega solo: el mecánico decide.
+                                </p>
+                            </div>
+                            <Switch
+                                checked={form.ia_presupuesto_activa}
+                                onCheckedChange={(v) => setForm({ ...form, ia_presupuesto_activa: v })}
                                 disabled={!puedeEditar}
                             />
                         </div>

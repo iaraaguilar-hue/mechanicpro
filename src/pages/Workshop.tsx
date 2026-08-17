@@ -22,6 +22,7 @@ import { resolveOrdenWebhookUrl, resolveEntregadoWebhookUrl } from "@/lib/ordenW
 import { EtapasChecklist } from "@/components/EtapasChecklist";
 import { avancesActivos, trabajosPendientes, tareasActivas, bloqueoFinalizacionActivo, tareasLibresPendientes } from "@/lib/planFeatures";
 import { tourBloqueaCierreDialog } from "@/components/OnboardingTour";
+import SegundoParDeOjos from "@/components/SegundoParDeOjos";
 
 export const formatSafeDate = (dateString: string | null | undefined): string => {
     if (!dateString) return '-';
@@ -924,6 +925,11 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                             <HealthCheckWidget onChange={setHealthCheckData} />
                         </div>
                     )}
+
+                    {/* El segundo par de ojos (idea 7): la IA mira el historial de
+                        esta bici y avisa lo que se está escapando. Carga en paralelo
+                        y si falla no aparece: NUNCA frena el botón de finalizar. */}
+                    {!isCompleted && <SegundoParDeOjos servicioId={job.service_id} />}
                 </div>
 
                 <DialogFooter data-tour="finalizar-boton" className="gap-2 sm:gap-0">

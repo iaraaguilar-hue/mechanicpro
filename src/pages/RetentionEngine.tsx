@@ -439,14 +439,14 @@ function AlertCard({ alert }: { alert: RetentionAlert }) {
                             if (r === 'enviado') setEnviado(true);
                         }}
                     >
+                        {/* "Escribir" va en el rótulo a propósito: las instrucciones que se le
+                            entregaron a Meta en el App Review dicen textual «press "Escribir"»,
+                            y esa solicitud ya no se puede editar. El resto de la frase queda
+                            porque para el mecánico "Escribir" a secas no dice qué se escribe. */}
                         {enviando
                             ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando...</>
                             : enviado
                                 ? <><CheckCircle2 className="mr-2 h-4 w-4" /> Mensaje enviado</>
-                                {/* "Escribir" va en el rótulo a propósito: las instrucciones que se
-                                    le entregaron a Meta en el App Review dicen textual «press
-                                    "Escribir"», y esa solicitud ya no se puede editar. El resto de la
-                                    frase queda porque para el mecánico "Escribir" solo es ambiguo. */}
                                 : <><Phone className="mr-2 h-4 w-4" /> {modoAuto ? 'Escribir recordatorio' : 'Escribir por WhatsApp'}</>}
                     </Button>
                     <Button

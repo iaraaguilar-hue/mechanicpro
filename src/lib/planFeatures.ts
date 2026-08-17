@@ -27,6 +27,12 @@ const FEATURES: Record<string, Plan[]> = {
      *  separa a Pro/Expert del Sport (decisión de pricing 17-ago-2026):
      *  el Motor completo va en Sport, el impulso por IA no. */
     segundo_ojos: ['Pro', 'Expert'],
+    /** El mensaje del Motor escrito por la IA leyendo el historial del cliente.
+     *  El Motor entero (alertas, lista, envío con el texto fijo) va en TODOS los
+     *  planes; lo que separa al Pro es que la IA ESCRIBA el mensaje. Gate espejo
+     *  server-side en la Edge Function `mensaje-ia` — el de acá solo evita el
+     *  viaje al servidor. */
+    mensaje_ia: ['Pro', 'Expert'],
 };
 
 export type Feature = keyof typeof FEATURES;

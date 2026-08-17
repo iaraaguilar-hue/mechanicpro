@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing, Flag, Copy, User, Loader2 } from "lucide-react";
 import { buildRetentionAlerts, type RetentionAlert } from "@/lib/retentionAlerts";
 import { carreraEnFrase, nombreBiciAmigable, nombresBicisAmigables, primerNombre } from "@/lib/nombreAmigable";
+import { tieneFeature } from "@/lib/planFeatures";
 import PanelRetorno from "@/components/PanelRetorno";
 import BandejaRespuestas from "@/components/BandejaRespuestas";
 
@@ -114,8 +115,10 @@ function useContactarWhatsApp() {
         if (!alert.clientId) return null;
         // Si el taller no la activó, ni se llama: es un viaje de ida y vuelta
         // al servidor que el mecánico espera con el dedo en el botón, para
-        // recibir "está apagada".
+        // recibir "está apagada". Mismo motivo para el plan: la IA es de
+        // Pro/Expert y el gate real vive en la Edge Function.
         if (taller?.ia_mensajes_activa !== true) return null;
+        if (!tieneFeature(taller, 'mensaje_ia')) return null;
         const r = await redactar({
             cliente_id: alert.clientId,
             motivo: alert.isPostCarrera ? 'post_carrera' : alert.isPreCarrera ? 'pre_carrera' : 'retencion',

@@ -88,23 +88,30 @@ async function token() {
  */
 async function paginado(base, auth, cap = 400) {
   const sep = base.includes('?') ? '&' : '?';
-  const first = await GET(`${base}${sep}page=1`, auth);
+  let first = null;
+  for (let intento = 0; intento < 6 && !first?.data?.Items?.length; intento++) {
+    if (intento) await sleep(2000 * intento);
+    first = await GET(`${base}${sep}page=1`, auth);
+  }
+  if (!first?.data?.Items?.length) {
+    throw new Error(`la pagina 1 de ${base} volvio vacia tras 6 intentos: el ERP no esta respondiendo. Abortado: 0 filas se leen como "no hay stock".`);
+  }
   const total = first.data?.TotalItems || 0;
   let items = first.data?.Items || [];
   const porPagina = items.length || 50;
   const paginas = Math.min(cap, Math.max(1, Math.ceil(total / porPagina)));
   for (let p = 2; p <= paginas; p++) {
     let its = null;
-    for (let intento = 0; intento < 4 && !its?.length; intento++) {
-      if (intento) await sleep(1200 * intento);
+    for (let intento = 0; intento < 6 && !its?.length; intento++) {
+      if (intento) await sleep(2000 * intento);
       const r = await GET(`${base}${sep}page=${p}`, auth);
       its = r.data?.Items || [];
     }
-    if (!its.length) throw new Error(`la pagina ${p} de ${base} volvio vacia despues de 4 intentos (esperaba ~${porPagina} items de ${total})`);
+    if (!its.length) throw new Error(`la pagina ${p} de ${base} volvio vacia despues de 6 intentos (esperaba ~${porPagina} items de ${total})`);
     items = items.concat(its);
     await sleep(120); // el ERP tira 429 si se lo castiga
   }
-  if (total && items.length < total) {
+  if (!items.length || (total && items.length < total)) {
     throw new Error(`barrido incompleto de ${base}: traje ${items.length} de ${total}. Abortado a proposito: una foto de stock incompleta se lee como "no hay".`);
   }
   return items;

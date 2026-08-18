@@ -111,16 +111,6 @@ export default function Configuracion() {
                 </p>
             </div>
 
-            {!puedeEditar && (
-                <div className="flex items-start gap-3 p-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-900">
-                    <Sparkles className="h-5 w-5 mt-0.5 shrink-0 text-amber-600" />
-                    <div className="text-sm">
-                        <p className="font-semibold">Tu plan Sport no incluye la configuración self-service.</p>
-                        <p>Podés mirar todo, pero para editar tu logo, colores y menú de services necesitás el plan Pro o Expert. Escribinos y lo activamos en el día.</p>
-                    </div>
-                </div>
-            )}
-
             <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="grid w-full grid-cols-4">
                     <TabsTrigger value="taller">Mi Taller</TabsTrigger>
@@ -421,6 +411,11 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                             </p>
                         </div>
 
+                        {/* Los dos interruptores de abajo son de Pro/Expert (la IA es lo
+                            que separa los planes, 17-ago). En Sport NO se muestran: un
+                            switch que se puede prender y que el servidor rechaza es peor
+                            que no tenerlo, y una demo con reloj genera bronca, no upgrade. */}
+                        {tieneFeature(taller, 'mensaje_ia') && (
                         <div className="flex items-start justify-between gap-4 rounded-lg border p-3 bg-slate-50">
                             <div className="space-y-0.5">
                                 <Label className="text-sm">Mensajes personalizados uno por uno</Label>
@@ -436,7 +431,9 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                                 disabled={!puedeEditar}
                             />
                         </div>
+                        )}
 
+                        {tieneFeature(taller, 'segundo_ojos') && (
                         <div className="flex items-start justify-between gap-4 rounded-lg border p-3 bg-slate-50">
                             <div className="space-y-0.5">
                                 <Label className="text-sm">Segundo par de ojos sobre el presupuesto</Label>
@@ -452,6 +449,7 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                                 disabled={!puedeEditar}
                             />
                         </div>
+                        )}
 
                         <Button onClick={handleSave} disabled={saving || !puedeEditar} className="w-full">
                             {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}

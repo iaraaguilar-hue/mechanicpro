@@ -15,8 +15,13 @@ export function planDe(taller?: { plan_actual?: string } | null): Plan {
 const FEATURES: Record<string, Plan[]> = {
     /** Sección Auditoría (papelera de services eliminados). */
     auditoria: ['Pro', 'Expert'],
-    /** Configuración self-service del taller: branding + catálogo + preferencias. */
-    config_taller: ['Pro', 'Expert'],
+    /** Configuración self-service del taller: branding + catálogo + preferencias.
+     *  Va en TODOS los planes desde el 17-ago-2026. Es la condición de que el
+     *  Sport exista: a USD 29, si cada alta cuesta una sesión de configuración
+     *  a mano, el taller es trabajo gratis (ver el análisis del Asesor
+     *  Financiero). Lo que separa los planes es la IA, y configurarse el propio
+     *  taller no es IA. */
+    config_taller: ['Sport', 'Pro', 'Expert'],
     /** Descripciones de catálogo con formato (RichText). */
     rich_text: ['Pro', 'Expert'],
     /** Modo "Avances por etapas" en la Mesa de Trabajo. */

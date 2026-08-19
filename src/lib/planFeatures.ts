@@ -51,6 +51,12 @@ const FEATURES: Record<string, Plan[]> = {
      *  herramientas de facturación no le existen (decidido en la Edge Function,
      *  no en la UI). */
     preguntale: ['Pro', 'Expert'],
+    /** El Motor con cabeza (ideas 5+6): la fecha del aviso sale del ritmo
+     *  real de ESE ciclista (no del plazo fijo) y la lista "Se está yendo"
+     *  detecta por comportamiento. Es estadística sobre los datos del taller
+     *  (costo marginal 0), pero se vende como el diferencial Pro: "el Sport
+     *  te dice a quién llamar; el Pro te dice a quién llamar con cabeza". */
+    motor_predictivo: ['Pro', 'Expert'],
 };
 
 export type Feature = keyof typeof FEATURES;

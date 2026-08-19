@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useDataStore } from '@/store/dataStore';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase';
-import { avancesActivos, tareasActivas, trabajosPendientes, tareasLibresPendientes } from '@/lib/planFeatures';
+import { avancesActivos, tareasActivas, trabajosPendientes, tareasLibresPendientes, tieneFeature } from '@/lib/planFeatures';
 import { buildRetentionAlerts } from '@/lib/retentionAlerts';
 import { carreraEnFrase, nombreBiciAmigable, primerNombre } from '@/lib/nombreAmigable';
 import { getNovedadesVistas, saveNovedadesVistas } from '@/lib/novedadesSeen';
@@ -94,8 +94,12 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
     //    descartar un aviso en Retención baja este contador y queda coherente
     //    al recargar. Antes esto filtraba `recordatorios` a mano e IGNORABA
     //    alertas_ocultas (por eso el número no bajaba nunca).
-    const vencidos = buildRetentionAlerts({ recordatorios, bicicletas, clientes, servicios, carreras })
-        .filter(a => a.daysRemaining <= 0);
+    const vencidos = buildRetentionAlerts({
+        recordatorios, bicicletas, clientes, servicios, carreras,
+        // Idea 5: misma bandera que la página de Retención — si difirieran,
+        // la campana y la página contarían vencidos distintos.
+        predictivo: tieneFeature(taller, 'motor_predictivo'),
+    }).filter(a => a.daysRemaining <= 0);
 
     const totalPendientes = conTareas.length + paraAvisar.length + vencidos.length;
     const noLeidas = novedades.filter(n => !seen.includes(n.id)).length;

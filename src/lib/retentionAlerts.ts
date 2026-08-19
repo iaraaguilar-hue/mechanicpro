@@ -1,4 +1,5 @@
 import { calculateDaysRemaining } from "@/lib/utils";
+import { prediccionComponente, type Prediccion } from "@/lib/motorConCabeza";
 import type {
     SupabaseService,
     SupabaseReminder,
@@ -40,6 +41,10 @@ export interface RetentionAlert {
     isPostCarrera: boolean;
     isPreCarrera: boolean;
     carreraName: string;
+    /** Idea 5 (Pro/Expert): la fecha salió del historial de ESE ciclista, no
+     *  del plazo fijo. Ausente = plazo fijo de siempre (y eso SE DICE en la
+     *  tarjeta: nunca una predicción sin base). */
+    prediccion?: Prediccion;
 }
 
 interface RetentionInput {
@@ -48,6 +53,11 @@ interface RetentionInput {
     clientes: SupabaseClient[];
     servicios: SupabaseService[];
     carreras: SupabaseCarrera[];
+    /** Idea 5 (Pro/Expert): cuando el historial de la bici da base (2+
+     *  eventos del componente), la fecha del aviso sale de cuánto le dura a
+     *  ESE ciclista, no del plazo fijo. Lo pasan los llamadores desde
+     *  tieneFeature(taller, 'motor_predictivo'). */
+    predictivo?: boolean;
 }
 
 export function buildRetentionAlerts({
@@ -56,6 +66,7 @@ export function buildRetentionAlerts({
     clientes,
     servicios,
     carreras,
+    predictivo = false,
 }: RetentionInput): RetentionAlert[] {
     const baseAlerts: RetentionAlert[] = recordatorios
         .filter(r => {
@@ -73,11 +84,18 @@ export function buildRetentionAlerts({
             const bike = bicicletas.find(b => b.id === r.bicicleta_id);
             const client = bike ? clientes.find(c => c.id === bike.cliente_id) : null;
 
-            const daysRemaining = calculateDaysRemaining(r.fecha_vencimiento || "");
+            // Idea 5: si el historial de esta bici tiene base para este
+            // componente, la fecha del aviso es la de SU ritmo real.
+            const serviciosDeBici = servicios.filter(s => s.bicicleta_id === r.bicicleta_id);
+            const prediccion = predictivo
+                ? prediccionComponente(serviciosDeBici, r.componente || '') ?? undefined
+                : undefined;
+
+            const dueDate = prediccion?.fecha ?? r.fecha_vencimiento ?? "";
+            const daysRemaining = calculateDaysRemaining(dueDate);
 
             // Orden más reciente de la bici → ahí se guarda el descarte si hace falta.
-            const mostRecentService = servicios
-                .filter(s => s.bicicleta_id === r.bicicleta_id)
+            const mostRecentService = serviciosDeBici
                 .sort((a, b) => new Date(b.fecha_ingreso || 0).getTime() - new Date(a.fecha_ingreso || 0).getTime())[0];
 
             return {
@@ -90,11 +108,12 @@ export function buildRetentionAlerts({
                 clientPhone: client?.telefono || "",
                 bikeModel: bike?.modelo || "Desconocida",
                 component: r.componente || "Sin componente",
-                dueDate: r.fecha_vencimiento || "",
+                dueDate,
                 daysRemaining,
                 isPostCarrera: false,
                 isPreCarrera: false,
                 carreraName: "",
+                prediccion,
             };
         });
 

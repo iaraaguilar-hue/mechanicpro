@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing, Flag, Copy, User, Loader2 } from "lucide-react";
 import { buildRetentionAlerts, type RetentionAlert } from "@/lib/retentionAlerts";
+import { clientesEnFuga, type ClienteEnFuga } from "@/lib/motorConCabeza";
 import { carreraEnFrase, nombreBiciAmigable, nombresBicisAmigables, primerNombre } from "@/lib/nombreAmigable";
 import { tieneFeature } from "@/lib/planFeatures";
 import PanelRetorno from "@/components/PanelRetorno";
@@ -220,11 +221,22 @@ export default function RetentionEngine() {
     const nombreBici = useNombreBici();
     const [enviando, setEnviando] = useState<string | null>(null);
 
+    const taller = useAuthStore(s => s.taller);
+    // Idea 5 (Pro/Expert): la fecha del aviso sale del ritmo real de ESE
+    // ciclista cuando su historial da base; si no, el plazo fijo de siempre.
+    const predictivo = tieneFeature(taller, 'motor_predictivo');
+
     // Fuente única compartida con la campana (NotificationBell) → mismo
     // listado y mismo alertas_ocultas en los dos lados.
     const alerts = useMemo(
-        () => buildRetentionAlerts({ recordatorios, bicicletas, clientes, servicios, carreras }),
-        [recordatorios, bicicletas, clientes, servicios, carreras]
+        () => buildRetentionAlerts({ recordatorios, bicicletas, clientes, servicios, carreras, predictivo }),
+        [recordatorios, bicicletas, clientes, servicios, carreras, predictivo]
+    );
+
+    // Idea 6 (Pro/Expert): el que se está yendo, por comportamiento.
+    const fuga = useMemo(
+        () => predictivo ? clientesEnFuga({ clientes, bicicletas, servicios }) : null,
+        [predictivo, clientes, bicicletas, servicios]
     );
 
     if (isHydrating) return <div className="p-8 text-center text-muted-foreground">Cargando motor de retención...</div>;
@@ -250,6 +262,9 @@ export default function RetentionEngine() {
             {/* Lo que contestaron va antes que lo que falta mandar: hay una
                 ventana de 24hs para responder y después se cierra. */}
             <BandejaRespuestas />
+
+            {/* Idea 6: pocos nombres con razón de estar, no doscientos. */}
+            {fuga && fuga.enRiesgo.length > 0 && <SeccionFuga fuga={fuga} />}
 
             {alerts.length === 0 && (
                 <Card className="border-dashed border-2 py-12 flex flex-col items-center justify-center text-center">
@@ -305,7 +320,16 @@ export default function RetentionEngine() {
                                                 {alert.daysRemaining} días
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="font-semibold">{alert.component}</TableCell>
+                                        <TableCell className="font-semibold">
+                                            {alert.component}
+                                            {/* Idea 5: si la fecha salió del ritmo real de ESE
+                                                ciclista, se dice con qué base. */}
+                                            {alert.prediccion && (
+                                                <div className="text-[11px] font-normal text-slate-500">
+                                                    le dura ~{alert.prediccion.cadaDias} días según su historial
+                                                </div>
+                                            )}
+                                        </TableCell>
                                         <TableCell>
                                             {perfilHref(alert) ? (
                                                 <Link
@@ -356,6 +380,79 @@ export default function RetentionEngine() {
 // ─────────────────────────────────────────────────────────────
 // Componente de Tarjeta de Alerta (UrgentCard)
 // ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Idea 6 — "Se está yendo": el cliente que venía cada X semanas y hace
+// k·X que no aparece, ordenado por atraso × valor. Pocos nombres, cada
+// uno con su razón de estar escrita con SUS números (nada lo redacta una
+// IA: el argumento ES el dato). El contacto se registra en
+// contactos_retencion → el Panel de Retorno ya le atribuye la plata.
+// ─────────────────────────────────────────────────────────────
+function SeccionFuga({ fuga }: { fuga: { enRiesgo: ClienteEnFuga[]; conBase: number; sinBase: number } }) {
+    const registrar = useDataStore(s => s.registrarContactoRetencion);
+    const taller_id = useAuthStore(s => s.taller_id);
+    const [contactados, setContactados] = useState<Record<string, boolean>>({});
+
+    const contactar = (c: ClienteEnFuga) => {
+        const texto = `${primerNombre(c.nombre) ? `Hola ${primerNombre(c.nombre)}!` : 'Hola!'} ¿Cómo va? Hace un tiempo que no pasás por el taller. ¿Todo bien con la bici? Cualquier cosa que necesite, acá estamos.`;
+        const tel = (c.telefono || '').replace(/[^0-9]/g, '');
+        if (!tel) { window.alert('Este cliente no tiene teléfono cargado.'); return; }
+        if (taller_id) {
+            registrar({
+                taller_id,
+                cliente_id: c.clienteId,
+                bicicleta_id: c.bicicletaId,
+                componente: 'seguimiento_fuga',
+                canal: 'whatsapp_manual',
+                variante: 'v1_fuga',
+                texto_enviado: texto,
+            });
+        }
+        setContactados(prev => ({ ...prev, [c.clienteId]: true }));
+        window.open(`https://wa.me/${tel}?text=${encodeURIComponent(texto)}`, '_blank');
+    };
+
+    return (
+        <div className="space-y-3">
+            <div className="flex items-center gap-2 text-amber-700">
+                <User className="h-6 w-6" />
+                <h2 className="text-xl font-bold">Se está yendo</h2>
+            </div>
+            <p className="text-xs text-muted-foreground -mt-1">
+                Leído del ritmo real de visitas de {fuga.conBase} clientes con historial suficiente.
+                {fuga.sinBase > 0 && <> {fuga.sinBase} no llegan a 3 visitas en 2 años, así que su ritmo no se puede leer (y no se adivina).</>}
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {fuga.enRiesgo.map(c => (
+                    <Card key={c.clienteId} className="border-l-4 border-l-amber-500 bg-amber-50/40 shadow-sm">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-lg font-bold text-slate-800">
+                                <Link
+                                    to={c.bicicletaId ? `/bikes/${c.bicicletaId}` : `/clients/${c.clienteId}`}
+                                    className="hover:text-primary hover:underline underline-offset-2"
+                                    title="Ver perfil del cliente"
+                                >
+                                    {c.nombre}
+                                </Link>
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <p className="text-sm text-slate-700">{c.argumento}</p>
+                            <Button
+                                className={`w-full font-semibold text-white ${contactados[c.clienteId] ? 'bg-slate-400 hover:bg-slate-400' : 'bg-green-600 hover:bg-green-700'}`}
+                                disabled={contactados[c.clienteId]}
+                                onClick={() => contactar(c)}
+                            >
+                                <Phone className="w-4 h-4 mr-2" />
+                                {contactados[c.clienteId] ? 'Contactado' : 'Contactar por WhatsApp'}
+                            </Button>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 function AlertCard({ alert }: { alert: RetentionAlert }) {
     const [isCopied, setIsCopied] = useState(false);
     const [isDismissing, setIsDismissing] = useState(false);
@@ -427,6 +524,14 @@ function AlertCard({ alert }: { alert: RetentionAlert }) {
                             : `Venció el ${new Date(alert.dueDate).toLocaleDateString()}`
                         }
                     </div>
+                    {/* Idea 5: si la fecha salió del historial de ESE ciclista, se
+                        dice con qué base. Si no hay predicción, es el plazo fijo
+                        de siempre — nunca una predicción sin base. */}
+                    {alert.prediccion && (
+                        <div className="text-[11px] text-slate-500 mt-1">
+                            A este ciclista le dura ~{alert.prediccion.cadaDias} días, según {alert.prediccion.intervalos === 1 ? 'un intervalo real' : `${alert.prediccion.intervalos} intervalos reales`} de su historial (último: {alert.prediccion.ultimoEvento.split('-').reverse().join('/')}).
+                        </div>
+                    )}
                 </div>
                 <div data-tour="retencion-contactar" className="flex flex-col gap-2">
                     <Button

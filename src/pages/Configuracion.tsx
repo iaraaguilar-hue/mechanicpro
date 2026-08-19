@@ -164,7 +164,11 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
         ia_mensajes_activa: (taller as any).ia_mensajes_activa === true,
         // El default de la base es true: solo queda apagado si el taller lo apagó.
         ia_presupuesto_activa: (taller as any).ia_presupuesto_activa !== false,
+        // Default false: la lista de bicis paradas trae clientes con su gasto.
+        bicis_paradas_ve_mecanico: (taller as any).bicis_paradas_ve_mecanico === true,
     });
+    const rolForm = useAuthStore(s => s.rol);
+    const esAdmin = rolForm?.toLowerCase()?.trim() === 'admin';
     const [isUploading, setIsUploading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [logoError, setLogoError] = useState<string | null>(null);
@@ -221,6 +225,7 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                     voz_taller: form.voz_taller.trim() || null,
                     ia_mensajes_activa: form.ia_mensajes_activa,
                     ia_presupuesto_activa: form.ia_presupuesto_activa,
+                    bicis_paradas_ve_mecanico: form.bicis_paradas_ve_mecanico,
                 })
                 .eq('id', taller.id);
             if (error) throw error;
@@ -447,6 +452,28 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                                 checked={form.ia_presupuesto_activa}
                                 onCheckedChange={(v) => setForm({ ...form, ia_presupuesto_activa: v })}
                                 disabled={!puedeEditar}
+                            />
+                        </div>
+                        )}
+
+                        {/* Decisión de Iara (19-ago): si el mecánico ve Bicis paradas lo
+                            decide el ADMIN de cada taller. Default apagado: la lista trae
+                            clientes con su gasto. El candado real está en RLS + en la
+                            Edge Function; este switch es la llave del admin. */}
+                        {tieneFeature(taller, 'bicis_paradas') && (
+                        <div className="flex items-start justify-between gap-4 rounded-lg border p-3 bg-slate-50">
+                            <div className="space-y-0.5">
+                                <Label className="text-sm">El mecánico también ve Bicis paradas</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    El panel de bicis paradas muestra clientes con lo que gastaron.
+                                    Apagado, lo ve solo el administrador; prendido, también los
+                                    usuarios mecánicos del taller.
+                                </p>
+                            </div>
+                            <Switch
+                                checked={form.bicis_paradas_ve_mecanico}
+                                onCheckedChange={(v) => setForm({ ...form, bicis_paradas_ve_mecanico: v })}
+                                disabled={!puedeEditar || !esAdmin}
                             />
                         </div>
                         )}

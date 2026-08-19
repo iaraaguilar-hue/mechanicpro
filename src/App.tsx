@@ -13,8 +13,9 @@ import DeletedServices from "./pages/DeletedServices";
 import Metrics from "./pages/Metrics";
 import SuperAdmin from "./pages/SuperAdmin";
 import Configuracion from "./pages/Configuracion";
+import BicisParadas from "./pages/BicisParadas";
 import { Button } from "@/components/ui/button";
-import { Settings, Wrench, History, Repeat, LogOut, BarChart3, Trash2, Menu, User, X, Users } from "lucide-react";
+import { Settings, Wrench, History, Repeat, LogOut, BarChart3, Trash2, Menu, User, X, Users, Bike } from "lucide-react";
 import { tieneFeature } from "@/lib/planFeatures";
 
 
@@ -259,6 +260,9 @@ function AppContent() {
               <DrawerLink to="/history" icon={<History size={20} />} label="Historial" onClick={closeDrawer} />
               <DrawerLink to="/reminders" icon={<Repeat size={20} />} label="Retención" onClick={closeDrawer} />
               <DrawerLink to="/metrics" icon={<BarChart3 size={20} />} label="Métricas" onClick={closeDrawer} />
+              {tieneFeature(taller, 'bicis_paradas') && (rol?.toLowerCase()?.trim() === 'admin' || (rol?.toLowerCase()?.trim() === 'mecanico' && taller?.bicis_paradas_ve_mecanico === true)) && (
+                <DrawerLink to="/bicis-paradas" icon={<Bike size={20} />} label="Bicis paradas" onClick={closeDrawer} />
+              )}
               {rol?.toLowerCase()?.trim() !== 'super_admin' && (
                 <DrawerLink to="/configuracion" icon={<Settings size={20} />} label="Configuración" onClick={closeDrawer} />
               )}
@@ -312,6 +316,9 @@ function AppContent() {
           <Link to="/history" data-tour="nav-historial"><NavButton icon={<History />} label="Historial" /></Link>
           <Link to="/reminders" data-tour="nav-retencion"><NavButton icon={<Repeat />} label="Retención" /></Link>
           <Link to="/metrics" data-tour="nav-metricas"><NavButton icon={<BarChart3 />} label="Métricas" /></Link>
+          {tieneFeature(taller, 'bicis_paradas') && (rol?.toLowerCase()?.trim() === 'admin' || (rol?.toLowerCase()?.trim() === 'mecanico' && taller?.bicis_paradas_ve_mecanico === true)) && (
+            <Link to="/bicis-paradas"><NavButton icon={<Bike />} label="Bicis paradas" /></Link>
+          )}
           {rol?.toLowerCase()?.trim() !== 'super_admin' && (
             <Link to="/configuracion" data-tour="nav-config"><NavButton icon={<Settings />} label="Configuración" /></Link>
           )}
@@ -354,6 +361,7 @@ function AppContent() {
           {/* "Contactar" (Admin) se unificó dentro de Retención → redirect por si
               queda algún link/bookmark viejo apuntando acá (Tarea A). */}
           <Route path="/admin" element={<Navigate to="/reminders" replace />} />
+          <Route path="/bicis-paradas" element={<BicisParadas />} />
           <Route path="/configuracion" element={<Configuracion />} />
           <Route path="/auditoria" element={<DeletedServices />} />
           <Route path="/superadmin" element={<SuperAdmin />} />

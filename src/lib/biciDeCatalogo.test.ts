@@ -1,7 +1,7 @@
 // Tests del detector de bici completa. Mini-harness propio (no hay vitest):
 //   ./node_modules/.bin/esbuild src/lib/biciDeCatalogo.test.ts --bundle --platform=node --format=cjs --outfile=/tmp/t.cjs && node /tmp/t.cjs
 // Los casos NO son inventados: salen del catálogo real de Probikes (agosto 2026).
-import { biciDeCatalogo, talleDeBici, disciplinaDeBici } from './biciDeCatalogo';
+import { biciDeCatalogo, talleDeBici, disciplinaDeBici, disciplinaDeBiciCliente, talleDeBiciCliente } from './biciDeCatalogo';
 
 let ok = 0, fail = 0;
 const eq = (nombre: string, a: unknown, b: unknown) => {
@@ -58,6 +58,32 @@ eq('PRUEBA 3', biciDeCatalogo({ nombre: 'PRUEBA 3', stock: 599985 }), null);
 eq('XXX', biciDeCatalogo({ nombre: 'XXX', stock: 100 }), null);
 eq('stock absurdo de un modelo real igual se descarta',
     biciDeCatalogo({ nombre: 'TARMAC SL8 COMP AXS CARB/WHT 52', stock: 5000 }), null);
+
+// ── La bici del CLIENTE: disciplina inferida de marca + modelo ──────────────
+// Casos reales de la base de Probikes (19-ago-2026), no inventados.
+eq('cliente: RH = Rockhopper', disciplinaDeBiciCliente('Specialized', 'RH X1 Pro Negra'), 'mtb');
+eq('cliente: SL7 = Tarmac', disciplinaDeBiciCliente('Specialized', 'SL7 Sport (blanca)'), 'ruta');
+eq('cliente: modelo generico', disciplinaDeBiciCliente('Spy', 'Gravel'), 'gravel');
+eq('cliente: GT Aggressor', disciplinaDeBiciCliente('GT', 'Aggressor (Negra - Verde)'), 'mtb');
+eq('cliente: Epic anotada como World Cup', disciplinaDeBiciCliente('Specialized', 'World Cup Expert'), 'mtb');
+eq('cliente: marca solo-ruta alcanza', disciplinaDeBiciCliente('Cervelo', 'P5'), 'ruta');
+eq('cliente: basura queda null', disciplinaDeBiciCliente('dasdas', 'dasda'), null);
+eq('cliente: la categoria cargada a mano MANDA', disciplinaDeBiciCliente('Specialized', 'Epic (azul)', 'ruta'), 'ruta');
+
+// 🚩 Los modelos de otras marcas NO pueden tocar el detector del CATÁLOGO:
+// medido 19-ago, estas palabras cazaban repuestos reales del ERP.
+eq('catalogo: QUICK LINK no es una Cannondale Quick',
+    disciplinaDeBici('CIERRE DE CADENA SHIMANO SM-CN900-11 QUICK LINK'), null);
+eq('catalogo: el sensor Wahoo no es una GT Sensor',
+    disciplinaDeBici('SENSOR DE CADENCIA WAHOO RPM CADENCE'), null);
+eq('catalogo: la bascula no es una Scott Scale',
+    disciplinaDeBici('BÁSCULA DIGITAL FEEDBACK SPORTS ALPINE DIGITAL SCALE (MAX 25KG)'), null);
+
+// ── El talle de la bici del cliente ─────────────────────────────────────────
+eq('talle cliente: campo cargado manda', talleDeBiciCliente('54', 'Epic (azul)'), '54');
+eq('talle cliente: normaliza minuscula', talleDeBiciCliente('xl', null), 'XL');
+eq('talle cliente: cae al modelo si no esta', talleDeBiciCliente(null, 'Tarmac SL6 54'), '54');
+eq('talle cliente: sin dato = null, no se adivina', talleDeBiciCliente(null, 'Epic (azul)'), null);
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} biciDeCatalogo: ${ok} ok, ${fail} fallaron`);
 if (fail) process.exit(1);

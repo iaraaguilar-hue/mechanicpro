@@ -23,6 +23,7 @@ export function AddBikeDialog({ clientId, clientName, isOpen, onClose, onBikeCre
         marca: "",
         modelo: "",
         transmision: "",
+        talle: "",
         notas: ""
     });
     const [isSaving, setIsSaving] = useState(false);
@@ -41,9 +42,10 @@ export function AddBikeDialog({ clientId, clientName, isOpen, onClose, onBikeCre
                 marca: formData.marca,
                 modelo: formData.modelo,
                 transmision: formData.transmision || undefined,
+                talle: formData.talle.trim().toUpperCase() || undefined,
                 notas: formData.notas || undefined,
             });
-            setFormData({ marca: "", modelo: "", transmision: "", notas: "" });
+            setFormData({ marca: "", modelo: "", transmision: "", talle: "", notas: "" });
             onBikeCreated(created);
         } catch (e: any) {
             alert(`Error: ${e.message}`);
@@ -77,6 +79,10 @@ export function AddBikeDialog({ clientId, clientName, isOpen, onClose, onBikeCre
                     <div className="space-y-2">
                         <Label>Transmisión</Label>
                         <Input value={formData.transmision} onChange={e => setFormData({ ...formData, transmision: e.target.value })} placeholder="Ej: Shimano Ultegra 12s" />
+                    </div>
+                    <div className="space-y-1">
+                        <Label>Talle</Label>
+                        <Input value={formData.talle} onChange={e => setFormData({ ...formData, talle: e.target.value })} placeholder="Ej: 54, M, XL" />
                     </div>
                     <div className="space-y-2">
                         <Label>Notas Generales</Label>

@@ -38,6 +38,13 @@ const FEATURES: Record<string, Plan[]> = {
      *  server-side en la Edge Function `mensaje-ia` — el de acá solo evita el
      *  viaje al servidor. */
     mensaje_ia: ['Pro', 'Expert'],
+    /** El cruce de bicis paradas contra la base de clientes (idea 15). Es IA:
+     *  Pro/Expert, gate espejo server-side en la Edge Function `cruce-stock`.
+     *  Además tiene gate de ROL (la lista trae clientes con su gasto): el
+     *  mecánico solo la ve si el admin prendió talleres.bicis_paradas_ve_mecanico
+     *  (decisión de Iara 19-ago-2026) — candado duro en RLS
+     *  (puede_ver_bicis_paradas), no solo acá. */
+    bicis_paradas: ['Pro', 'Expert'],
 };
 
 export type Feature = keyof typeof FEATURES;

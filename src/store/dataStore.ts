@@ -32,6 +32,8 @@ export interface SupabaseBike {
     modelo: string;
     transmision?: string;
     categoria?: string;
+    /** Talle de la bici del cliente (52/M/XL). Lo usa el cruce de bicis paradas. */
+    talle?: string;
     notas?: string;
 }
 

@@ -111,6 +111,7 @@ export default function BikeDetail() {
     const [editBrand, setEditBrand] = useState("");
     const [editModel, setEditModel] = useState("");
     const [editTransmission, setEditTransmission] = useState("");
+    const [editTalle, setEditTalle] = useState("");
     const [editNotes, setEditNotes] = useState("");
     const [editingBikeId, setEditingBikeId] = useState<string | null>(null);
 
@@ -134,6 +135,7 @@ export default function BikeDetail() {
         setEditBrand(b.marca);
         setEditModel(b.modelo);
         setEditTransmission(b.transmision || "");
+        setEditTalle((b as any).talle || "");
         setEditNotes(b.notas || "");
     };
 
@@ -146,6 +148,7 @@ export default function BikeDetail() {
                     marca: editBrand,
                     modelo: editModel,
                     transmision: editTransmission,
+                    talle: editTalle.trim().toUpperCase() || undefined,
                     notas: editNotes || undefined,
                 });
                 setEditingBikeId(null);
@@ -614,6 +617,11 @@ export default function BikeDetail() {
                                         <div className="space-y-1">
                                             <Label htmlFor="transmission">Transmisión</Label>
                                             <Input id="transmission" value={editTransmission} onChange={(e) => setEditTransmission(e.target.value)} placeholder="Ej: Shimano 105" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label htmlFor="talle">Talle</Label>
+                                            <Input id="talle" value={editTalle} onChange={(e) => setEditTalle(e.target.value)} placeholder="Ej: 54, M, XL" />
+                                            <p className="text-[11px] text-muted-foreground">Con el talle cargado, el cruce de bicis paradas puede afinar a quién le calza cada bici.</p>
                                         </div>
                                         <div className="space-y-1">
                                             <Label htmlFor="notes">Notas Generales</Label>

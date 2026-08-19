@@ -45,6 +45,12 @@ const FEATURES: Record<string, Plan[]> = {
      *  (decisión de Iara 19-ago-2026) — candado duro en RLS
      *  (puede_ver_bicis_paradas), no solo acá. */
     bicis_paradas: ['Pro', 'Expert'],
+    /** Preguntale a tu taller (idea 3): el chat que contesta con los datos del
+     *  taller. Es IA: Pro/Expert, gate espejo server-side en `preguntar-taller`.
+     *  Lo usan TODOS los roles, pero la PLATA va atada al rol: al mecánico las
+     *  herramientas de facturación no le existen (decidido en la Edge Function,
+     *  no en la UI). */
+    preguntale: ['Pro', 'Expert'],
 };
 
 export type Feature = keyof typeof FEATURES;

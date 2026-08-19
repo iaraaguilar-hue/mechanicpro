@@ -14,8 +14,9 @@ import Metrics from "./pages/Metrics";
 import SuperAdmin from "./pages/SuperAdmin";
 import Configuracion from "./pages/Configuracion";
 import BicisParadas from "./pages/BicisParadas";
+import PreguntaleTaller from "./pages/PreguntaleTaller";
 import { Button } from "@/components/ui/button";
-import { Settings, Wrench, History, Repeat, LogOut, BarChart3, Trash2, Menu, User, X, Users, Bike } from "lucide-react";
+import { Settings, Wrench, History, Repeat, LogOut, BarChart3, Trash2, Menu, User, X, Users, Bike, MessageCircleQuestion } from "lucide-react";
 import { tieneFeature } from "@/lib/planFeatures";
 
 
@@ -263,6 +264,9 @@ function AppContent() {
               {tieneFeature(taller, 'bicis_paradas') && (rol?.toLowerCase()?.trim() === 'admin' || (rol?.toLowerCase()?.trim() === 'mecanico' && taller?.bicis_paradas_ve_mecanico === true)) && (
                 <DrawerLink to="/bicis-paradas" icon={<Bike size={20} />} label="Bicis paradas" onClick={closeDrawer} />
               )}
+              {tieneFeature(taller, 'preguntale') && rol?.toLowerCase()?.trim() !== 'super_admin' && (
+                <DrawerLink to="/preguntale" icon={<MessageCircleQuestion size={20} />} label="Preguntale" onClick={closeDrawer} />
+              )}
               {rol?.toLowerCase()?.trim() !== 'super_admin' && (
                 <DrawerLink to="/configuracion" icon={<Settings size={20} />} label="Configuración" onClick={closeDrawer} />
               )}
@@ -319,6 +323,9 @@ function AppContent() {
           {tieneFeature(taller, 'bicis_paradas') && (rol?.toLowerCase()?.trim() === 'admin' || (rol?.toLowerCase()?.trim() === 'mecanico' && taller?.bicis_paradas_ve_mecanico === true)) && (
             <Link to="/bicis-paradas"><NavButton icon={<Bike />} label="Bicis paradas" /></Link>
           )}
+          {tieneFeature(taller, 'preguntale') && rol?.toLowerCase()?.trim() !== 'super_admin' && (
+            <Link to="/preguntale"><NavButton icon={<MessageCircleQuestion />} label="Preguntale" /></Link>
+          )}
           {rol?.toLowerCase()?.trim() !== 'super_admin' && (
             <Link to="/configuracion" data-tour="nav-config"><NavButton icon={<Settings />} label="Configuración" /></Link>
           )}
@@ -362,6 +369,7 @@ function AppContent() {
               queda algún link/bookmark viejo apuntando acá (Tarea A). */}
           <Route path="/admin" element={<Navigate to="/reminders" replace />} />
           <Route path="/bicis-paradas" element={<BicisParadas />} />
+          <Route path="/preguntale" element={<PreguntaleTaller />} />
           <Route path="/configuracion" element={<Configuracion />} />
           <Route path="/auditoria" element={<DeletedServices />} />
           <Route path="/superadmin" element={<SuperAdmin />} />

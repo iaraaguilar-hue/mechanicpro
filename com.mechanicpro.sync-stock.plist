@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.mechanicpro.sync-stock</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/node</string>
+        <string>/Users/iaraaguilar/Desktop/mechanic_pro/frontend/mp_sync_stock_cron.cjs</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>8</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardErrorPath</key>
+    <string>/Users/iaraaguilar/Library/Logs/mp-sync-stock.launchd.log</string>
+    <key>StandardOutPath</key>
+    <string>/Users/iaraaguilar/Library/Logs/mp-sync-stock.launchd.log</string>
+</dict>
+</plist>

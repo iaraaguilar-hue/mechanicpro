@@ -24,6 +24,8 @@ interface FilaSugerencia {
     estado: string;
     created_at: string;
     monto_sumado: number | null;
+    texto: string | null;
+    dato_usado: string | null;
 }
 
 const plata = (n: number) =>
@@ -49,6 +51,7 @@ function Numero({ icono, valor, etiqueta, detalle, tono = "slate" }: {
 export default function PanelSugerencias() {
     const taller_id = useAuthStore(s => s.taller_id);
     const [filas, setFilas] = useState<FilaSugerencia[] | null>(null);
+    const [verHistorial, setVerHistorial] = useState(false);
 
     useEffect(() => {
         if (!taller_id) return;
@@ -57,8 +60,9 @@ export default function PanelSugerencias() {
             const desde = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
             const { data } = await supabase
                 .from("retorno_sugerencias")
-                .select("sugerencia_id, estado, created_at, monto_sumado")
-                .gte("created_at", desde);
+                .select("sugerencia_id, estado, created_at, monto_sumado, texto, dato_usado")
+                .gte("created_at", desde)
+                .order("created_at", { ascending: false });
             if (!vivo) return;
             setFilas((data ?? []) as FilaSugerencia[]);
         })();
@@ -108,6 +112,39 @@ export default function PanelSugerencias() {
                     La plata sale de los ítems que siguen cargados en esas órdenes, a su precio real.
                     Si después sacaste un ítem o le cambiaste el precio, este número lo refleja.
                 </p>
+
+                {/* Historial pedido por Iara (19-ago): qué sugirió, cuándo y en
+                    qué terminó — no solo el total. */}
+                <button
+                    onClick={() => setVerHistorial(v => !v)}
+                    className="text-xs font-medium text-indigo-700 hover:underline"
+                >
+                    {verHistorial ? 'Ocultar historial' : `Ver historial (${filas.length})`}
+                </button>
+                {verHistorial && (
+                    <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                        {filas.map(f => (
+                            <div key={f.sugerencia_id} className="rounded-md border border-indigo-100 bg-white/70 p-2">
+                                <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                                    <span>{new Date(f.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', timeZone: 'America/Argentina/Buenos_Aires' })}</span>
+                                    <span className={
+                                        f.estado === 'aceptada' ? 'text-emerald-600 font-semibold'
+                                        : f.estado === 'no_aplica' ? 'text-slate-400'
+                                        : 'text-amber-600'
+                                    }>
+                                        {f.estado === 'aceptada'
+                                            ? `Le hiciste caso${f.monto_sumado ? ` · ${plata(f.monto_sumado)}` : ''}`
+                                            : f.estado === 'no_aplica' ? 'No aplicaba' : 'Sin responder'}
+                                    </span>
+                                </div>
+                                <p className="text-xs text-slate-700 mt-1">{f.texto}</p>
+                                {f.dato_usado && (
+                                    <p className="text-[10px] text-muted-foreground mt-0.5">Se apoyó en: {f.dato_usado}</p>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
             </CardContent>
         </Card>
     );

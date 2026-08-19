@@ -79,6 +79,17 @@ export default function PreguntaleTaller() {
         setTexto('');
         setAviso(null);
         setPensando(true);
+        // La pregunta aparece como ENVIADA al instante (pedido de Iara,
+        // 19-ago): la respuesta la completa después, en la misma burbuja.
+        const tmpId = `tmp-${Date.now()}`;
+        setHistorial(h => [...h, {
+            id: tmpId,
+            pregunta,
+            respuesta: null,
+            herramientas: null,
+            feedback: null,
+            created_at: new Date().toISOString(),
+        }]);
         try {
             const llamada = supabase.functions.invoke('preguntar-taller', { body: { pregunta } });
             const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 90000));
@@ -90,14 +101,12 @@ export default function PreguntaleTaller() {
                 else setAviso('No se pudo responder. Probá de nuevo en un rato.');
                 return;
             }
-            setHistorial(h => [...h, {
-                id: data.pregunta_id ?? `tmp-${Date.now()}`,
-                pregunta,
+            setHistorial(h => h.map(x => x.id === tmpId ? {
+                ...x,
+                id: data.pregunta_id ?? tmpId,
                 respuesta: data.respuesta,
-                herramientas: (data.herramientas ?? []).map((x: string) => ({ herramienta: x })),
-                feedback: null,
-                created_at: new Date().toISOString(),
-            }]);
+                herramientas: (data.herramientas ?? []).map((y: string) => ({ herramienta: y })),
+            } : x));
         } catch (e: any) {
             setAviso(e?.message === 'timeout'
                 ? 'La respuesta tardó demasiado y se cortó a los 90 segundos. Probá de nuevo.'

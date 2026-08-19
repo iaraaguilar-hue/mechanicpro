@@ -301,9 +301,14 @@ function ClientSearchStep({ onClientSelect, initialQuery = "" }: { onClientSelec
             </div>
 
             <div className="pt-4 border-t mt-4">
+                {/* isRapidIntake: sin esto, AddClientDialog navega a la ficha
+                    del cliente y MATA el recorrido de recepción entero (el
+                    defecto que Iara reportó el 19-ago). El cliente creado
+                    sigue de largo al paso de la bici. */}
                 <AddClientDialog
                     onClientCreated={(client) => onClientSelect(client)}
                     variant="outline"
+                    isRapidIntake
                 />
             </div>
         </div>
@@ -318,6 +323,14 @@ function BikeSelectionStep({ client, onBikeSelect, onBack }: { client: SupabaseC
     const bikes = useMemo(() => bicicletas.filter(b => b.cliente_id === client.id), [bicicletas, client.id]);
 
     const [showAddBike, setShowAddBike] = useState(false);
+
+    // Garage vacío (cliente recién creado) → el popup de cargar la bici se
+    // abre solo: recibir bici es UN recorrido, no tres menúes (Iara, 19-ago).
+    useEffect(() => {
+        if (bikes.length === 0) setShowAddBike(true);
+        // Solo al entrar al paso: si el mecánico lo cierra a mano, no se re-abre.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
     const [editingBike, setEditingBike] = useState<SupabaseBike | null>(null);
 
     return (

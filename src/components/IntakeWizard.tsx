@@ -200,11 +200,14 @@ function ClientSearchStep({ onClientSelect }: { onClientSelect: (c: SupabaseClie
             </div>
 
             <div className="pt-4 border-t mt-4">
+                {/* El recorrido NO se corta (pedido de Iara, 19-ago): el cliente
+                    recién creado sigue de largo al paso de la bici. Antes esto
+                    navegaba a la ficha del cliente y mataba el wizard entero:
+                    el mecánico tenía que volver a empezar la recepción. */}
                 <AddClientDialog
-                    onClientCreated={(client) => {
-                        window.location.href = `/clients/${client.id}`;
-                    }}
+                    onClientCreated={(client) => onClientSelect(client)}
                     variant="outline"
+                    isRapidIntake
                 />
             </div>
         </div>
@@ -217,6 +220,14 @@ function BikeSelectionStep({ client, onBikeSelect, onBack }: { client: SupabaseC
 
     const [showAddBike, setShowAddBike] = useState(false);
     const [editingBike, setEditingBike] = useState<SupabaseBike | null>(null);
+
+    // Garage vacío (cliente recién creado o sin bicis) → el popup de cargar
+    // la bici se abre solo: recibir bici es UN recorrido, no tres menúes.
+    useEffect(() => {
+        if (bikes.length === 0) setShowAddBike(true);
+        // Solo al entrar al paso: si el mecánico lo cierra a mano, no se re-abre.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return (
         <div className="space-y-6">

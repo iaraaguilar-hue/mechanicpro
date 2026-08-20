@@ -53,6 +53,36 @@ async function main() {
         add('auth_health', r.ok ? 'OK' : 'FALLA', `HTTP ${r.status}`);
     } catch (e) { add('auth_health', 'FALLA', e.message); }
 
+    // ── 2-bis. El veredicto OFICIAL de Supabase sobre el proyecto ──
+    // Los checks de arriba prueban que el server contesta; este pregunta si la
+    // BASE está sana, que no es lo mismo. El 20-ago-2026 la base estuvo caída 5
+    // horas con los endpoints sin llave contestando 401 al instante. El token
+    // vive en el keychain (lo guarda el CLI de Supabase); si no está, se dice y
+    // el chequeo se marca OMITIDO en vez de dar un OK que no midió nada.
+    // El vigía que corre cada 6 horas es `mp_base_viva.cjs`; esto es la foto
+    // semanal. Runbook: memoria mp-supabase-restart-runbook.
+    try {
+        const crudo = require('child_process').execFileSync('/usr/bin/security',
+            ['find-generic-password', '-s', 'Supabase CLI', '-w'],
+            { encoding: 'utf8', timeout: 8000, stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+        const token = crudo.startsWith('go-keyring-base64:')
+            ? Buffer.from(crudo.split(':')[1], 'base64').toString('utf8').trim()
+            : crudo;
+        const proyecto = (URL.match(/https:\/\/([a-z0-9]+)\.supabase\.co/) || [])[1];
+        if (!token || !proyecto) throw new Error('sin token o sin ref de proyecto');
+        const r = await fetch(`https://api.supabase.com/v1/projects/${proyecto}/health?services=db,auth,rest`,
+            { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15000) });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const servicios = await r.json();
+        const enfermos = (servicios || []).filter(sv => !sv.healthy);
+        add('salud_proyecto_supabase', enfermos.length ? 'FALLA' : 'OK',
+            enfermos.length
+                ? enfermos.map(sv => `${sv.name}: ${sv.error || 'unhealthy'}`).join(' · ')
+                : (servicios || []).map(sv => sv.name).join(', ') + ' healthy');
+    } catch (e) {
+        add('salud_proyecto_supabase', 'OMITIDO', `no pude consultar la Management API (${e.message})`);
+    }
+
     // ── 3. Chequeo profundo (solo con service_role) ──
     if (!SERVICE) {
         add('chequeo_profundo', 'OMITIDO', 'sin SUPABASE_SERVICE_ROLE — no puedo ver datos por RLS');

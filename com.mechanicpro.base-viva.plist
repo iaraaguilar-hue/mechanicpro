@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.mechanicpro.base-viva</string>
+    <!-- node directo, NO bash: TCC le bloquea ~/Documents a /bin/bash bajo launchd -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/node</string>
+        <string>/Users/iaraaguilar/Desktop/mechanic_pro/frontend/mp_base_viva.cjs</string>
+    </array>
+    <!-- Cada 6 horas. El sync de stock ya mira a las 08:00; esto cubre el resto
+         del día, que es donde el incidente del 20-ago quedó sin testigo. -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Hour</key><integer>7</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Hour</key><integer>19</integer><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Hour</key><integer>1</integer><key>Minute</key><integer>30</integer></dict>
+    </array>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardErrorPath</key>
+    <string>/Users/iaraaguilar/Library/Logs/mp-base-viva.launchd.log</string>
+    <key>StandardOutPath</key>
+    <string>/Users/iaraaguilar/Library/Logs/mp-base-viva.launchd.log</string>
+</dict>
+</plist>

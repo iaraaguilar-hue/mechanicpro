@@ -159,6 +159,10 @@ export interface SupabaseService {
     fecha_finalizacion?: string | null;
     fecha_entregado?: string | null;
     webhook_erp_disparado?: boolean;
+    /** Qué contestó el POST de la orden de venta: false = NO llegó. NULL = no se intentó. */
+    webhook_erp_ok?: boolean | null;
+    webhook_erp_detalle?: string | null;
+    webhook_erp_at?: string | null;
     eliminado_en?: string | null;
     checklist_data?: Record<string, boolean>;
     etapas_data?: Record<string, boolean> | null;

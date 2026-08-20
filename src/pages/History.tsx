@@ -217,6 +217,8 @@ export default function History() {
                         totalPrice: service.precio_total,
                         mechanic_notes: service.notas_mecanico,
                         notas_internas: service.notas_internas,
+                        webhook_erp_ok: service.webhook_erp_ok,
+                        webhook_erp_detalle: service.webhook_erp_detalle,
                         extraItems: service.items_extra?.map((i: any) => ({
                             id: i.id || crypto.randomUUID(),
                             description: i.descripcion,
@@ -840,6 +842,19 @@ function ExpandedServiceDetail({ job }: { job: any }) {
                     )}
                 </div>
             </div>
+
+            {/* La orden de venta al ERP no llegó: se dice acá, en la orden, y no
+                en un console.error que nadie lee. */}
+            {service.webhook_erp_ok === false && (
+                <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4">
+                    <h4 className="text-red-700 flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-1">
+                        <Info className="w-4 h-4" /> La orden de venta no salió al ERP
+                    </h4>
+                    <p className="text-sm text-red-700">
+                        El aviso a la automatización no se pudo entregar{service.webhook_erp_detalle ? ` (${service.webhook_erp_detalle})` : ''}. Puede que haya que cargar la venta a mano.
+                    </p>
+                </div>
+            )}
 
             {/* Notes: las del cliente y, si las hay, las internas del taller.
                 Esta pantalla la ve el taller, así que las dos van; el rótulo

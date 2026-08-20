@@ -57,6 +57,9 @@ interface DashboardJob {
     date_out?: string;
     total_price?: number;
     bicicleta_id: string;
+    /** false = el POST de la orden de venta al ERP no llegó. */
+    webhook_erp_ok?: boolean | null;
+    webhook_erp_detalle?: string | null;
 }
 
 export default function Workshop() {
@@ -104,6 +107,8 @@ export default function Workshop() {
                     date_out: s.fecha_entrega ?? undefined,
                     total_price: s.precio_total,
                     bicicleta_id: s.bicicleta_id,
+                    webhook_erp_ok: s.webhook_erp_ok ?? null,
+                    webhook_erp_detalle: s.webhook_erp_detalle ?? null,
                 };
             });
 
@@ -559,6 +564,14 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
             <TableRow className="hover:bg-muted/30 transition-colors cursor-pointer" onClick={onClick}>
                 <TableCell>
                     {statusBadge}
+                    {/* El POST de la orden de venta no llegó al ERP. Es un dato, no una
+                        suposición: lo registra doFinalize con lo que contestó el servidor.
+                        Sin esto, una orden de venta que no se generó no deja rastro. */}
+                    {job.webhook_erp_ok === false && (
+                        <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-red-600" title={job.webhook_erp_detalle || ''}>
+                            <PackageSearch className="h-3 w-3" /> LA ORDEN DE VENTA NO SALIÓ
+                        </div>
+                    )}
                     {(mostrarEtapas || mostrarTareas) && <EtapasChecklist serviceId={job.service_id} />}
                 </TableCell>
                 <TableCell className="font-medium text-muted-foreground w-28">
@@ -929,12 +942,39 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                         // finalizar, el stock ya se descontó la primera vez.
                         const ordenUrl = resolveOrdenWebhookUrl(taller_id, ordenWebhookUrl);
                         if (ordenUrl && !service.webhook_erp_disparado) {
+                            // ── Se REGISTRA qué contestó, no se manda y se olvida ────────
+                            // Antes esto era `fetch(...).catch(console.error)`: si el POST
+                            // no llegaba (el webhook de Probikes vive detrás de un túnel
+                            // ngrok), no quedaba rastro en ningún lado y "se generó la orden
+                            // de venta" era una esperanza. Ahora es un dato que la pantalla
+                            // muestra. Ver migración 20260820213000.
+                            //
+                            // No se espera la respuesta para cerrar el modal: el mecánico no
+                            // tiene por qué mirar un spinner mientras el ERP piensa. El
+                            // registro se escribe cuando llega, aunque el modal ya se haya
+                            // cerrado (va a la base, no al estado de React).
+                            const servicioId = job.service_id;
                             fetch(ordenUrl, {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify(payload),
-                                keepalive: true
-                            }).catch(e => console.error("Webhook Error (Fetch):", e));
+                                keepalive: true,
+                                signal: AbortSignal.timeout(20000),
+                            })
+                                .then(r => ({ ok: r.ok, detalle: `HTTP ${r.status}` }))
+                                .catch(e => ({ ok: false, detalle: e?.message || 'no se pudo entregar' }))
+                                .then(async ({ ok, detalle }) => {
+                                    if (!ok) console.error("Webhook de orden: no llegó —", detalle);
+                                    try {
+                                        await supabase.from('servicios').update({
+                                            webhook_erp_ok: ok,
+                                            webhook_erp_detalle: detalle,
+                                            webhook_erp_at: new Date().toISOString(),
+                                        }).eq('id', servicioId);
+                                    } catch (e: any) {
+                                        console.error("No pude registrar la respuesta del webhook:", e?.message);
+                                    }
+                                });
                             await updateServicio(job.service_id, { webhook_erp_disparado: true });
                         } else if (service.webhook_erp_disparado) {
                             console.log("Webhook de orden NO re-disparado: ya corrió para este service (reabierto y re-finalizado).");

@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
 import { resolveOrdenWebhookUrl, resolveEntregadoWebhookUrl } from "@/lib/ordenWebhook";
+import { claveProducto } from "@/lib/buscadorProductos";
 import {
     chequearOrdenParaERP,
     clavesAChequear,
@@ -768,6 +769,37 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
     // Lo que hace acá es lo único que se puede hacer a tiempo: avisar mientras
     // la orden todavía se puede corregir. NO bloquea, igual que los otros tres.
     // ─────────────────────────────────────────────────────────────
+    // Trae del catálogo del taller lo que se sabe de cada repuesto de la orden:
+    // su nombre en el ERP, su SKU y su idConcepto. Lo usan LOS DOS lados —
+    // el candado (para avisar) y el payload del webhook (para mandárselos a la
+    // automatización). `pudoMedir` en false significa "no sé", que no es lo
+    // mismo que "no está vinculado".
+    //
+    // Se consulta el catálogo COMPLETO del taller, sin los filtros del buscador
+    // (`activo`/`sugerible`): la pregunta es "¿existe en el ERP?", no "¿lo
+    // sugiere el buscador?". Un casco está en Contabilium aunque el buscador no
+    // lo ofrezca como repuesto.
+    const cargarVinculosERP = async (): Promise<{ vinculos: Map<string, VinculoProducto>; pudoMedir: boolean }> => {
+        const vinculos = new Map<string, VinculoProducto>();
+        const claves = clavesAChequear(service?.items_extra);
+        if (claves.length === 0 || !taller_id) return { vinculos, pudoMedir: true };
+        try {
+            const { data, error } = await supabase
+                .from('productos_taller')
+                .select('clave,nombre,sku,id_externo,origen')
+                .eq('taller_id', taller_id)
+                .in('clave', claves);
+            if (error) throw error;
+            for (const p of (data || []) as (VinculoProducto & { clave: string })[]) {
+                vinculos.set(p.clave, p);
+            }
+            return { vinculos, pudoMedir: true };
+        } catch (e: any) {
+            console.warn('[Finalizar] No se pudo leer el catálogo del ERP:', e?.message);
+            return { vinculos, pudoMedir: false };
+        }
+    };
+
     const chequearItemsYFinalizar = async () => {
         if (!service) return;
         const estadoActual = (service.estado || '').toLowerCase();
@@ -780,40 +812,18 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
         // webhook de verdad (mismo guard y mismo anti-doble-disparo que abajo).
         const erpActivo = !!resolveOrdenWebhookUrl(taller_id, ordenWebhookUrl) && !service.webhook_erp_disparado;
 
-        const vinculos = new Map<string, VinculoProducto>();
-        let pudoMedir = true;
-
-        if (erpActivo) {
-            const claves = clavesAChequear(service.items_extra);
-            if (claves.length > 0 && taller_id) {
-                // Se consulta el catálogo COMPLETO del taller, sin los filtros
-                // del buscador (`activo`/`sugerible`): la pregunta es "¿existe
-                // en el ERP?", no "¿lo sugiere el buscador?". Un casco está en
-                // Contabilium aunque el buscador no lo ofrezca como repuesto.
-                try {
-                    const { data, error } = await supabase
-                        .from('productos_taller')
-                        .select('clave,nombre,sku,id_externo,origen')
-                        .eq('taller_id', taller_id)
-                        .in('clave', claves);
-                    if (error) throw error;
-                    for (const p of (data || []) as (VinculoProducto & { clave: string })[]) {
-                        vinculos.set(p.clave, p);
-                    }
-                } catch (e: any) {
-                    // No se pudo leer el catálogo → NO se inventa un aviso. Un
-                    // candado que grita sin haber medido es peor que uno mudo:
-                    // en dos semanas lo ignoran. El chequeo de "sin nombre" (que
-                    // no necesita catálogo) sí sigue corriendo.
-                    console.warn('[Finalizar] No se pudo chequear el catálogo del ERP:', e?.message);
-                    pudoMedir = false;
-                }
-            }
-        }
+        // Sin ERP no hace falta ir al catálogo: solo corre el chequeo de
+        // "renglón sin nombre", que no necesita nada de la base.
+        const { vinculos, pudoMedir } = erpActivo
+            ? await cargarVinculosERP()
+            : { vinculos: new Map<string, VinculoProducto>(), pudoMedir: true };
 
         const avisos = chequearOrdenParaERP({
             items: service.items_extra,
             vinculos,
+            // No se pudo leer el catálogo → NO se inventa un aviso. Un candado
+            // que grita sin haber medido es peor que uno mudo: en dos semanas
+            // lo ignoran.
             erpActivo: erpActivo && pudoMedir,
             sugerir: (descripcion) => sugerirProductoERP(descripcion, productos),
         });
@@ -870,16 +880,40 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                         const totalProductos = productosFisicos.reduce((sum: number, p: any) => sum + (Number(p.precio) || 0), 0);
                         const nombresConcatenados = productosFisicos.map((p: any) => p.descripcion).join(", ");
 
+                        // ── Lo que el ERP necesita para no adivinar (20-ago-2026) ──
+                        // Hasta hoy el payload mandaba SOLO la descripción que
+                        // escribió el mecánico, y la automatización la matcheaba por
+                        // texto contra el catálogo. Cuando el nombre del taller no es
+                        // el del ERP ("Camara Specialized Ruta 20-28 48mm" contra
+                        // "PV TUBE 700X20-28 48MM") el match falla y la orden de venta
+                        // no se genera. El SKU y el nombre del ERP hacen el match
+                        // determinístico.
+                        //
+                        // 🚩 Los campos viejos NO se tocan: los nuevos se AGREGAN, y
+                        // solo cuando existen. La automatización actual sigue leyendo
+                        // `descripcion` y funciona igual sin enterarse del cambio.
+                        const { vinculos } = await cargarVinculosERP();
+
                         const payload = {
                             numero_orden: ordenNumberForWebhook(service.numero_orden, service.id),
                             dni_cliente: client?.dni || "Sin DNI",
                             nombre_cliente: client?.nombre || "Cliente",
                             fecha_finalizacion: fechaFinalizacion,
                             nombre_producto: nombresConcatenados,
-                            productos: productosFisicos.map((p: any) => ({
-                                descripcion: p.descripcion,
-                                precio: Number(p.precio) || 0
-                            })),
+                            productos: productosFisicos.map((p: any) => {
+                                const v = vinculos.get(claveProducto(p.descripcion || ''));
+                                return {
+                                    descripcion: p.descripcion,
+                                    precio: Number(p.precio) || 0,
+                                    // Un renglón de la orden = una unidad. Un repuesto
+                                    // cargado dos veces viaja como dos renglones de 1,
+                                    // igual que antes de este cambio.
+                                    cantidad: 1,
+                                    ...(v?.sku ? { sku: v.sku } : {}),
+                                    ...(v?.id_externo ? { id_externo: v.id_externo } : {}),
+                                    ...(v?.nombre ? { nombre_erp: v.nombre } : {}),
+                                };
+                            }),
                             total_service: totalProductos,
                         };
 
@@ -1087,7 +1121,9 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                 <ConfirmDialog
                     open={precioCeroConfirm}
                     onClose={() => { setPrecioCeroConfirm(false); onClose(); }}
-                    onConfirm={() => { setPrecioCeroConfirm(false); doFinalize(); }}
+                    /* Sigue por la cadena, NO salta a doFinalize: si no, una orden
+                       en $0 se saltearía el chequeo de los repuestos del ERP. */
+                    onConfirm={() => { setPrecioCeroConfirm(false); chequearItemsYFinalizar(); }}
                     icon={<CircleDollarSign className="h-7 w-7" />}
                     iconClassName="bg-amber-100 text-amber-600"
                     title="Esta orden va a quedar en $0"

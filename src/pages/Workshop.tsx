@@ -19,7 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
 import { resolveOrdenWebhookUrl, resolveEntregadoWebhookUrl } from "@/lib/ordenWebhook";
-import { claveProducto } from "@/lib/buscadorProductos";
+import { claveProducto, buscarProductos } from "@/lib/buscadorProductos";
 import { instanteAR, diaCalendario } from "@/lib/fechaAR";
 import { ETIQUETAS_NOTAS } from "@/lib/notasServicio";
 import {
@@ -27,6 +27,7 @@ import {
     clavesAChequear,
     itemsQueVanAlERP,
     sugerirProductoERP,
+    estaVinculadoAlERP,
     type AvisoOrdenERP,
     type VinculoProducto,
 } from "@/lib/chequeoOrdenERP";
@@ -843,6 +844,14 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
             // lo ignoran.
             erpActivo: erpActivo && pudoMedir,
             sugerir: (descripcion) => sugerirProductoERP(descripcion, productos),
+            // El aviso solo salta si el ERP NO va a poder encontrarlo. Se usa el
+            // MISMO buscador que ve el mecánico (todos los términos tienen que
+            // aparecer), restringido a productos que sí están en el ERP: es el
+            // proxy honesto de "un matcher por texto lo halla". Sin este filtro
+            // el cartel saltaba en el 54% de las órdenes de Probikes en vez del
+            // 25%, y a esa altura nadie lo lee. Ver chequeoOrdenERP.ts.
+            encontrableEnERP: (descripcion) =>
+                buscarProductos(productos.filter(estaVinculadoAlERP), descripcion, { limite: 1 }).length > 0,
         });
 
         if (avisos.length > 0) {

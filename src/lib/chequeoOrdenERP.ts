@@ -109,6 +109,27 @@ export interface ParametrosChequeo {
     erpActivo: boolean;
     /** Devuelve el nombre del producto del ERP más parecido, o null. Opcional. */
     sugerir?: (descripcion: string) => string | null;
+    /**
+     * ¿Un matcher POR TEXTO del otro lado va a encontrar este ítem igual?
+     *
+     * 🔴 POR QUÉ EXISTE. Medido contra las últimas 120 órdenes reales de
+     * Probikes: avisando por "no está vinculado" a secas, el cartel saltaba en
+     * el **54% de las órdenes**. Un aviso que aparece en más de la mitad de los
+     * cierres deja de leerse en dos semanas, y ahí el candado no sirve para
+     * nada.
+     *
+     * Y avisaba de más: la pregunta que le importa al mecánico no es "¿está
+     * vinculado en NUESTRA base?" sino "¿el ERP lo va a encontrar?". Un
+     * "Piñón a cassette Shimano Acera CS-HG200-9" no está vinculado, pero en
+     * Contabilium existe "PINONES A CASSETTE SHIMANO ACERA CS-HG200-9" y
+     * cualquier matcher por texto lo encuentra: ese ítem no corre riesgo.
+     *
+     * Con este filtro el aviso baja al **25% de las órdenes** y sigue cazando
+     * los dos casos que lo hicieron nacer (311 y 319), porque
+     * "Camara Specialized Ruta 20-28 48mm" y "PV TUBE 700X20-28 48MM" no
+     * comparten una sola palabra.
+     */
+    encontrableEnERP?: (descripcion: string) => boolean;
 }
 
 /**
@@ -120,6 +141,7 @@ export function chequearOrdenParaERP({
     vinculos,
     erpActivo,
     sugerir,
+    encontrableEnERP,
 }: ParametrosChequeo): AvisoOrdenERP[] {
     const todos = items || [];
 
@@ -152,6 +174,9 @@ export function chequearOrdenParaERP({
 
         const clave = claveProducto(desc);
         if (estaVinculadoAlERP(vinculos.get(clave))) continue;
+        // No está vinculado, pero si el ERP lo encuentra por el nombre igual,
+        // no hay nada que avisar. Ver el porqué en `encontrableEnERP`.
+        if (encontrableEnERP && encontrableEnERP(desc)) continue;
 
         const previo = porClave.get(clave);
         if (previo) {

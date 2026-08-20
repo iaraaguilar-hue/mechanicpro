@@ -137,6 +137,36 @@ eq('taller sin ERP: nada de vínculos',
 eq('orden sin ítems', chequear([]), []);
 eq('items en null', chequearOrdenParaERP({ items: null, vinculos, erpActivo: true }), []);
 
+// ── El filtro que baja el ruido del 54% al 25% ──────────────────────────────
+// Si un matcher por texto del otro lado lo encuentra igual, no hay riesgo y no
+// se avisa. Medido contra las últimas 120 órdenes reales de Probikes.
+
+// Caso real silenciado: no está vinculado, pero en el ERP existe
+// "PINONES A CASSETTE SHIMANO ACERA CS-HG200-9" y el texto lo encuentra.
+eq('encontrable por texto: no avisa',
+    chequearOrdenParaERP({
+        items: [{ descripcion: 'Piñón a cassette Shimano Acera CS-HG200-9', categoria: 'part', precio: 40000 }],
+        vinculos, erpActivo: true,
+        encontrableEnERP: () => true,
+    }), []);
+
+// 🔴 Y el caso 319 SIGUE avisando aunque el filtro esté puesto: no comparte una
+// sola palabra con el nombre del ERP, así que ningún matcher por texto lo halla.
+eq('319: el filtro NO lo silencia',
+    chequearOrdenParaERP({
+        items: [{ descripcion: 'Camara Specialized Ruta 20-28 48mm', categoria: 'part', precio: 12500 }],
+        vinculos, erpActivo: true,
+        encontrableEnERP: (d) => d.includes('PV TUBE'),   // el buscador real no lo encuentra
+    }).map(a => a.tipo), ['sin_vinculo']);
+
+// El renglón SIN NOMBRE no se silencia nunca: no hay texto que buscar.
+eq('311: el filtro no toca el renglón sin nombre',
+    chequearOrdenParaERP({
+        items: [{ descripcion: '', categoria: 'part', precio: 50288 }],
+        vinculos, erpActivo: true,
+        encontrableEnERP: () => true,
+    }).map(a => a.tipo), ['sin_nombre']);
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Las piezas sueltas
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * mp_base_viva.cjs — el vigía de la base de Mechanic Pro.
+ * mp_base_viva.cjs — el vigía de lo que tiene que estar vivo para que MP sirva:
+ * la BASE y el PUENTE hacia el ERP.
  *
  * POR QUÉ EXISTE: el 20-ago-2026 la base de producción estuvo caída de 08:00 a
  * 12:45 (casi 5 horas). Toda consulta autenticada colgaba en timeout mientras
@@ -28,6 +29,19 @@
  * Se dispara con el LaunchAgent `com.mechanicpro.base-viva` (cada 6 horas).
  * ⚠️ Es node y no .sh a propósito: TCC le bloquea `~/Documents` a /bin/bash bajo
  * launchd (así murió el backup 17 días). Mismo patrón que mp_sync_stock_cron.
+ *
+ * ── EL PUENTE AL ERP (agregado 20-ago-2026, a las 3 horas de montar esto) ──
+ * Luis avisó que otra orden no había generado su orden de venta. La orden 328
+ * ($230.000 en cubiertas) tenía los repuestos PERFECTAMENTE vinculados al ERP,
+ * con SKU y con el nombre idéntico al de Contabilium: o sea que NO era un
+ * problema de match como la 311 y la 319. El webhook de la orden de venta vive
+ * detrás de un túnel ngrok gratuito, y el túnel estaba caído
+ * (`ERR_NGROK_3200: endpoint is offline`). Todo lo que MP mandaba se perdía.
+ *
+ * Se sondea con **GET, jamás con POST**: un POST a `generar-orden` crearía una
+ * orden real y descontaría stock (memoria webhook-n8n-sondear-sin-dispararlo).
+ * n8n vivo contesta 404 con un JSON que dice "not registered for GET requests";
+ * ngrok caído contesta 404 con su propia página de error.
  *
  * Uso a mano:  node mp_base_viva.cjs [--json] [--sin-notificar]
  */
@@ -181,6 +195,38 @@ function guardarEstado(e) {
         }
     }
 
+    // ── 4. El puente hacia el ERP (el túnel de la automatización) ───────────
+    // Solo GET. Nunca POST: un POST acá crea una orden de venta de verdad.
+    const urlOrden = env.VITE_N8N_ORDEN_WEBHOOK_URL;
+    if (!urlOrden) {
+        reporte.checks.puenteERP = { configurado: false };
+        log('  puente al ERP: sin VITE_N8N_ORDEN_WEBHOOK_URL, no hay nada que mirar');
+    } else {
+        const t0 = Date.now();
+        try {
+            const r = await fetch(urlOrden, { method: 'GET', signal: AbortSignal.timeout(TIMEOUT_MS) });
+            const errNgrok = r.headers.get('ngrok-error-code');
+            const cuerpo = (await r.text().catch(() => '')).slice(0, 300);
+            // n8n vivo con el flujo activo devuelve 404 diciendo que el webhook
+            // no acepta GET. Ese texto ES la prueba de que está del otro lado.
+            const n8nVivo = /not registered for GET/i.test(cuerpo) || /Did you mean to make a POST/i.test(cuerpo);
+            const ok = n8nVivo && !errNgrok;
+            reporte.checks.puenteERP = { configurado: true, ok, status: r.status, errNgrok, ms: Date.now() - t0 };
+            log(`  puente al ERP:              ${ok ? `vivo (HTTP ${r.status}, n8n contesta)` : `🔴 NO RESPONDE${errNgrok ? ' — ' + errNgrok : ` — HTTP ${r.status}, no contesta n8n`}`}`);
+            if (!ok) {
+                reporte.puenteCaido = true;
+                reporte.motivoPuente = errNgrok === 'ERR_NGROK_3200'
+                    ? 'el túnel de la automatización está apagado'
+                    : `el webhook no contesta como n8n (HTTP ${r.status}${errNgrok ? ', ' + errNgrok : ''})`;
+            }
+        } catch (e) {
+            reporte.checks.puenteERP = { configurado: true, ok: false, error: e.message };
+            reporte.puenteCaido = true;
+            reporte.motivoPuente = `no se pudo llegar al webhook (${e.message})`;
+            log(`  puente al ERP:              🔴 ${e.message}`);
+        }
+    }
+
     // ── Veredicto ───────────────────────────────────────────────────────────
     if (!base.ok) {
         reporte.caida = true;
@@ -191,7 +237,28 @@ function guardarEstado(e) {
     }
 
     const previo = estadoPrevio();
-    guardarEstado({ caida: reporte.caida, ts: reporte.ts, motivo: reporte.motivo });
+    guardarEstado({
+        caida: reporte.caida, ts: reporte.ts, motivo: reporte.motivo,
+        puenteCaido: !!reporte.puenteCaido, motivoPuente: reporte.motivoPuente ?? null,
+    });
+
+    // El puente caído se avisa APARTE de la base: son dos problemas distintos y
+    // el remedio lo tiene otra persona (la base la reinicia Iara, el túnel lo
+    // levanta Mica).
+    if (reporte.puenteCaido) {
+        log(`\n🔴 PUENTE AL ERP CAÍDO — ${reporte.motivoPuente}`);
+        log('  Efecto: cada service que se finalice con repuestos NO va a generar su orden');
+        log('  de venta, y hasta el 20-ago-2026 eso no dejaba ningún rastro.');
+        log('  Qué hacer: avisarle a Mica que levante el túnel / la instancia de n8n.');
+        log('  Después: cruzar contra Contabilium las órdenes finalizadas mientras estuvo caído');
+        log('  (en la app, las que digan "LA ORDEN DE VENTA NO SALIÓ").');
+        notificar('🔴 Mechanic Pro — el puente al ERP está caído',
+            `${reporte.motivoPuente}. Las órdenes que se finalicen NO van a generar su orden de venta. Avisale a Mica.`);
+    } else if (previo.puenteCaido && reporte.checks.puenteERP?.ok) {
+        log('  (el puente venía caído: volvió)');
+        notificar('✅ Mechanic Pro — el puente al ERP volvió',
+            'La automatización contesta otra vez. Revisá las órdenes que quedaron sin generar mientras estuvo caído.');
+    }
 
     if (reporte.caida) {
         log(`\n🔴 BASE CAÍDA — ${reporte.motivo}`);
@@ -209,7 +276,7 @@ function guardarEstado(e) {
     }
 
     if (JSON_OUT) console.log(JSON.stringify(reporte, null, 2));
-    process.exit(reporte.caida ? 1 : 0);
+    process.exit(reporte.caida || reporte.puenteCaido ? 1 : 0);
 })().catch(e => {
     log(`✗ error fatal: ${e.message}`);
     notificar('🔴 MP — el vigía de la base falló', `${e.message}. Mirá ~/Library/Logs/mp-base-viva.log`);

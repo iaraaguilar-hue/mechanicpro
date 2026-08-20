@@ -40,8 +40,16 @@
  *
  * Se sondea con **GET, jamás con POST**: un POST a `generar-orden` crearía una
  * orden real y descontaría stock (memoria webhook-n8n-sondear-sin-dispararlo).
- * n8n vivo contesta 404 con un JSON que dice "not registered for GET requests";
- * ngrok caído contesta 404 con su propia página de error.
+ * n8n vivo contesta 404 con un JSON que dice "not registered for GET requests".
+ *
+ * 🔴 **CUÁL URL SE SONDEA. Esto me lo comí y avisé de una caída que no existía.**
+ * La app resuelve el webhook con `resolveOrdenWebhookUrl`: usa la URL propia del
+ * taller (`taller_configuraciones.webhook_orden_url`) y SOLO cae a la variable
+ * de entorno `VITE_N8N_ORDEN_WEBHOOK_URL` si el taller no tiene la suya.
+ * Probikes tiene la suya desde el 30-jul (`probikes-n8n.duckdns.org`), así que
+ * la env es un FALLBACK VIEJO que apunta a un ngrok apagado y que no se usa.
+ * Sondear la env daba "puente caído" cada 6 horas por un túnel que nadie usa,
+ * que es justo el aviso que nadie lee. Se sondea lo que la app USA.
  *
  * Uso a mano:  node mp_base_viva.cjs [--json] [--sin-notificar]
  */
@@ -52,6 +60,8 @@ const { execFileSync } = require('child_process');
 const LOG = path.join(process.env.HOME, 'Library', 'Logs', 'mp-base-viva.log');
 const ESTADO = path.join(process.env.HOME, 'Library', 'Logs', 'mp-base-viva.estado.json');
 const PROYECTO = 'vsybmwuqhxcuuervmoas';
+// Espejo de PROBIKES_TALLER_ID en frontend/src/lib/ordenWebhook.ts
+const PROBIKES_ID = 'f3844f35-cb20-420d-93e7-a940a50a68a1';
 const TIMEOUT_MS = 15_000;
 const JSON_OUT = process.argv.includes('--json');
 const SIN_NOTIFICAR = process.argv.includes('--sin-notificar');
@@ -144,6 +154,7 @@ function guardarEstado(e) {
     const env = leerEnv();
     const URL = env.VITE_SUPABASE_URL;
     const ANON = env.VITE_SUPABASE_ANON_KEY;
+    const SERVICE = env.SUPABASE_SERVICE_ROLE;   // para leer las URLs configuradas
     const reporte = { ts: new Date().toISOString(), proyecto: PROYECTO, checks: {}, caida: false, motivo: null };
 
     if (!URL || !ANON) {
@@ -195,35 +206,70 @@ function guardarEstado(e) {
         }
     }
 
-    // ── 4. El puente hacia el ERP (el túnel de la automatización) ───────────
+    // ── 4. El puente hacia el ERP (el que la app USA de verdad) ────────────
     // Solo GET. Nunca POST: un POST acá crea una orden de venta de verdad.
-    const urlOrden = env.VITE_N8N_ORDEN_WEBHOOK_URL;
-    if (!urlOrden) {
-        reporte.checks.puenteERP = { configurado: false };
-        log('  puente al ERP: sin VITE_N8N_ORDEN_WEBHOOK_URL, no hay nada que mirar');
-    } else {
+    const puentes = [];
+    try {
+        // Espejo de `resolveOrdenWebhookUrl` (frontend/src/lib/ordenWebhook.ts):
+        // manda la URL del taller; la env es el último recurso y solo Probikes.
+        const r = await fetch(`${URL}/rest/v1/taller_configuraciones?select=taller_id,webhook_orden_url`, {
+            headers: { apikey: SERVICE || ANON, Authorization: `Bearer ${SERVICE || ANON}` },
+            signal: AbortSignal.timeout(TIMEOUT_MS),
+        });
+        const filas = r.ok ? await r.json() : [];
+        for (const f of filas) {
+            const propia = (f.webhook_orden_url || '').trim();
+            if (propia) puentes.push({ taller: f.taller_id, url: propia, origen: 'del taller' });
+        }
+        // Probikes sin URL propia caería a la env; hoy tiene la suya.
+        const sinPropia = filas.filter(f => !(f.webhook_orden_url || '').trim());
+        if (sinPropia.some(f => f.taller_id === PROBIKES_ID) && env.VITE_N8N_ORDEN_WEBHOOK_URL) {
+            puentes.push({ taller: PROBIKES_ID, url: env.VITE_N8N_ORDEN_WEBHOOK_URL, origen: 'fallback de la env' });
+        }
+    } catch (e) {
+        log(`  puente al ERP: no pude leer las URLs configuradas (${e.message})`);
+    }
+
+    // ¿Qué talleres USAN el puente de verdad? Un taller configurado pero que
+    // nunca disparó una orden (Crono: 2 services, ninguno disparado, workflow
+    // inactivo) no puede generar una alarma: sería el aviso que nadie lee.
+    const activos = new Set();
+    try {
+        const desde = new Date(Date.now() - 60 * 86400_000).toISOString();
+        const r = await fetch(`${URL}/rest/v1/servicios?select=taller_id&webhook_erp_disparado=eq.true&fecha_finalizacion=gte.${desde}`, {
+            headers: { apikey: SERVICE || ANON, Authorization: `Bearer ${SERVICE || ANON}` },
+            signal: AbortSignal.timeout(TIMEOUT_MS),
+        });
+        if (r.ok) for (const f of await r.json()) activos.add(f.taller_id);
+    } catch (_) { /* sin este dato se avisa igual: mejor de más que de menos */ }
+
+    reporte.checks.puentes = [];
+    if (!puentes.length) {
+        log('  puente al ERP: ningún taller tiene webhook de orden configurado');
+    }
+    for (const p of puentes) {
         const t0 = Date.now();
+        let ok = false, detalle = '';
         try {
-            const r = await fetch(urlOrden, { method: 'GET', signal: AbortSignal.timeout(TIMEOUT_MS) });
+            const r = await fetch(p.url, { method: 'GET', signal: AbortSignal.timeout(TIMEOUT_MS) });
             const errNgrok = r.headers.get('ngrok-error-code');
             const cuerpo = (await r.text().catch(() => '')).slice(0, 300);
-            // n8n vivo con el flujo activo devuelve 404 diciendo que el webhook
-            // no acepta GET. Ese texto ES la prueba de que está del otro lado.
-            const n8nVivo = /not registered for GET/i.test(cuerpo) || /Did you mean to make a POST/i.test(cuerpo);
-            const ok = n8nVivo && !errNgrok;
-            reporte.checks.puenteERP = { configurado: true, ok, status: r.status, errNgrok, ms: Date.now() - t0 };
-            log(`  puente al ERP:              ${ok ? `vivo (HTTP ${r.status}, n8n contesta)` : `🔴 NO RESPONDE${errNgrok ? ' — ' + errNgrok : ` — HTTP ${r.status}, no contesta n8n`}`}`);
-            if (!ok) {
-                reporte.puenteCaido = true;
-                reporte.motivoPuente = errNgrok === 'ERR_NGROK_3200'
-                    ? 'el túnel de la automatización está apagado'
-                    : `el webhook no contesta como n8n (HTTP ${r.status}${errNgrok ? ', ' + errNgrok : ''})`;
-            }
+            // n8n vivo con el flujo activo contesta 404 diciendo que no acepta
+            // GET. Ese texto ES la prueba de que hay un n8n del otro lado; un
+            // 404 a secas puede ser cualquier cosa (un túnel apagado, un proxy).
+            ok = (/not registered for GET/i.test(cuerpo) || /Did you mean to make a POST/i.test(cuerpo)) && !errNgrok;
+            detalle = ok ? `HTTP ${r.status}, contesta n8n` : (errNgrok || `HTTP ${r.status}, no contesta n8n`);
         } catch (e) {
-            reporte.checks.puenteERP = { configurado: true, ok: false, error: e.message };
+            detalle = e.message;
+        }
+        const host = (() => { try { return new (require('url').URL)(p.url).host; } catch { return p.url; } })();
+        const enUso = activos.size === 0 || activos.has(p.taller);
+        reporte.checks.puentes.push({ ...p, ok, detalle, enUso, ms: Date.now() - t0 });
+        const marca = ok ? 'vivo' : (enUso ? '🔴 ' + detalle : '⚠ ' + detalle + ' (este taller no lo usa)');
+        log(`  puente ${host.padEnd(28)} ${marca}`);
+        if (!ok && enUso) {
             reporte.puenteCaido = true;
-            reporte.motivoPuente = `no se pudo llegar al webhook (${e.message})`;
-            log(`  puente al ERP:              🔴 ${e.message}`);
+            reporte.motivoPuente = `${host}: ${detalle}`;
         }
     }
 
@@ -249,7 +295,7 @@ function guardarEstado(e) {
         log(`\n🔴 PUENTE AL ERP CAÍDO — ${reporte.motivoPuente}`);
         log('  Efecto: cada service que se finalice con repuestos NO va a generar su orden');
         log('  de venta, y hasta el 20-ago-2026 eso no dejaba ningún rastro.');
-        log('  Qué hacer: avisarle a Mica que levante el túnel / la instancia de n8n.');
+        log('  Qué hacer: avisarle a Mica que el n8n de la automatización no contesta.');
         log('  Después: cruzar contra Contabilium las órdenes finalizadas mientras estuvo caído');
         log('  (en la app, las que digan "LA ORDEN DE VENTA NO SALIÓ").');
         notificar('🔴 Mechanic Pro — el puente al ERP está caído',

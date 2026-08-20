@@ -1,3 +1,4 @@
+import { instanteAR } from '@/lib/fechaAR';
 import type {
     SupabaseBike,
     SupabaseCarrera,
@@ -367,7 +368,7 @@ export function dossierATexto(d: DossierCliente): string {
         L.push("");
         L.push("ÚLTIMOS TRABAJOS:");
         for (const v of d.historial.slice(0, 4)) {
-            const fecha = v.fecha ? new Date(v.fecha).toLocaleDateString("es-AR") : "sin fecha";
+            const fecha = v.fecha ? instanteAR(v.fecha) : "sin fecha";
             L.push(`- ${fecha} · ${v.bici} · ${v.trabajos.join(", ") || "service"}`);
             if (v.notasMecanico) L.push(`  El mecánico anotó: ${v.notasMecanico}`);
         }

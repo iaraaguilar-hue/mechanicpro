@@ -5,6 +5,8 @@ import { formatOrdenNumber } from '@/lib/formatId';
 import { cleanItemName } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { getBase64ImageFromUrl } from '@/lib/pdfGenerator';
+import { instanteARLargo, entregaMostrable } from '@/lib/fechaAR';
+import { notasParaElCliente } from '@/lib/notasServicio';
 
 function stripHtml(html: string): string {
   if (!html) return '';
@@ -52,7 +54,9 @@ export const printServiceReport = async (
   const serviceType = serviceTypeRaw.toUpperCase();
 
   const descripcionHtml: string = job.descripcion_catalogo || job.descripcion_html || '';
-  const notesPlain: string = job.notes || job.mechanic_notes || '';
+  // 🔴 Por acá NUNCA pasan las notas internas del taller: `notasParaElCliente`
+  // ni siquiera mira ese campo, y tiene tests que lo prueban.
+  const notesPlain: string = notasParaElCliente(job);
 
   const basePrice = Number(job.basePrice) || Number(job.precio_base) || 0;
   const extraItems = job.extraItems || job.items_extra || [];
@@ -98,8 +102,20 @@ export const printServiceReport = async (
   const totalProducts = products.reduce((acc: number, row: any) => acc + (Number(row.price) || 0), 0);
   const grandTotal = totalLabor + totalProducts;
   
-  const dateInStr = job.fecha_ingreso ? new Date(job.fecha_ingreso).toLocaleDateString('es-AR') : new Date().toLocaleDateString('es-AR');
-  const dateOutStr = job.fecha_entrega ? new Date(job.fecha_entrega).toLocaleDateString('es-AR') : null;
+  // 🚩 Fechas: ver `lib/fechaAR.ts`. El ingreso es un INSTANTE (va en hora de
+  // Argentina); la entrega la resuelve `entregaMostrable`: si la bici ya se
+  // retiró va la fecha REAL, y si no la prometida — siempre diciendo cuál es.
+  // Antes acá se hacía `new Date(fecha_entrega).toLocaleDateString('es-AR')`,
+  // que le restaba 3 horas a un día de calendario: la orden 311 tenía prometido
+  // el 10 y el comprobante decía 9.
+  const dateInStr = instanteARLargo(job.fecha_ingreso || job.date_in || new Date().toISOString());
+  const entrega = entregaMostrable(
+    job.fecha_entregado ?? job.date_delivered,
+    job.fecha_entrega ?? job.date_out,
+    { largo: true },
+  );
+  const dateOutStr = entrega ? entrega.texto : null;
+  const dateOutLabel = entrega ? entrega.etiqueta : null;
 
   const safeClientName = clientName.trim().replace(/\s+/g, '_');
   const printFileName = `${safeClientName}_#${formatOrdenNumber(job.numero_orden, job.id)}_Informe_Service`;
@@ -112,6 +128,7 @@ export const printServiceReport = async (
     jobNo: formatOrdenNumber(job.numero_orden, job.id),
     dateIn: dateInStr,
     dateOut: dateOutStr,
+    dateOutLabel,
     clientName,
     clientDni,
     clientPhone,
@@ -124,7 +141,7 @@ export const printServiceReport = async (
     totalLabor,
     totalProducts,
     grandTotal,
-    notes: job.notes || job.mechanic_notes || '',
+    notes: notasParaElCliente(job),
     tallerName: taller?.nombre || '',
   };
 

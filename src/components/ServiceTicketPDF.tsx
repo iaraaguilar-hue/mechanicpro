@@ -199,6 +199,8 @@ export interface ServiceTicketPDFProps {
     jobNo: string;
     dateIn: string;
     dateOut: string | null;
+    /** "Entregada el" o "Entrega estimada": la fecha nunca va sin decir cuál es. */
+    dateOutLabel?: string | null;
     clientName: string;
     clientDni: string;
     clientPhone: string;
@@ -233,7 +235,7 @@ export const ServiceTicketPDF: React.FC<ServiceTicketPDFProps> = ({ data }) => {
             <Text style={styles.headerDate}>Ingreso: {data.dateIn}</Text>
             {data.dateOut && (
               <Text style={[styles.headerDateOut, { color: data.primaryColor }]}>
-                Entrega: {data.dateOut}
+                {data.dateOutLabel || 'Entrega'}: {data.dateOut}
               </Text>
             )}
           </View>

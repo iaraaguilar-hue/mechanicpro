@@ -151,7 +151,10 @@ export interface SupabaseService {
     tipo_servicio?: string;
     precio_total?: number;
     precio_base?: number;
+    /** Notas que VE EL CLIENTE (comprobante, mensajes). Ver lib/notasServicio.ts. */
     notas_mecanico?: string;
+    /** Notas que NO salen del taller: nunca en el PDF ni en mensajes al cliente. */
+    notas_internas?: string | null;
     fecha_entrega?: string | null;
     fecha_finalizacion?: string | null;
     fecha_entregado?: string | null;

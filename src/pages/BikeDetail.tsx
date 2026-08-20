@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from "react";
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { useDataStore, type SupabaseBike } from "@/store/dataStore";
 import { printServiceReport } from "@/lib/printServiceBtn";
+import { instanteARTexto, entregaMostrable } from "@/lib/fechaAR";
+import { notasParaElCliente, notasDelTaller, tieneNotasInternas } from "@/lib/notasServicio";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -409,9 +411,19 @@ export default function BikeDetail() {
                                                             </Badge>
                                                             <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-4 flex-1">
                                                                 <span className="font-semibold text-slate-800">
-                                                                    {new Date(service.fecha_ingreso || "").toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                                                                    {instanteARTexto(service.fecha_ingreso)}
                                                                 </span>
                                                                 <StatusBadge status={service.estado || ''} />
+                                                                {/* Cuándo salió la bici: la fecha REAL si ya se retiró,
+                                                                    la prometida si todavía no. Siempre rotulada. */}
+                                                                {(() => {
+                                                                    const e = entregaMostrable(service.fecha_entregado, service.fecha_entrega);
+                                                                    return e ? (
+                                                                        <span className="text-xs text-slate-500 whitespace-nowrap">
+                                                                            {e.etiqueta} {e.texto}
+                                                                        </span>
+                                                                    ) : null;
+                                                                })()}
                                                             </div>
                                                         </div>
                                                     </AccordionTrigger>
@@ -464,11 +476,19 @@ export default function BikeDetail() {
                                                                 </div>
 
                                                                 <div>
-                                                                    <h4 className="text-sm font-semibold mb-1 text-muted-foreground uppercase text-xs tracking-wider">Notas del Mecánico</h4>
+                                                                    <h4 className="text-sm font-semibold mb-1 text-muted-foreground uppercase text-xs tracking-wider">Notas para el cliente</h4>
                                                                     <p className="text-sm text-slate-700 italic">
-                                                                        "{service.notas_mecanico || "N/A"}"
+                                                                        "{notasParaElCliente(service) || "N/A"}"
                                                                     </p>
                                                                 </div>
+                                                                {/* Las internas se muestran acá porque esta pantalla la ve el
+                                                                    taller. Al cliente nunca le llegan (lib/notasServicio.ts). */}
+                                                                {tieneNotasInternas(service) && (
+                                                                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                                                                        <h4 className="text-xs font-semibold mb-1 text-amber-700 uppercase tracking-wider">Notas internas del taller</h4>
+                                                                        <p className="text-sm text-slate-700 italic">"{notasDelTaller(service)}"</p>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                         <div className="mt-4 pt-2 border-t flex justify-end">

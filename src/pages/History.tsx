@@ -21,45 +21,22 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
-import { Search, FilterX, ChevronUp, ChevronDown, FileText, Pencil, Trash2, Eye, ClipboardList, Calendar as CalendarIcon, Wrench, Package, Info, Tag, MessageCircle } from "lucide-react";
+import { Search, FilterX, ChevronUp, ChevronDown, FileText, Pencil, Trash2, Eye, ClipboardList, Calendar as CalendarIcon, Wrench, Package, Info, Tag, MessageCircle, Lock } from "lucide-react";
 import { printServiceReport } from '@/lib/printServiceBtn';
 import { ServiceModal } from '@/components/ServiceModal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { es } from "date-fns/locale";
+import { instanteAR, instanteARConHora, entregaMostrable } from '@/lib/fechaAR';
+import { notasParaElCliente, notasDelTaller, tieneNotasInternas } from '@/lib/notasServicio';
 
-export const formatSafeDate = (dateString: string | null | undefined): string => {
-    if (!dateString) return '-';
-    // Extraer solo la parte de la fecha, ignorando timestamps si los hay
-    const justDate = dateString.split('T')[0];
-    if (!justDate) return '-';
-    // Cortar el string YYYY-MM-DD
-    const [year, month, day] = justDate.split('-');
+// 🚩 Las fechas se formatean en UN SOLO lugar: `lib/fechaAR.ts`. Ahí está
+// explicado por qué `fecha_ingreso`/`fecha_finalizacion`/`fecha_entregado` se
+// convierten a hora de Argentina y `fecha_entrega` (la prometida) NO.
+// Antes había dos copias de `formatSafeDate` (acá y en Workshop) y media docena
+// de `toLocaleDateString` sueltos: la misma fecha se veía distinta según la
+// pantalla, que es el "9 vs 10" que apareció en la orden 311.
+export { instanteAR as formatSafeDate } from '@/lib/fechaAR';
 
-    if (!year || !month || !day) return '-';
-
-    // Devolver literal sin pasar por new Date()
-    return `${day}/${month}/${year.slice(-2)}`; // Formato DD/MM/YY
-};
-
-// fecha_finalizacion es un timestamp real (el momento exacto en que el mecánico
-// apretó el botón verde "Finalizar"). A diferencia de las fechas "solo día", acá
-// SÍ pasamos por new Date() y lo mostramos en hora local de Argentina, para que
-// un service cerrado de noche no aparezca con la fecha del día siguiente (UTC).
-const AR_TZ = "America/Argentina/Buenos_Aires";
-
-export const formatFinalizacion = (iso: string | null | undefined): string => {
-    if (!iso) return "-";
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return "-";
-    return d.toLocaleDateString("es-AR", { timeZone: AR_TZ, day: "2-digit", month: "2-digit", year: "2-digit" });
-};
-
-export const formatFinalizacionHora = (iso: string | null | undefined): string => {
-    if (!iso) return "-";
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return "-";
-    return d.toLocaleString("es-AR", { timeZone: AR_TZ, day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
-};
 import { format } from "date-fns";
 import { cn, formatInternalServiceName } from "@/lib/utils";
 type DateRange = {
@@ -196,8 +173,11 @@ export default function History() {
                 const rawDateIn = service.fecha_ingreso || "2024-01-01T00:00:00";
                 const rawDateOut = service.fecha_entrega;
 
-                const displayDateIn = formatSafeDate(rawDateIn);
-                const displayDateOut = formatSafeDate(rawDateOut);
+                // fecha_ingreso es un INSTANTE (lo escribe new Date()); la
+                // entrega se resuelve con la regla de entregaMostrable: la real
+                // si la bici ya se retiró, la prometida si todavía no.
+                const displayDateIn = instanteAR(rawDateIn);
+                const entrega = entregaMostrable(service.fecha_entregado, rawDateOut);
 
                 // dateObj is used for filtering, so it needs to be a Date object
                 const isDateOnly = /^\d{4}-\d{2}-\d{2}$/.test(rawDateIn);
@@ -215,12 +195,12 @@ export default function History() {
                     numero_orden: service.numero_orden,
                     status: service.estado || "Unknown",
                     displayDateIn,
-                    displayDateOut,
+                    entrega,
                     rawDateOut,
                     rawDate: rawDateIn,
                     rawFechaFinalizacion: service.fecha_finalizacion,
-                    displayFinalizacion: formatFinalizacion(service.fecha_finalizacion),
-                    displayFinalizacionHora: formatFinalizacionHora(service.fecha_finalizacion),
+                    displayFinalizacion: instanteAR(service.fecha_finalizacion),
+                    displayFinalizacionHora: instanteARConHora(service.fecha_finalizacion),
                     dateObj,
                     clientName: client?.nombre || "Cliente Desconocido",
                     clientDni: client?.dni || "",
@@ -236,6 +216,7 @@ export default function History() {
                         basePrice: service.precio_base,
                         totalPrice: service.precio_total,
                         mechanic_notes: service.notas_mecanico,
+                        notas_internas: service.notas_internas,
                         extraItems: service.items_extra?.map((i: any) => ({
                             id: i.id || crypto.randomUUID(),
                             description: i.descripcion,
@@ -550,8 +531,13 @@ export default function History() {
                                                 </div>
                                             </TableCell>
                                             <TableCell className="py-4 w-28">
-                                                {job.rawDateOut ? (
-                                                    <span className="font-semibold text-slate-600">{job.displayDateOut}</span>
+                                                {job.entrega ? (
+                                                    <div className="flex flex-col">
+                                                        <span className={job.entrega.real ? "font-semibold text-slate-700" : "font-semibold text-slate-500"}>{job.entrega.texto}</span>
+                                                        {/* Una fecha sola no dice si la bici ya se retiró o si es la
+                                                            prometida. El rótulo es la diferencia entre un dato y una promesa. */}
+                                                        <span className="text-[10px] text-slate-400 leading-tight">{job.entrega.real ? 'entregada' : 'estimada'}</span>
+                                                    </div>
                                                 ) : (
                                                     <span className="text-slate-400 italic text-sm">-</span>
                                                 )}
@@ -855,15 +841,28 @@ function ExpandedServiceDetail({ job }: { job: any }) {
                 </div>
             </div>
 
-            {/* Notes */}
-            {service.mechanic_notes && (
+            {/* Notes: las del cliente y, si las hay, las internas del taller.
+                Esta pantalla la ve el taller, así que las dos van; el rótulo
+                marca cuál se llevó impresa el cliente. Ver lib/notasServicio.ts. */}
+            {notasParaElCliente(service) && (
                 <div className="mt-8 pt-6 border-t border-gray-100">
                     <h4 className="text-primary flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
-                        <Tag className="w-4 h-4" /> Notas del Mecánico
+                        <Tag className="w-4 h-4" /> Notas para el cliente
                     </h4>
                     <p className="text-sm text-slate-700 italic bg-slate-50 p-4 rounded-lg border border-slate-200">
-                        "{service.mechanic_notes}"
+                        "{notasParaElCliente(service)}"
                     </p>
+                </div>
+            )}
+            {tieneNotasInternas(service) && (
+                <div className="mt-6">
+                    <h4 className="text-slate-500 flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-3">
+                        <Lock className="w-4 h-4" /> Notas internas del taller
+                    </h4>
+                    <p className="text-sm text-slate-700 italic bg-amber-50 p-4 rounded-lg border border-amber-200">
+                        "{notasDelTaller(service)}"
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1.5">Esto no salió en el comprobante del cliente.</p>
                 </div>
             )}
         </div>

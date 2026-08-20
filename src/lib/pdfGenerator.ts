@@ -1,5 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { diaCalendarioLargo, instanteARLargo } from "@/lib/fechaAR";
+import { notasParaElCliente } from "@/lib/notasServicio";
 
 export const getBase64ImageFromUrl = async (imageUrl: string): Promise<string> => {
     if (!imageUrl) return "";
@@ -77,9 +79,11 @@ export const generatePDF = async (
     doc.setFont("helvetica", "normal");
 
     // Date
+    // fecha_entrega es un DIA de calendario, no un instante: se muestra tal
+    // cual se eligió. Ver lib/fechaAR.ts.
     const dateOut = service.date_out
-        ? new Date(service.date_out).toLocaleDateString("es-AR")
-        : new Date().toLocaleDateString("es-AR");
+        ? diaCalendarioLargo(service.date_out)
+        : instanteARLargo(new Date().toISOString());
     doc.text(`Fecha de Salida: ${dateOut}`, margin, yPos);
 
     yPos += 10;
@@ -164,7 +168,8 @@ export const generatePDF = async (
     yPos += 7;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    const notesText = service.mechanic_notes || "Sin observaciones.";
+    // Nunca las notas internas del taller: ver lib/notasServicio.ts.
+    const notesText = notasParaElCliente(service) || "Sin observaciones.";
     // Sanitize timestamps: Remove [DD/MM HH:MM] or similar patterns
     const cleanNotes = notesText.replace(/\[\d{1,2}\/\d{1,2}.*?\]\s?/g, "");
 

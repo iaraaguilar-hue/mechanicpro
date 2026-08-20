@@ -1,6 +1,8 @@
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
 import { type SupabaseService, type SupabaseBike } from '@/store/dataStore';
 import { formatOrdenNumber } from '@/lib/formatId';
+import { diaCalendarioLargo } from '@/lib/fechaAR';
+import { notasParaElCliente } from '@/lib/notasServicio';
 import { useAuthStore } from '@/store/authStore';
 
 const styles = StyleSheet.create({
@@ -125,7 +127,7 @@ export const ServiceReport = ({ service, bike, clientName }: ServiceReportProps)
                     </View>
                     <View style={styles.row}>
                         <Text style={styles.label}>Fecha:</Text>
-                        <Text style={styles.value}>{service.fecha_entrega ? new Date(service.fecha_entrega).toLocaleDateString("es-AR") : "En Curso"}</Text>
+                        <Text style={styles.value}>{service.fecha_entrega ? diaCalendarioLargo(service.fecha_entrega) : "En Curso"}</Text>
                     </View>
                 </View>
 
@@ -139,10 +141,10 @@ export const ServiceReport = ({ service, bike, clientName }: ServiceReportProps)
                     ))}
                 </View>
 
-                {service.notas_mecanico && (
+                {notasParaElCliente(service) && (
                     <View style={styles.section}>
                         <Text style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 5 }}>Observaciones del Mecánico</Text>
-                        <Text style={styles.value}>{service.notas_mecanico}</Text>
+                        <Text style={styles.value}>{notasParaElCliente(service)}</Text>
                     </View>
                 )}
 

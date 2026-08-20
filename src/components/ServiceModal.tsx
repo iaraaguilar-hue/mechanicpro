@@ -3,6 +3,8 @@ import { useDataStore, type SupabaseClient, type SupabaseBike } from "@/store/da
 import { useAuthStore } from "@/store/authStore";
 import { supabase } from "@/lib/supabase";
 import { formatOrdenNumber } from "@/lib/formatId";
+import { diaParaInput } from "@/lib/fechaAR";
+import { ETIQUETAS_NOTAS } from "@/lib/notasServicio";
 import { SuccessModal } from "@/components/SuccessModal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Search, User, Bike as BikeIcon, Plus, CheckCircle, Wrench, Pencil, Trash2, ArrowLeft, Flag, Calendar, ChevronDown } from "lucide-react";
+import { Search, User, Bike as BikeIcon, Plus, CheckCircle, Wrench, Pencil, Trash2, ArrowLeft, Flag, Calendar, ChevronDown, Lock } from "lucide-react";
 import { AddClientDialog } from "@/components/AddClientDialog";
 import { AddBikeDialog } from "@/components/AddBikeDialog";
 import { EditBikeDialog } from "@/components/EditBikeDialog";
@@ -417,6 +419,9 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
     const [catalogoServicios, setCatalogoServicios] = useState<any[]>([]);
     const [serviceType, setServiceType] = useState<string>("");
     const [notes, setNotes] = useState("");
+    // Notas internas del taller: NUNCA salen en el comprobante ni en los
+    // mensajes al cliente. Ver lib/notasServicio.ts.
+    const [notasInternas, setNotasInternas] = useState("");
     const [basePrice, setBasePrice] = useState(40000);
     const [extraItems, setExtraItems] = useState<{ id: string, description: string, price: number, category?: 'part' | 'labor' }[]>([]);
     const [isSaving, setIsSaving] = useState(false);
@@ -472,6 +477,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
 
         setServiceType(existing.tipo_servicio || "");
         setNotes(existing.notas_mecanico || "");
+        setNotasInternas(existing.notas_internas || "");
         setBasePrice(existing.precio_base || 0);
         setExtraItems(
             existing.items_extra?.map((i: any) => ({
@@ -483,7 +489,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
         );
 
         if (existing.fecha_entrega && typeof existing.fecha_entrega === "string") {
-            setFechaEntrega(existing.fecha_entrega.split('T')[0]);
+            setFechaEntrega(diaParaInput(existing.fecha_entrega));
         } else {
             setFechaEntrega("");
         }
@@ -590,6 +596,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                 await updateServicio(serviceId, {
                     tipo_servicio: serviceType,
                     notas_mecanico: notes,
+                    notas_internas: notasInternas,
                     precio_base: basePrice,
                     items_extra: supabaseItems,
                     precio_total: totalPrice,
@@ -619,6 +626,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                     estado: "in_progress",
                     fecha_ingreso: new Date().toISOString(),
                     notas_mecanico: notes,
+                    notas_internas: notasInternas,
                     precio_base: basePrice,
                     items_extra: supabaseItems,
                     precio_total: totalPrice,
@@ -643,6 +651,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                     onClose={() => {
                         setSuccessMessage(null);
                         setNotes("");
+                        setNotasInternas("");
                         setBasePrice(0);
                         setExtraItems([]);
                         setServiceType("");
@@ -824,14 +833,32 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                         />
                     </div>
 
+                    {/* Las notas van partidas en dos desde el 20-ago-2026: lo que se
+                        lleva impreso el cliente y lo que es del taller. El rótulo de
+                        cada una dice adónde va, que es lo único que evita el error. */}
                     <div className="space-y-2">
-                        <Label>Observaciones / Detalle del Trabajo</Label>
+                        <Label>{ETIQUETAS_NOTAS.cliente}</Label>
+                        <p className="text-sm text-muted-foreground -mt-1">{ETIQUETAS_NOTAS.clienteAyuda}</p>
                         <Textarea
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             rows={3}
-                            placeholder="Notas de ingreso..."
+                            placeholder={ETIQUETAS_NOTAS.clientePlaceholder}
                             className="text-lg"
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="flex items-center gap-2">
+                            <Lock className="h-3.5 w-3.5 text-slate-400" /> {ETIQUETAS_NOTAS.interna}
+                        </Label>
+                        <p className="text-sm text-muted-foreground -mt-1">{ETIQUETAS_NOTAS.internaAyuda}</p>
+                        <Textarea
+                            value={notasInternas}
+                            onChange={(e) => setNotasInternas(e.target.value)}
+                            rows={2}
+                            placeholder={ETIQUETAS_NOTAS.internaPlaceholder}
+                            className="text-lg bg-slate-50"
                         />
                     </div>
 

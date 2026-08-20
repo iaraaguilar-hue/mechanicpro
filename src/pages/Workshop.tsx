@@ -20,6 +20,8 @@ import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
 import { resolveOrdenWebhookUrl, resolveEntregadoWebhookUrl } from "@/lib/ordenWebhook";
 import { claveProducto } from "@/lib/buscadorProductos";
+import { instanteAR, diaCalendario } from "@/lib/fechaAR";
+import { ETIQUETAS_NOTAS } from "@/lib/notasServicio";
 import {
     chequearOrdenParaERP,
     clavesAChequear,
@@ -33,19 +35,11 @@ import { avancesActivos, trabajosPendientes, tareasActivas, bloqueoFinalizacionA
 import { tourBloqueaCierreDialog } from "@/components/OnboardingTour";
 import SegundoParDeOjos from "@/components/SegundoParDeOjos";
 
-export const formatSafeDate = (dateString: string | null | undefined): string => {
-    if (!dateString) return '-';
-    // Extraer solo la parte de la fecha, ignorando timestamps si los hay
-    const justDate = dateString.split('T')[0];
-    // Cortar el string YYYY-MM-DD
-    const [year, month, day] = justDate.split('-');
-
-    // Fallback if split fails
-    if (!year || !month || !day) return '-';
-
-    // Devolver literal sin pasar por new Date()
-    return `${day}/${month}/${year.slice(-2)}`; // Formato DD/MM/YY
-};
+// 🚩 Las fechas se formatean en UN SOLO lugar: `lib/fechaAR.ts`. Ahí está
+// explicado por qué los INSTANTES (fecha_ingreso, fecha_finalizacion,
+// fecha_entregado) se convierten a hora de Argentina y la fecha PROMETIDA
+// (fecha_entrega, que la escribe un <input type="date">) se muestra tal cual.
+export { instanteAR as formatSafeDate } from '@/lib/fechaAR';
 
 // ─────────────────────────────────────────────────────────────
 // Dashboard Job shape (computed from store data)
@@ -391,7 +385,7 @@ function MobileJobCard({ job, onClick, onDeliver, onReopen }: { job: DashboardJo
                         <StatusBadge status={job.status} />
                         <span className="text-xs text-slate-400 flex items-center gap-1">
                             <Clock size={10} />
-                            {job.date_out ? formatSafeDate(job.date_out) : formatSafeDate(job.date_in)}
+                            {job.date_out ? `Entrega ${diaCalendario(job.date_out)}` : instanteAR(job.date_in)}
                         </span>
                     </div>
                     <ChevronRight size={18} className="text-slate-300" />
@@ -470,6 +464,9 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                 service_type: serviceData.tipo_servicio,
                 date_in: serviceData.fecha_ingreso,
                 date_out: serviceData.fecha_entrega,
+                // La fecha REAL de entrega (el botón Entregar). El comprobante
+                // prefiere esta sobre la prometida. Ver lib/fechaAR.ts.
+                date_delivered: serviceData.fecha_entregado,
                 basePrice: serviceData.precio_base,
                 totalPrice: serviceData.precio_total,
                 extraItems: serviceData.items_extra?.map((i: any) => ({
@@ -566,13 +563,19 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                 </TableCell>
                 <TableCell className="font-medium text-muted-foreground w-28">
                     <div className="flex flex-col gap-1">
-                        <span className="text-slate-900 font-semibold">{formatSafeDate(job.date_in)}</span>
+                        <span className="text-slate-900 font-semibold">{instanteAR(job.date_in)}</span>
                         <span className="text-[10px] text-primary font-bold mt-1" title={job.service_id}>{formatOrdenNumber(job.numero_orden, job.service_id)}</span>
                     </div>
                 </TableCell>
                 <TableCell className="font-medium p-0 m-0 align-top pt-4">
                     {job.date_out ? (
-                        <span className="text-slate-600 font-semibold text-sm whitespace-nowrap">{formatSafeDate(job.date_out)}</span>
+                        <div className="flex flex-col">
+                            {/* fecha_entrega es la fecha PROMETIDA y se muestra tal cual se
+                                eligió (ver lib/fechaAR.ts). El rótulo evita que se lea como
+                                "ya se entregó": la bici sigue en el taller. */}
+                            <span className="text-slate-600 font-semibold text-sm whitespace-nowrap">{diaCalendario(job.date_out)}</span>
+                            <span className="text-[10px] text-slate-400 leading-tight">estimada</span>
+                        </div>
                     ) : (
                         <span className="text-slate-400 italic text-sm">-</span>
                     )}
@@ -698,6 +701,7 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
     const client = bike ? clientes.find(c => c.id === bike.cliente_id) : null;
 
     const [notes, setNotes] = useState(service?.notas_mecanico || "");
+    const [notasInternas, setNotasInternas] = useState(service?.notas_internas || "");
     const [healthCheckData, setHealthCheckData] = useState<HealthCheckData[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [pendientesConfirm, setPendientesConfirm] = useState<string[] | null>(null);
@@ -842,6 +846,7 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
             // Update service notes
             await updateServicio(job.service_id, {
                 notas_mecanico: notes,
+                notas_internas: notasInternas,
                 checklist_data: {},
             });
 
@@ -964,6 +969,7 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                     service_type: service.tipo_servicio as any,
                     date_in: service.fecha_ingreso,
                     date_out: service.fecha_entrega,
+                    date_delivered: service.fecha_entregado,
                     basePrice: service.precio_base,
                     totalPrice: service.precio_total,
                     extraItems: service.items_extra?.map((i: any) => ({
@@ -1027,9 +1033,27 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                             </div>
                         </div>
                         <div data-tour="finalizar-obs" className="space-y-2">
-                            <Label htmlFor="notes">Observaciones Finales</Label>
-                            <Textarea id="notes" className="h-32" placeholder="Notas para el cliente..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+                            <Label htmlFor="notes">{ETIQUETAS_NOTAS.cliente}</Label>
+                            <Textarea id="notes" className="h-32" placeholder={ETIQUETAS_NOTAS.clientePlaceholder} value={notes} onChange={(e) => setNotes(e.target.value)} />
+                            <p className="text-xs text-muted-foreground">{ETIQUETAS_NOTAS.clienteAyuda}</p>
                         </div>
+                    </div>
+
+                    {/* Notas internas: lo que el taller necesita recordar y el cliente
+                        no tiene por qué leer. NUNCA salen en el comprobante (el candado
+                        vive en lib/notasServicio.ts, con tests). */}
+                    <div className="space-y-2">
+                        <Label htmlFor="notas-internas" className="flex items-center gap-2">
+                            <Lock className="h-3.5 w-3.5 text-slate-400" /> {ETIQUETAS_NOTAS.interna}
+                        </Label>
+                        <Textarea
+                            id="notas-internas"
+                            className="h-20 bg-slate-50"
+                            placeholder={ETIQUETAS_NOTAS.internaPlaceholder}
+                            value={notasInternas}
+                            onChange={(e) => setNotasInternas(e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">{ETIQUETAS_NOTAS.internaAyuda}</p>
                     </div>
 
                     {/* Diagnóstico al finalizar: se muestra salvo que el taller haya

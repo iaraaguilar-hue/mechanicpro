@@ -4,6 +4,7 @@ import { useDataStore } from "@/store/dataStore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { construirDossier } from "@/lib/dossierCliente";
+import { instanteAR } from '@/lib/fechaAR';
 import {
     Bike, Flag, Wrench, AlertTriangle, CalendarClock, Coins, History,
 } from "lucide-react";
@@ -191,7 +192,7 @@ export default function FichaCliente({ clienteId }: { clienteId: string }) {
                             {historial.slice(0, 3).map(v => (
                                 <div key={v.servicioId} className="text-sm border-l-2 border-slate-200 pl-2">
                                     <div className="text-xs text-muted-foreground leading-tight">
-                                        {v.fecha ? new Date(v.fecha).toLocaleDateString("es-AR") : "sin fecha"}
+                                        {v.fecha ? instanteAR(v.fecha) : "sin fecha"}
                                         {v.bici && (
                                             <>
                                                 {" · "}

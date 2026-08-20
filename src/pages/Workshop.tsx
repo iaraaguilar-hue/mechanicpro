@@ -9,7 +9,7 @@ import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign } from "lucide-react";
+import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign, PackageSearch } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { servicioRevenue } from "@/lib/servicioRevenue";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -19,6 +19,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
 import { resolveOrdenWebhookUrl, resolveEntregadoWebhookUrl } from "@/lib/ordenWebhook";
+import {
+    chequearOrdenParaERP,
+    clavesAChequear,
+    itemsQueVanAlERP,
+    sugerirProductoERP,
+    type AvisoOrdenERP,
+    type VinculoProducto,
+} from "@/lib/chequeoOrdenERP";
 import { EtapasChecklist } from "@/components/EtapasChecklist";
 import { avancesActivos, trabajosPendientes, tareasActivas, bloqueoFinalizacionActivo, tareasLibresPendientes } from "@/lib/planFeatures";
 import { tourBloqueaCierreDialog } from "@/components/OnboardingTour";
@@ -694,6 +702,8 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
     const [pendientesConfirm, setPendientesConfirm] = useState<string[] | null>(null);
     const [bloqueoPendientes, setBloqueoPendientes] = useState<string[] | null>(null);
     const [precioCeroConfirm, setPrecioCeroConfirm] = useState(false);
+    const [avisosERP, setAvisosERP] = useState<AvisoOrdenERP[] | null>(null);
+    const productos = useDataStore(s => s.productos);
 
 
     const handleFinalize = async () => {
@@ -743,6 +753,75 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
             setPrecioCeroConfirm(true);
             return;
         }
+        await chequearItemsYFinalizar();
+    };
+
+    // ─────────────────────────────────────────────────────────────
+    // Cuarto eslabón: el candado de la ORDEN DE VENTA al ERP (20-ago-2026).
+    //
+    // Nace de dos órdenes reales de Probikes que se cerraron bien en la app y
+    // NUNCA generaron su orden de venta en Contabilium, sin que nadie se
+    // enterara: la 311 (un renglón de repuesto guardado sin nombre, $50.288) y
+    // la 319 (dos cámaras cuyo nombre no existe en el ERP, porque el buscador
+    // lo había aprendido de alguien que lo tipeó). Ver `chequeoOrdenERP.ts`.
+    //
+    // Lo que hace acá es lo único que se puede hacer a tiempo: avisar mientras
+    // la orden todavía se puede corregir. NO bloquea, igual que los otros tres.
+    // ─────────────────────────────────────────────────────────────
+    const chequearItemsYFinalizar = async () => {
+        if (!service) return;
+        const estadoActual = (service.estado || '').toLowerCase();
+        const yaCerrado = estadoActual === 'ready' || estadoActual === 'delivered';
+
+        // Ya cerrado = el webhook no vuelve a salir, no hay nada que prevenir.
+        if (yaCerrado) { await doFinalize(); return; }
+
+        // El chequeo del ERP solo aplica si esta finalización va a disparar el
+        // webhook de verdad (mismo guard y mismo anti-doble-disparo que abajo).
+        const erpActivo = !!resolveOrdenWebhookUrl(taller_id, ordenWebhookUrl) && !service.webhook_erp_disparado;
+
+        const vinculos = new Map<string, VinculoProducto>();
+        let pudoMedir = true;
+
+        if (erpActivo) {
+            const claves = clavesAChequear(service.items_extra);
+            if (claves.length > 0 && taller_id) {
+                // Se consulta el catálogo COMPLETO del taller, sin los filtros
+                // del buscador (`activo`/`sugerible`): la pregunta es "¿existe
+                // en el ERP?", no "¿lo sugiere el buscador?". Un casco está en
+                // Contabilium aunque el buscador no lo ofrezca como repuesto.
+                try {
+                    const { data, error } = await supabase
+                        .from('productos_taller')
+                        .select('clave,nombre,sku,id_externo,origen')
+                        .eq('taller_id', taller_id)
+                        .in('clave', claves);
+                    if (error) throw error;
+                    for (const p of (data || []) as (VinculoProducto & { clave: string })[]) {
+                        vinculos.set(p.clave, p);
+                    }
+                } catch (e: any) {
+                    // No se pudo leer el catálogo → NO se inventa un aviso. Un
+                    // candado que grita sin haber medido es peor que uno mudo:
+                    // en dos semanas lo ignoran. El chequeo de "sin nombre" (que
+                    // no necesita catálogo) sí sigue corriendo.
+                    console.warn('[Finalizar] No se pudo chequear el catálogo del ERP:', e?.message);
+                    pudoMedir = false;
+                }
+            }
+        }
+
+        const avisos = chequearOrdenParaERP({
+            items: service.items_extra,
+            vinculos,
+            erpActivo: erpActivo && pudoMedir,
+            sugerir: (descripcion) => sugerirProductoERP(descripcion, productos),
+        });
+
+        if (avisos.length > 0) {
+            setAvisosERP(avisos);
+            return;
+        }
         await doFinalize();
     };
 
@@ -780,11 +859,12 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
 
                 // 2. Inmediatamente después del éxito del update, enviamos el Webhook
                 try {
-                    // Filtrar solo los ítems que son productos (excluir mano de obra y productos ML)
-                    const esML = (desc: string) => /\(ml\)|\(mercado libre\)/i.test(desc);
-                    const productosFisicos = (service.items_extra || []).filter(
-                        (p: any) => p.categoria === 'part' && !esML(p.descripcion || '')
-                    );
+                    // Solo los ítems que son productos (sin mano de obra ni ML).
+                    // 🚩 El filtro vive en `chequeoOrdenERP.ts` y lo usan los DOS:
+                    // el que arma este payload y el candado que chequea la orden
+                    // antes de finalizar. Si midieran conjuntos distintos, el
+                    // candado avisaría de ítems que no viajan y callaría los que sí.
+                    const productosFisicos = itemsQueVanAlERP(service.items_extra || []);
 
                     if (productosFisicos.length > 0) {
                         const totalProductos = productosFisicos.reduce((sum: number, p: any) => sum + (Number(p.precio) || 0), 0);
@@ -1026,6 +1106,64 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                     confirmLabel="Cerrar en $0 igual"
                     confirmClassName="bg-green-600 hover:bg-green-700 text-white"
                     cancelLabel="Volver y cargar el precio"
+                />
+            )}
+
+            {/* Candado de la orden de venta al ERP: avisa lo que la automatización
+                no va a poder facturar. No bloquea (ver chequeoOrdenERP.ts). */}
+            {avisosERP && (
+                <ConfirmDialog
+                    open={!!avisosERP}
+                    onClose={() => { setAvisosERP(null); onClose(); }}
+                    onConfirm={() => { setAvisosERP(null); doFinalize(); }}
+                    icon={<PackageSearch className="h-7 w-7" />}
+                    iconClassName="bg-amber-100 text-amber-600"
+                    title={avisosERP.length === 1 ? "Revisá este repuesto antes de cerrar" : `Revisá ${avisosERP.length} repuestos antes de cerrar`}
+                    description={
+                        <div className="text-left space-y-3">
+                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-3 max-h-56 overflow-y-auto">
+                                {avisosERP.map((aviso, i) => (
+                                    <div key={i} className="flex items-start gap-2">
+                                        <span className="text-amber-500 mt-0.5">•</span>
+                                        {aviso.tipo === 'sin_nombre' ? (
+                                            <div>
+                                                <p className="text-slate-800 font-semibold">
+                                                    {aviso.veces === 1
+                                                        ? `Hay un renglón sin nombre, de $ ${aviso.precio.toLocaleString("es-AR")}.`
+                                                        : `Hay ${aviso.veces} renglones sin nombre, de $ ${aviso.precio.toLocaleString("es-AR")} en total.`}
+                                                </p>
+                                                <p className="text-slate-600 text-xs mt-0.5">
+                                                    Va a salir en blanco en el comprobante del cliente. Completalo desde la orden.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <p className="text-slate-800">
+                                                    <span className="font-semibold">"{aviso.descripcion}"</span>
+                                                    {aviso.veces > 1 ? ` (x${aviso.veces})` : ''} no está en el catálogo del ERP.
+                                                </p>
+                                                {aviso.sugerencia ? (
+                                                    <p className="text-slate-600 text-xs mt-0.5">
+                                                        ¿Puede ser <span className="font-semibold text-slate-700">"{aviso.sugerencia}"</span>? Cambialo desde la orden y buscalo con el buscador.
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-slate-600 text-xs mt-0.5">
+                                                        Buscalo con el buscador de la orden y elegí el del catálogo.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                            <p className="text-slate-500 text-xs">
+                                Si lo dejás así, la orden de venta puede no generarse en el ERP y nadie te va a avisar.
+                            </p>
+                        </div>
+                    }
+                    confirmLabel="Finalizar igual"
+                    confirmClassName="bg-green-600 hover:bg-green-700 text-white"
+                    cancelLabel="Volver y corregir"
                 />
             )}
         </Dialog>

@@ -388,7 +388,11 @@ export const useDataStore = create<DataState>((set, get) => ({
         // (en Probikes, 3.428 de 5.632). Ver `mp_clasificar_familias.cjs`.
         const pagina = (desde: number) => supabase
             .from('productos_taller')
-            .select('id,nombre,clave,sku,precio,categoria,veces_usado,ultima_vez', { count: 'exact' })
+            // `id_externo` y `origen` viajan desde el 20-ago-2026: son lo que
+            // deja saber si un producto está vinculado al ERP. Los usan el
+            // candado pre-finalización (chequeoOrdenERP.ts) y el payload del
+            // webhook de la orden de venta. Son dos strings cortos por fila.
+            .select('id,nombre,clave,sku,id_externo,origen,precio,categoria,veces_usado,ultima_vez', { count: 'exact' })
             .eq('taller_id', tallerId)
             .eq('activo', true)
             .eq('sugerible', true)

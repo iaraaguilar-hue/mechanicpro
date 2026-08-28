@@ -25,7 +25,8 @@ import { NuevoBadge } from "@/components/NuevoBadge";
 import { type TareaService } from "@/lib/planFeatures";
 import { tourBloqueaCierreDialog } from "@/components/OnboardingTour";
 import DictadoOrden from "@/components/DictadoOrden";
-import { buscarProductos } from "@/lib/buscadorProductos";
+import { buscarProductos, claveProducto } from "@/lib/buscadorProductos";
+import { vieneComoRepuesto } from "@/lib/chequeoOrdenERP";
 import { type OrdenDictada } from "@/store/dataStore";
 
 // Service types (const object pattern for erasableSyntaxOnly compatibility)
@@ -521,6 +522,28 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [dictadoInicial, catalogoServicios, productosCargados, serviceId]);
 
+    const productos = useDataStore(s => s.productos);
+
+    // ── "Che, esto lo venís cargando como repuesto" (28-ago-2026) ────────────
+    // La categoría del ítem decide, EN SILENCIO, si el repuesto llega al ERP y
+    // baja del stock: el payload del webhook filtra `categoria = 'part'`. La
+    // orden 318 se cerró con unas pastillas de freno marcadas como mano de obra
+    // y NUNCA generó la orden de venta; nadie se enteró hasta que Iara lo buscó
+    // 16 días después. Acá se avisa en el momento en que todavía se arregla
+    // solo, que es mientras se está cargando. La regla y su calibración viven
+    // en chequeoOrdenERP.ts (las mismas que usa el candado antes de finalizar).
+    const catalogoPorClave = useMemo(
+        () => new Map(productos.map(p => [p.clave, p])),
+        [productos],
+    );
+    const pareceRepuesto = (item: { description: string; category?: 'part' | 'labor' }) => {
+        if (item.category !== 'labor') return null;
+        const clave = claveProducto(item.description || '');
+        if (!clave) return null;
+        const p = catalogoPorClave.get(clave);
+        return vieneComoRepuesto(p) ? p : null;
+    };
+
     const totalPrice = basePrice + extraItems.reduce((acc, item) => acc + item.price, 0);
 
     const handleTypeChange = (type: string, price: number) => {
@@ -531,8 +554,6 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
     const addItem = () => {
         setExtraItems([...extraItems, { id: Date.now().toString(), description: "", price: 0, category: 'part' }]);
     };
-
-    const productos = useDataStore(s => s.productos);
 
     // ─────────────────────────────────────────────────────────
     // Volcar el dictado al formulario (idea 1). Reglas:
@@ -759,8 +780,11 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                             <p className="text-sm text-muted-foreground italic text-center py-2">Sin items extra</p>
                         ) : (
                             <div className="space-y-2">
-                                {extraItems.map((item) => (
-                                    <div key={item.id} className="flex gap-2 items-center">
+                                {extraItems.map((item) => {
+                                  const avisoRepuesto = pareceRepuesto(item);
+                                  return (
+                                    <div key={item.id}>
+                                    <div className="flex gap-2 items-center">
                                         <div className="flex bg-muted rounded-md p-1 gap-1">
                                             <Button type="button" variant={item.category === 'part' ? 'default' : 'ghost'} size="icon"
                                                 className={`h-8 w-8 ${item.category === 'part' ? 'bg-blue-600 hover:bg-blue-700' : 'text-muted-foreground'}`}
@@ -802,7 +826,27 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                                             <Trash2 className="w-4 h-4 text-red-500" />
                                         </Button>
                                     </div>
-                                ))}
+
+                                    {avisoRepuesto && (
+                                        <div className="ml-[4.5rem] mt-1 mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5">
+                                            <span className="text-sm">📦</span>
+                                            <p className="text-xs text-amber-900 flex-1 min-w-[12rem]">
+                                                Esto lo venís cargando como <span className="font-semibold">repuesto</span>
+                                                {' '}({avisoRepuesto.veces_part} {Number(avisoRepuesto.veces_part) === 1 ? 'vez' : 'veces'}).
+                                                {' '}Como mano de obra no baja del stock ni entra en la orden de venta.
+                                            </p>
+                                            <Button
+                                                type="button" size="sm" variant="outline"
+                                                className="h-7 border-amber-300 bg-white text-xs text-amber-900 hover:bg-amber-100"
+                                                onClick={() => updateItem(item.id, 'category', 'part')}
+                                            >
+                                                Ponerlo como repuesto
+                                            </Button>
+                                        </div>
+                                    )}
+                                    </div>
+                                  );
+                                })}
                             </div>
                         )}
                     </div>

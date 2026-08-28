@@ -399,7 +399,7 @@ export const useDataStore = create<DataState>((set, get) => ({
             // deja saber si un producto está vinculado al ERP. Los usan el
             // candado pre-finalización (chequeoOrdenERP.ts) y el payload del
             // webhook de la orden de venta. Son dos strings cortos por fila.
-            .select('id,nombre,clave,sku,id_externo,origen,precio,categoria,veces_usado,ultima_vez', { count: 'exact' })
+            .select('id,nombre,clave,sku,id_externo,origen,precio,categoria,veces_usado,veces_part,veces_labor,ultima_vez', { count: 'exact' })
             .eq('taller_id', tallerId)
             .eq('activo', true)
             .eq('sugerible', true)

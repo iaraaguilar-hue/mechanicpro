@@ -804,7 +804,7 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
         try {
             const { data, error } = await supabase
                 .from('productos_taller')
-                .select('clave,nombre,sku,id_externo,origen')
+                .select('clave,nombre,sku,id_externo,origen,veces_part,veces_labor')
                 .eq('taller_id', taller_id)
                 .in('clave', claves);
             if (error) throw error;
@@ -1243,6 +1243,18 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                                                 </p>
                                                 <p className="text-slate-600 text-xs mt-0.5">
                                                     Va a salir en blanco en el comprobante del cliente. Completalo desde la orden.
+                                                </p>
+                                            </div>
+                                        ) : aviso.tipo === 'parece_repuesto' ? (
+                                            <div>
+                                                <p className="text-slate-800">
+                                                    <span className="font-semibold">"{aviso.descripcion}"</span>
+                                                    {aviso.veces > 1 ? ` (x${aviso.veces})` : ''} está cargado como mano de obra,
+                                                    y lo venís cargando como repuesto ({aviso.vecesComoRepuesto} veces).
+                                                </p>
+                                                <p className="text-slate-600 text-xs mt-0.5">
+                                                    Así no baja del stock ni entra en la orden de venta. Se cambia con el botón
+                                                    del 📦 en la orden.
                                                 </p>
                                             </div>
                                         ) : (

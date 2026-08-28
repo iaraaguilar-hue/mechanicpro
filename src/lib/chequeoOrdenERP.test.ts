@@ -12,6 +12,8 @@ import {
     estaVinculadoAlERP,
     esItemMercadoLibre,
     sugerirProductoERP,
+    vieneComoRepuesto,
+    VECES_PART_MINIMO,
     type VinculoProducto,
 } from './chequeoOrdenERP';
 
@@ -192,8 +194,11 @@ eq('itemsQueVanAlERP filtra labor y ML',
     ]).map(i => i.descripcion),
     ['PV TUBE 700X20-28 48MM']);
 
-// Las claves que hay que ir a buscar: sin duplicados, sin vacíos, solo las que viajan.
-eq('clavesAChequear',
+// Las claves que hay que ir a buscar: sin duplicados y sin vacíos.
+// 🔴 Cambió el 28-ago-2026: antes traía SOLO las que viajan al ERP. Ahora también
+// las de mano de obra, porque el aviso "esto parece un repuesto" necesita la fila
+// del catálogo de ESE ítem. Sin esto el chequeo nuevo no podría disparar nunca.
+eq('clavesAChequear: las que viajan Y las de mano de obra',
     clavesAChequear([
         { descripcion: 'Camara Specialized Ruta 20-28 48mm', categoria: 'part' },
         { descripcion: 'Camara Specialized Ruta 20-28 48mm', categoria: 'part' },
@@ -201,7 +206,7 @@ eq('clavesAChequear',
         { descripcion: 'Service', categoria: 'labor' },
         { descripcion: 'PV TUBE 700X20-28 48MM', categoria: 'part' },
     ]),
-    ['camara specialized ruta 20 28 48mm', 'pv tube 700x20 28 48mm']);
+    ['camara specialized ruta 20 28 48mm', 'pv tube 700x20 28 48mm', 'service']);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // El sugeridor ("¿no será este otro?")
@@ -249,6 +254,105 @@ eq('acierta el nombre largo del ERP', sug('Pastillas de freno Shimano B05S'), 'P
         sugerir: (d) => sugerirProductoERP(d, CAT_SUG),
     });
     eq('el candado entero sugiere el reemplazo', avisos[0]?.sugerencia, 'PV TUBE 700X20-28 48MM');
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "ESTO PARECE UN REPUESTO, NO MANO DE OBRA" — la orden 318 (28-ago-2026)
+//
+// Los números de acá NO son inventados: salen de contar los 586 ítems reales de
+// Probikes el 28-ago-2026. Por eso los contraejemplos valen tanto como el caso
+// que caza: son los que fijaron el umbral en 2.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CAT_318 = new Map<string, VinculoProducto>(Object.entries({
+    // El caso real: 6 veces repuesto, 1 vez mano de obra (esa 1 es la 318).
+    'pastillas de freno de resina shimano k05s': {
+        nombre: 'Pastillas de freno de resina Shimano K05S', origen: 'aprendido',
+        veces_part: 6, veces_labor: 1,
+    },
+    // 15 y 1: la señal más fuerte del catálogo.
+    'recarga tubeless x2': { nombre: 'Recarga tubeless x2', origen: 'aprendido', veces_part: 15, veces_labor: 1 },
+    // Justo en el umbral: 2 y 1 avisa.
+    'recarga liquido tubeless x2': { nombre: 'Recarga liquido tubeless x2', origen: 'aprendido', veces_part: 2, veces_labor: 1 },
+    // CONTRAEJEMPLO 1 — empate 1 a 1: no hay señal, no se molesta a nadie.
+    'centrado 1 rueda': { nombre: 'Centrado 1 Rueda', origen: 'aprendido', veces_part: 1, veces_labor: 1 },
+    // CONTRAEJEMPLO 2 — el caso inverso: mano de obra que UNA vez se cargó como
+    // repuesto. 1 contra 70. Si esto avisara, el aviso saltaría todo el día.
+    'm o': { nombre: 'M.O.', origen: 'aprendido', veces_part: 1, veces_labor: 70 },
+    // CONTRAEJEMPLO 3 — un repuesto que nunca se cargó mal: no aplica.
+    'pastillas de freno shimano b05s': {
+        nombre: 'PASTILLAS DE FRENO SHIMANO B05S', sku: '00921', id_externo: '11500001',
+        origen: 'contabilium', veces_part: 22, veces_labor: 0,
+    },
+}));
+
+const chequear318 = (items: any[], erpActivo = true) =>
+    chequearOrdenParaERP({ items, vinculos: CAT_318, erpActivo });
+
+// ── La regla suelta ──────────────────────────────────────────────────────────
+eq('6 part / 1 labor → parece repuesto', vieneComoRepuesto(CAT_318.get('pastillas de freno de resina shimano k05s')), true);
+eq('2 part / 1 labor → parece repuesto (el umbral justo)', vieneComoRepuesto(CAT_318.get('recarga liquido tubeless x2')), true);
+eq('1 part / 1 labor → empate, NO avisa', vieneComoRepuesto(CAT_318.get('centrado 1 rueda')), false);
+eq('1 part / 70 labor → es mano de obra, NO avisa', vieneComoRepuesto(CAT_318.get('m o')), false);
+eq('producto desconocido → NO avisa', vieneComoRepuesto(undefined), false);
+eq('sin contadores → NO avisa', vieneComoRepuesto({ nombre: 'X' }), false);
+eq('el umbral es 2', VECES_PART_MINIMO, 2);
+
+// ── La orden 318 reconstruida tal cual está en la base ───────────────────────
+{
+    const avisos = chequear318([
+        { descripcion: 'Pastillas de freno de resina Shimano K05S', categoria: 'labor', precio: 18935 },
+    ]);
+    eq('318: avisa', avisos.length, 1);
+    eq('318: el tipo', avisos[0]?.tipo, 'parece_repuesto');
+    eq('318: cita el ítem', avisos[0]?.descripcion, 'Pastillas de freno de resina Shimano K05S');
+    eq('318: cita el precio', avisos[0]?.precio, 18935);
+    eq('318: dice cuántas veces fue repuesto', avisos[0]?.vecesComoRepuesto, 6);
+}
+
+// ── Lo que NO tiene que hacer ruido ──────────────────────────────────────────
+eq('el mismo ítem como repuesto no avisa',
+    chequear318([{ descripcion: 'Pastillas de freno de resina Shimano K05S', categoria: 'part', precio: 18935 }])
+        .filter(a => a.tipo === 'parece_repuesto').length, 0);
+
+eq('la mano de obra de verdad no avisa',
+    chequear318([{ descripcion: 'M.O.', categoria: 'labor', precio: 30000 }]).length, 0);
+
+eq('el empate no avisa',
+    chequear318([{ descripcion: 'Centrado 1 Rueda', categoria: 'labor', precio: 40000 }]).length, 0);
+
+eq('un trabajo que no está en el catálogo no avisa',
+    chequear318([{ descripcion: 'Purgado de frenos', categoria: 'labor', precio: 25000 }]).length, 0);
+
+eq('sin ERP no se avisa (no hay orden de venta que perder)',
+    chequear318([{ descripcion: 'Recarga tubeless x2', categoria: 'labor', precio: 8000 }], false).length, 0);
+
+// ── Dos renglones iguales = UN aviso (la lección de la 319) ──────────────────
+{
+    const avisos = chequear318([
+        { descripcion: 'Recarga tubeless x2', categoria: 'labor', precio: 8000 },
+        { descripcion: 'Recarga tubeless x2', categoria: 'labor', precio: 8000 },
+    ]);
+    eq('dos renglones iguales dan un solo aviso', avisos.length, 1);
+    eq('...con las dos veces contadas', avisos[0]?.veces, 2);
+    eq('...y la plata sumada', avisos[0]?.precio, 16000);
+}
+
+// ── El renglón sin nombre no se avisa dos veces ──────────────────────────────
+{
+    const avisos = chequear318([{ descripcion: '   ', categoria: 'labor', precio: 5000 }]);
+    eq('sin nombre: un solo aviso', avisos.length, 1);
+    eq('sin nombre: gana el aviso de siempre', avisos[0]?.tipo, 'sin_nombre');
+}
+
+// ── clavesAChequear tiene que pedir también las de mano de obra ──────────────
+// Si no, el lookup no trae la fila del catálogo y el chequeo queda MUDO.
+{
+    const claves = clavesAChequear([
+        { descripcion: 'Pastillas de freno de resina Shimano K05S', categoria: 'labor', precio: 18935 },
+    ]);
+    eq('pide la clave del ítem de mano de obra', claves.includes('pastillas de freno de resina shimano k05s'), true);
 }
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} chequeoOrdenERP: ${ok} ok, ${fail} fallaron`);

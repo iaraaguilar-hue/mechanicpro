@@ -46,6 +46,10 @@ export interface ProductoTaller {
     origen?: string;
     /** Cuántas veces este taller lo cargó en una orden. Señal principal del ranking. */
     veces_usado: number;
+    /** De esas veces, cuántas fue como repuesto. Alimenta el aviso "esto parece un repuesto". */
+    veces_part?: number | null;
+    /** ...y cuántas como mano de obra. */
+    veces_labor?: number | null;
     ultima_vez?: string | null;
 }
 

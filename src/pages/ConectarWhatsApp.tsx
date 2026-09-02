@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
     MessageCircle, CheckCircle2, AlertTriangle, ShieldCheck,
     Smartphone, Clock, ArrowLeft, Loader2,
@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import type { TallerData } from "@/store/authStore";
+import { supabase } from "@/lib/supabase";
 
 /**
  * Configuración → Conectar el WhatsApp del taller (Coexistencia).
@@ -20,6 +21,50 @@ import type { TallerData } from "@/store/authStore";
  * todos los días: si algo deja de andar sin aviso, la conclusión no va a ser "me
  * faltó leer", va a ser "este sistema me rompió el WhatsApp".
  */
+
+declare global {
+    interface Window { FB?: any; fbAsyncInit?: () => void }
+}
+
+const META_APP_ID = import.meta.env.VITE_META_APP_ID as string | undefined;
+const GRAPH_VERSION = "v25.0";
+
+/**
+ * Carga el SDK de Meta una sola vez. Devuelve una promesa que resuelve cuando
+ * `FB` está listo.
+ *
+ * Se carga acá y no en el index.html a propósito: es un script de terceros que
+ * solo hace falta en esta pantalla, y el 99% de las veces que un taller entra a
+ * la app no viene a conectar WhatsApp.
+ */
+let sdkCargando: Promise<void> | null = null;
+function cargarSdkDeMeta(): Promise<void> {
+    if (window.FB) return Promise.resolve();
+    if (sdkCargando) return sdkCargando;
+
+    sdkCargando = new Promise<void>((resolver, rechazar) => {
+        window.fbAsyncInit = () => {
+            window.FB.init({
+                appId: META_APP_ID,
+                autoLogAppEvents: true,
+                xfbml: true,
+                version: GRAPH_VERSION,
+            });
+            resolver();
+        };
+        const tag = document.createElement("script");
+        tag.src = "https://connect.facebook.net/en_US/sdk.js";
+        tag.async = true;
+        tag.defer = true;
+        tag.crossOrigin = "anonymous";
+        // Si el taller tiene un bloqueador de publicidad, este script no baja.
+        // Hay que decirlo con esas palabras, porque el síntoma (un botón que no
+        // hace nada) manda a buscar el problema a cualquier otro lado.
+        tag.onerror = () => rechazar(new Error("bloqueado"));
+        document.body.appendChild(tag);
+    });
+    return sdkCargando;
+}
 
 /** Cuántos días sin sincronizar antes de gritar. Meta corta la sesión a los 14. */
 const DIAS_SIN_SYNC_PARA_ALERTAR = 3;
@@ -81,34 +126,111 @@ function FlujoDeConexion({ avisar }: { avisar: (tipo: "ok" | "error", msg: strin
 
     /**
      * El diálogo de Embedded Signup lo abre Meta, no nosotros: obliga al dueño a
-     * loguearse con SU cuenta de Facebook. Necesita el Configuration ID que se crea
-     * en el panel de la app, y ese sólo existe cuando Meta aprueba el acceso avanzado
-     * a whatsapp_business_management.
+     * loguearse con SU cuenta de Facebook. Necesita el Configuration ID que se
+     * creó en el panel de la app (2-sep-2026, plantilla "token que caduca en 60
+     * días"), y ese sólo pudo existir con el acceso avanzado ya aprobado.
      *
-     * Mientras no esté, esto NO simula una conexión: avisa la verdad. Un botón que
-     * finge que conectó es peor que un botón que no anda.
+     * Si falta la variable, esto NO simula una conexión: avisa la verdad. Un
+     * botón que finge que conectó es peor que un botón que no anda.
      */
     const configId = import.meta.env.VITE_META_CONFIG_ID as string | undefined;
 
-    const conectar = async () => {
-        if (!configId) {
-            avisar(
-                "error",
-                "Todavía no podemos conectar: Meta está revisando la solicitud de Mechanic Pro. Te avisamos apenas se habilite.",
-            );
+    /**
+     * Lo que Meta manda por `postMessage` mientras el taller avanza en el
+     * diálogo. Llega ANTES que el `code`, y es la única fuente del waba_id.
+     *
+     * Va en un ref y no en un estado porque no se dibuja: si fuera estado, el
+     * re-render podría llegar después del callback y lo leeríamos vacío.
+     */
+    const datosDeLaSesion = useRef<{ waba_id?: string; phone_number_id?: string }>({});
+
+    useEffect(() => {
+        const escuchar = (event: MessageEvent) => {
+            // Sin este filtro, cualquier iframe de la página podría inyectar un
+            // waba_id y hacernos conectar la cuenta de otro.
+            if (!event.origin.endsWith("facebook.com")) return;
+            try {
+                const msg = JSON.parse(event.data);
+                if (msg.type !== "WA_EMBEDDED_SIGNUP") return;
+                // Dos formas del mismo evento: el alta normal trae el número, y
+                // la de Coexistencia (event FINISH_WHATSAPP_BUSINESS_APP_ONBOARDING)
+                // a veces trae sólo la cuenta. Se guarda lo que venga; el número
+                // faltante lo resuelve el servidor preguntándole a Meta.
+                if (msg.data?.waba_id) datosDeLaSesion.current.waba_id = msg.data.waba_id;
+                if (msg.data?.phone_number_id) datosDeLaSesion.current.phone_number_id = msg.data.phone_number_id;
+            } catch {
+                // Facebook manda también mensajes que no son JSON. No es un error.
+            }
+        };
+        window.addEventListener("message", escuchar);
+        return () => window.removeEventListener("message", escuchar);
+    }, []);
+
+    /** Termina la conexión del lado nuestro. El code dura 30 segundos: sin await de por medio. */
+    const cerrarConexion = async (code: string) => {
+        const { waba_id, phone_number_id } = datosDeLaSesion.current;
+        if (!waba_id) {
+            avisar("error", "Meta no nos devolvió la cuenta de WhatsApp. Probá de nuevo sin cerrar la ventana antes de tiempo.");
+            setLanzando(false);
             return;
         }
-        setLanzando(true);
-        try {
-            // TODO(embedded-signup): abrir el diálogo de Meta con configId y, con el
-            // code que devuelve, llamar a la Edge Function que lo canjea por el token
-            // del taller, registra el número y le crea sus plantillas. No se puede
-            // escribir a ciegas: el shape del callback se fija recién con el acceso
-            // avanzado aprobado.
-            avisar("error", "La conexión con Meta todavía no está implementada.");
-        } finally {
-            setLanzando(false);
+
+        const { data, error } = await supabase.functions.invoke("whatsapp-conectar", {
+            body: { code, waba_id, phone_number_id, historial_meses: meses },
+        });
+
+        setLanzando(false);
+
+        if (error || data?.error) {
+            avisar("error", data?.detalle ?? data?.error ?? error?.message ?? "No pudimos terminar de conectar.");
+            return;
         }
+
+        // Conectó, pero puede que el historial no haya venido. Se dice: un "listo"
+        // completo sobre una conexión a medias es lo que después aparece como
+        // "me faltan las conversaciones y nadie me avisó".
+        if (Array.isArray(data?.avisos) && data.avisos.length > 0) {
+            avisar("ok", `Tu WhatsApp quedó conectado (${data.numero ?? "número listo"}), pero no pudimos traer todo el historial. Lo reintentamos y te avisamos.`);
+        } else {
+            avisar("ok", `¡Listo! Tu WhatsApp ${data?.numero ?? ""} quedó conectado.`);
+        }
+    };
+
+    const conectar = async () => {
+        if (!configId || !META_APP_ID) {
+            avisar("error", "Nos falta un dato de configuración de nuestro lado para poder conectar. Escribinos y lo resolvemos.");
+            return;
+        }
+
+        setLanzando(true);
+        datosDeLaSesion.current = {};
+
+        try {
+            await cargarSdkDeMeta();
+        } catch {
+            avisar("error", "No pudimos abrir la ventana de Meta. Suele ser un bloqueador de publicidad: desactivalo para esta página y probá de nuevo.");
+            setLanzando(false);
+            return;
+        }
+
+        window.FB.login(
+            (respuesta: any) => {
+                const code = respuesta?.authResponse?.code;
+                if (!code) {
+                    // Cancelar no es un error: es lo que pasa cuando alguien se
+                    // arrepiente a mitad de camino, y no merece un cartel rojo.
+                    setLanzando(false);
+                    return;
+                }
+                void cerrarConexion(code);
+            },
+            {
+                config_id: configId,
+                response_type: "code",
+                override_default_response_type: true,
+                extras: { setup: {} },
+            },
+        );
     };
 
     if (paso === "historial") {
@@ -196,9 +318,10 @@ function FlujoDeConexion({ avisar }: { avisar: (tipo: "ok" | "error", msg: strin
                     </h3>
                     <ul className="text-sm text-slate-700 space-y-1.5 list-disc pl-5">
                         <li>El celular del taller con la app <strong>WhatsApp Business</strong> (no el WhatsApp común)</li>
-                        <li>La app actualizada</li>
+                        <li>La app actualizada: <strong>versión 2.24.17 o más nueva</strong></li>
                         <li>El número con el que atendés a tus clientes</li>
                         <li>La cuenta de Facebook de tu negocio a mano</li>
+                        <li>Una <strong>tarjeta cargada en tu cuenta de WhatsApp</strong>: los recordatorios automáticos los cobra Meta y se facturan a tu nombre, no al nuestro</li>
                     </ul>
                     <p className="text-xs text-muted-foreground mt-3">
                         <strong>¿Usás el WhatsApp común?</strong> Se puede pasar a WhatsApp Business gratis
@@ -219,6 +342,7 @@ function FlujoDeConexion({ avisar }: { avisar: (tipo: "ok" | "error", msg: strin
                         <li>Mensajes temporales</li>
                         <li>Mensajes de «ver una vez»</li>
                         <li>Ubicación en tiempo real</li>
+                        <li><strong>WhatsApp Web y la PC del mostrador se desvinculan</strong> en el momento de conectar: hay que volver a escanear el código desde el celular</li>
                     </ul>
                     <p className="text-sm text-amber-900 mt-2">
                         Los grupos siguen andando en tu celular, pero desde Mechanic Pro no los vamos a ver.

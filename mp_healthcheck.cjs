@@ -119,6 +119,49 @@ async function main() {
     const servHuerfanos = (servs || []).filter(s => s.bicicleta_id && !bikeIds.has(s.bicicleta_id));
     add('integridad_servicios', servHuerfanos.length ? 'FALLA' : 'OK', `${servHuerfanos.length} servicios sin bicicleta`);
 
+    // 3c-bis. TOKENS DE WHATSAPP POR VENCER (Coexistencia, desde el 2-sep-2026).
+    //
+    // El token que cada taller nos da al conectar su WhatsApp vive 60 días. Si
+    // vence, los recordatorios de ESE taller dejan de salir sin ningún síntoma
+    // visible: el taller cree que sus clientes están siendo contactados y no lo
+    // están. Y un token ya vencido NO se puede renovar — hay que rehacer todo el
+    // Embedded Signup con el dueño del taller delante.
+    //
+    // La Edge Function whatsapp-renovar-tokens renueva con 15 días de margen.
+    // Este chequeo es la red por si esa función no está corriendo: acá se ve.
+    {
+        const { data: creds, error } = await db
+            .from('wa_credenciales')
+            .select('taller_id, expira_at');
+
+        if (error) {
+            // Tabla nueva: si todavía no existe en este entorno, no es una falla.
+            add('tokens_whatsapp', 'OMITIDO', `no pude leer wa_credenciales (${error.message})`);
+        } else if (!creds || creds.length === 0) {
+            add('tokens_whatsapp', 'OK', 'ningún taller con WhatsApp conectado todavía');
+        } else {
+            const ahora = Date.now();
+            const dias = ms => Math.floor((ms - ahora) / 86400000);
+            const vencidos = creds.filter(c => c.expira_at && Date.parse(c.expira_at) <= ahora);
+            const porVencer = creds.filter(c => {
+                if (!c.expira_at) return false;
+                const d = dias(Date.parse(c.expira_at));
+                return d > 0 && d <= 15;
+            });
+
+            if (vencidos.length) {
+                add('tokens_whatsapp', 'FALLA',
+                    `${vencidos.length} taller(es) con el token VENCIDO: no pueden mandar y hay que reconectarlos a mano`);
+            } else if (porVencer.length) {
+                const masCerca = Math.min(...porVencer.map(c => dias(Date.parse(c.expira_at))));
+                add('tokens_whatsapp', 'FALLA',
+                    `${porVencer.length} token(es) vencen en <=15 días (el más cercano en ${masCerca}) y no se renovaron`);
+            } else {
+                add('tokens_whatsapp', 'OK', `${creds.length} conectado(s), ninguno vence en 15 días`);
+            }
+        }
+    }
+
     // 3d. Fugas cross-tenant: filas sin taller_id (RLS no las protege)
     for (const t of ['clientes', 'bicicletas', 'servicios', 'recordatorios']) {
         const { count } = await db.from(t).select('*', { count: 'exact', head: true }).is('taller_id', null);

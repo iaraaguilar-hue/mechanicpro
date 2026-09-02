@@ -228,7 +228,18 @@ function FlujoDeConexion({ avisar }: { avisar: (tipo: "ok" | "error", msg: strin
                 config_id: configId,
                 response_type: "code",
                 override_default_response_type: true,
-                extras: { setup: {} },
+                extras: {
+                    setup: {},
+                    // 🔴 SIN ESTO EL DIÁLOGO ABRE EL FLUJO EQUIVOCADO.
+                    // Verificado en vivo el 2-sep-2026: sin featureType, Meta muestra
+                    // el alta normal y termina creando un número NUEVO — justo lo
+                    // contrario de Coexistencia, que existe para conservar el número
+                    // con el que el taller ya atiende.
+                    // ⚠️ El valor "coexistence" está DEROGADO por Meta; el que vale es
+                    // este. Doc: embedded-signup/custom-flows/onboarding-business-app-users
+                    featureType: "whatsapp_business_app_onboarding",
+                    sessionInfoVersion: "3",
+                },
             },
         );
     };

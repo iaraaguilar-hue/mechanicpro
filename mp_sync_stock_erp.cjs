@@ -142,7 +142,19 @@ const fmt = d => d.toISOString().slice(0, 10);
   console.log('· stock del depósito…');
   const filas = await paginado(`/api/inventarios/getStockByDeposito?id=${DEPOSITO}`, auth);
   const stock = new Map();
-  for (const f of filas) if (f.Codigo) stock.set(String(f.Codigo).trim(), { actual: f.StockActual ?? 0, reservado: f.StockReservado ?? 0 });
+  /* 🔴 STOCK DISPONIBLE, NO BRUTO — la misma cuña del 26-ago-2026 de los 4 exportadores de
+     Probikes, que este sync tenía pendiente (28-ago). `StockActual` incluye lo ya reservado
+     para un cliente: medido en Probikes, 311 SKU (17%) se ofrecían sin tenerlos. El disponible
+     es `StockConReservas` = max(0, actual − reservado); el max(0,…) es por las filas donde el
+     reservado supera al actual (el ERP también las clampea). `stock_reservado` se sigue
+     guardando aparte como dato informativo — la app NO lo resta (verificado 28-ago: ninguna
+     vista lo usa), así que `stock` tiene que llegar ya restado. */
+  for (const f of filas) if (f.Codigo) {
+    const disponible = typeof f.StockConReservas === 'number'
+      ? Math.max(0, f.StockConReservas)
+      : Math.max(0, (f.StockActual ?? 0) - (f.StockReservado ?? 0));
+    stock.set(String(f.Codigo).trim(), { actual: f.StockActual ?? 0, reservado: f.StockReservado ?? 0, disponible });
+  }
   console.log(`  ${stock.size} SKU con registro de stock`);
 
   // 2) VENTAS de la ventana → última fecha + unidades por SKU
@@ -198,7 +210,8 @@ const fmt = d => d.toISOString().slice(0, 10);
       id: p.id,
       taller_id: taller.id,
       nombre: p.nombre,
-      stock: s ? s.actual : null,
+      // `stock` es el DISPONIBLE (bruto − reservado), no el bruto: ver la cuña de arriba.
+      stock: s ? s.disponible : null,
       stock_reservado: s ? s.reservado : null,
       stock_actualizado_en: ahora,
       ultima_venta: v?.ultima ?? null,

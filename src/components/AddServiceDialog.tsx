@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { useDataStore, type SupabaseBike, type SupabaseService } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
-import { ServiceType } from "@/components/ServiceModal";
+// ⚠️ Componente SIN USO: no lo importa ninguna pantalla (verificado 3-sep-2026).
+// Apuntaba a un `ServiceType` que ServiceModal nunca exportó, y el error estaba
+// oculto porque el typecheck del proyecto corría sobre un tsconfig con
+// "files": [], o sea sobre cero archivos. Se define acá para dejar el chequeo en
+// verde sin borrar código que quizá alguien quiera retomar.
+const ServiceType = { SPORT: "Sport", PERFORMANCE: "Performance", EXPERT: "Expert" } as const;
+type ServiceType = typeof ServiceType[keyof typeof ServiceType];
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";

@@ -145,6 +145,8 @@ export interface SupabaseService {
     id: string;
     taller_id: string;
     bicicleta_id: string;
+    /** Quién hizo el trabajo. Se elige al finalizar, si el taller lo tiene prendido. */
+    mecanico_id?: string | null;
     numero_orden?: number;
     fecha_ingreso?: string;
     estado?: string;

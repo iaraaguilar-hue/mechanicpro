@@ -11,6 +11,8 @@ export interface TallerData {
     politica_pago?: string;
     plan_actual?: string;
     config_avances?: { habilitado: boolean; etapas: string[] } | null;
+    // Opt-in de registrar quién hizo cada service (3-sep-2026). NULL/ausente = apagado.
+    config_mecanicos?: { habilitado: boolean } | null;
     config_notificaciones?: { tareas_habilitado?: boolean; bloquear_finalizacion?: boolean; momento_diagnostico?: 'final' | 'durante' | 'ambos' } | null;
     [key: string]: any;
 }

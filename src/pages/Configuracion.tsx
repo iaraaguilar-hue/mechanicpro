@@ -13,7 +13,7 @@ import { Switch } from '@/components/ui/switch';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { NuevoBadge } from '@/components/NuevoBadge';
 import {
-    Settings, Loader2, Save, UploadCloud, Plus, Edit2, Check, X,
+    Settings, Loader2, Save, UploadCloud, Plus, Edit2, Check, X, Users,
     AlertCircle, Sparkles, ListChecks, CheckCircle, Lock, Bell, HeartPulse,
     GraduationCap, PlayCircle
 } from 'lucide-react';
@@ -926,6 +926,32 @@ function TabPreferencias({ taller, setTaller, avisar }: {
         }
     };
 
+    // ── Quién hizo cada service (opt-in, 3-sep-2026).
+    // Opt-in y no obligatorio porque un taller de una sola persona no tiene a
+    // quién distinguir, y pedirle ese dato en cada service es fricción pura.
+    const [mecanicosHab, setMecanicosHab] = useState(taller.config_mecanicos?.habilitado === true);
+    const [savingMec, setSavingMec] = useState(false);
+
+    const guardarMecanicos = async (valor: boolean) => {
+        const anterior = mecanicosHab;
+        setMecanicosHab(valor);
+        try {
+            setSavingMec(true);
+            const config_mecanicos = { ...(taller.config_mecanicos || {}), habilitado: valor };
+            const { error } = await supabase.from('talleres').update({ config_mecanicos }).eq('id', taller.id);
+            if (error) throw error;
+            setTaller({ ...taller, config_mecanicos: config_mecanicos as any });
+            avisar('ok', valor
+                ? 'Listo. Al finalizar cada service vas a elegir quién lo hizo, y lo vas a ver en Métricas.'
+                : 'Desactivado. Los services ya registrados no se borran.');
+        } catch (error: any) {
+            setMecanicosHab(anterior);
+            avisar('error', 'No se pudo guardar: ' + error.message);
+        } finally {
+            setSavingMec(false);
+        }
+    };
+
     const guardarAvances = async (valor: boolean) => {
         const anterior = habilitado;
         setHabilitado(valor);
@@ -1041,6 +1067,37 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                         disabled={!tareasHab || savingTareas}
                     />
                 </div>
+            </CardContent>
+        </Card>
+
+        {/* ── Quién hizo cada service (opt-in, 3-sep-2026) ── */}
+        <Card className="flex flex-col">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                    <Users className="h-5 w-5" /> Quién hizo cada service
+                </CardTitle>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                    Si en el taller trabaja más de una persona, al finalizar cada service elegís quién
+                    lo hizo. Después, en Métricas, ves cuánto generó cada uno en mano de obra y en
+                    repuestos, por separado.
+                </p>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col gap-3">
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <p className="font-semibold text-sm pr-3">Registrar el mecánico</p>
+                    <Switch
+                        checked={mecanicosHab}
+                        onCheckedChange={guardarMecanicos}
+                        disabled={savingMec}
+                    />
+                </div>
+                {/* Lo que sigue evita el reclamo del primer día: se prende, se abre
+                    Métricas y está vacío. No es un bug, es que el dato empieza hoy. */}
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Se cuenta <strong>desde que lo prendés</strong>: los services que ya cerraste no
+                    tienen guardado quién los hizo y no se puede saber a esta altura.
+                    {' '}Si trabajás solo, dejalo apagado y te ahorrás un clic en cada orden.
+                </p>
             </CardContent>
         </Card>
 

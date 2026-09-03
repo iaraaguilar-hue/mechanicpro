@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { useMemo, useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useAuthStore } from '@/store/authStore';
+import { supabase } from '@/lib/supabase';
 import { useDataStore } from '@/store/dataStore';
 import ExpertMetrics from '@/components/ExpertMetrics';
 import PanelSugerencias from '@/components/PanelSugerencias';
@@ -9,6 +10,7 @@ import { normalizeBikeData, normalizeServiceType } from '@/lib/bikeDataNormalize
 import { rankProducts } from '@/lib/productMatcher';
 import { servicioRevenue } from '@/lib/servicioRevenue';
 import {
+    Users,
     BarChart3,
     TrendingUp,
     Package,
@@ -590,6 +592,9 @@ export default function Metrics() {
                 {header}
                 {kpiCards}
                 <PanelSugerencias />
+                {taller?.config_mecanicos?.habilitado && (
+                    <PorMecanico servicios={filteredServicios} tallerId={tallerId} />
+                )}
                 {analysisPanels}
             </div>
         );
@@ -601,6 +606,9 @@ export default function Metrics() {
             {header}
             {kpiCards}
             <PanelSugerencias />
+            {taller?.config_mecanicos?.habilitado && (
+                <PorMecanico servicios={filteredServicios} tallerId={tallerId} />
+            )}
             {analysisPanels}
             <ExpertMetrics
                 tallerId={tallerId || ''}
@@ -667,4 +675,104 @@ function getCategoryIcon(cat: string) {
         case 'Mantenimiento General': return '🧰';
         default: return '📦';
     }
+}
+
+
+// ═════════════════════════════════════════════════════════════
+// LO QUE GENERÓ CADA MECÁNICO (3-sep-2026)
+//
+// Pedido de Iara: poder calcular sueldos. Muestra mano de obra y repuestos en
+// columnas SEPARADAS porque fue su decisión explícita: distintos talleres pagan
+// sobre distintas cosas, y con las dos a la vista cada uno hace su cuenta sin
+// que nosotros elijamos por él.
+//
+// Usa `servicioRevenue`, la misma función que el resto de las métricas y que el
+// candado de "orden en $0" de Workshop. Si acá se sumara distinto, el taller
+// vería dos números y no sabría cuál creer.
+// ═════════════════════════════════════════════════════════════
+export function PorMecanico({ servicios, tallerId }: { servicios: any[]; tallerId: string | null }) {
+    const [gente, setGente] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        if (!tallerId) return;
+        void (async () => {
+            const { data } = await supabase.from('usuarios').select('id, nombre').eq('taller_id', tallerId);
+            setGente(Object.fromEntries((data ?? []).map((u: any) => [u.id, u.nombre])));
+        })();
+    }, [tallerId]);
+
+    const filas = useMemo(() => {
+        const acc: Record<string, { services: number; labor: number; parts: number }> = {};
+        for (const s of servicios) {
+            if (!s.mecanico_id) continue;          // sin registrar, no se inventa
+            const { labor, parts } = servicioRevenue(s);
+            const a = acc[s.mecanico_id] ?? (acc[s.mecanico_id] = { services: 0, labor: 0, parts: 0 });
+            a.services += 1; a.labor += labor; a.parts += parts;
+        }
+        return Object.entries(acc)
+            .map(([id, v]) => ({ id, nombre: gente[id] ?? 'Alguien que ya no está', ...v }))
+            .sort((x, y) => y.labor - x.labor);
+    }, [servicios, gente]);
+
+    const sinRegistrar = servicios.filter((s: any) => !s.mecanico_id).length;
+    const fmt = (n: number) => '$' + Math.round(n).toLocaleString('es-AR');
+
+    return (
+        <Card>
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <Users className="h-4 w-4" /> Lo que generó cada mecánico
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                    Del período elegido arriba. La mano de obra y los repuestos van separados para que
+                    saques la cuenta como la hagas vos.
+                </p>
+            </CardHeader>
+            <CardContent>
+                {filas.length === 0 ? (
+                    // El vacío explicado: si no, el primer día parece que está roto.
+                    <p className="text-sm text-muted-foreground py-4">
+                        Todavía no hay services con el mecánico registrado. Se empieza a llenar a medida
+                        que vayas cerrando órdenes eligiendo quién las hizo.
+                    </p>
+                ) : (
+                    <>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="text-xs text-muted-foreground border-b">
+                                    <tr>
+                                        <th className="text-left font-medium py-2">Mecánico</th>
+                                        <th className="text-right font-medium py-2">Services</th>
+                                        <th className="text-right font-medium py-2">Mano de obra</th>
+                                        <th className="text-right font-medium py-2">Repuestos</th>
+                                        <th className="text-right font-medium py-2">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filas.map((f) => (
+                                        <tr key={f.id} className="border-b last:border-0">
+                                            <td className="py-2.5 font-medium">{f.nombre}</td>
+                                            <td className="py-2.5 text-right tabular-nums">{f.services}</td>
+                                            <td className="py-2.5 text-right tabular-nums font-semibold">{fmt(f.labor)}</td>
+                                            <td className="py-2.5 text-right tabular-nums text-muted-foreground">{fmt(f.parts)}</td>
+                                            <td className="py-2.5 text-right tabular-nums">{fmt(f.labor + f.parts)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        {sinRegistrar > 0 && (
+                            // Decirlo es lo que evita que alguien reparta sueldos sobre una tabla
+                            // que no cubre todo el trabajo del mes.
+                            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2 mt-3">
+                                Ojo: {sinRegistrar} service{sinRegistrar > 1 ? 's' : ''} del período no
+                                {sinRegistrar > 1 ? ' tienen' : ' tiene'} mecánico registrado, así que
+                                {sinRegistrar > 1 ? ' no están' : ' no está'} en esta tabla.
+                            </p>
+                        )}
+                    </>
+                )}
+            </CardContent>
+        </Card>
+    );
 }

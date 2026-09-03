@@ -734,6 +734,27 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
     const bike = service ? bicicletas.find(b => b.id === service.bicicleta_id) : null;
     const client = bike ? clientes.find(c => c.id === bike.cliente_id) : null;
 
+    // ── Quién hizo el service (opt-in por taller, 3-sep-2026).
+    // Viene precargado con el que está usando la app: en el 90% de los casos es
+    // el que lo hizo, y así el selector se mira y se pasa de largo en vez de
+    // frenar a alguien con las manos sucias.
+    const registrarMecanico = taller?.config_mecanicos?.habilitado === true;
+    const miUserId = useAuthStore(s => s.session?.user?.id ?? null);
+    const [gente, setGente] = useState<{ id: string; nombre: string; rol: string }[]>([]);
+    const [mecanicoId, setMecanicoId] = useState<string>(service?.mecanico_id || miUserId || '');
+
+    useEffect(() => {
+        if (!registrarMecanico || !isOpen || !taller_id) return;
+        void (async () => {
+            const { data } = await supabase
+                .from('usuarios').select('id, nombre, rol')
+                .eq('taller_id', taller_id)
+                .in('rol', ['mecanico', 'admin'])   // el dueño también mete mano
+                .order('nombre');
+            setGente(data ?? []);
+        })();
+    }, [registrarMecanico, isOpen, taller_id]);
+
     const [notes, setNotes] = useState(service?.notas_mecanico || "");
     const [notasInternas, setNotasInternas] = useState(service?.notas_internas || "");
     const [healthCheckData, setHealthCheckData] = useState<HealthCheckData[]>([]);
@@ -912,7 +933,13 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
             if (wasJustCompleted) {
                 // 1. UPDATE a Supabase para cambiar el estado
                 const fechaFinalizacion = new Date().toISOString();
-                await updateServicio(job.service_id, { estado: 'ready', fecha_finalizacion: fechaFinalizacion });
+                await updateServicio(job.service_id, {
+                    estado: 'ready',
+                    fecha_finalizacion: fechaFinalizacion,
+                    // Solo si el taller lo pidió: si no, se deja como estaba y no
+                    // se pisa un dato viejo con null.
+                    ...(registrarMecanico && mecanicoId ? { mecanico_id: mecanicoId } : {}),
+                });
 
                 // El aviso de "ya está lista" con el comprobante, si el taller lo
                 // dejó prendido. Sin `await` a propósito: el mecánico ya terminó
@@ -1136,6 +1163,26 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                         />
                         <p className="text-xs text-muted-foreground">{ETIQUETAS_NOTAS.internaAyuda}</p>
                     </div>
+
+                    {/* Quién hizo el trabajo. Solo si el taller prendió la preferencia. */}
+                    {!isCompleted && registrarMecanico && (
+                        <div className="pt-2">
+                            <label className="text-sm font-semibold mb-1.5 block">¿Quién lo hizo?</label>
+                            <select
+                                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                value={mecanicoId}
+                                onChange={(e) => setMecanicoId(e.target.value)}
+                            >
+                                <option value="">Sin registrar</option>
+                                {gente.map((g) => (
+                                    <option key={g.id} value={g.id}>{g.nombre}</option>
+                                ))}
+                            </select>
+                            <p className="text-[11px] text-muted-foreground mt-1">
+                                Viene puesto el que está usando la app. Cambialo si lo hizo otro.
+                            </p>
+                        </div>
+                    )}
 
                     {/* Diagnóstico al finalizar: se muestra salvo que el taller haya
                         elegido registrarlo SOLO 'durante' el service (Tarea G-pref). */}

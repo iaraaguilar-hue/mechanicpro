@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing, Flag, Copy, User, Loader2 } from "lucide-react";
+import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing, Flag, Copy, User, Loader2, MessageCircle } from "lucide-react";
 import { buildRetentionAlerts, type RetentionAlert } from "@/lib/retentionAlerts";
 import { construirAvisosSuaves, CONFIG_SUAVES_DEFAULT, type AvisoSuave, type ResultadoSuaves } from "@/lib/avisosSuaves";
 import { clientesEnFuga, type ClienteEnFuga } from "@/lib/motorConCabeza";

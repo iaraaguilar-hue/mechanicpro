@@ -926,6 +926,38 @@ function TabPreferencias({ taller, setTaller, avisar }: {
         }
     };
 
+    // ── Avisos suaves (3-sep-2026). Los umbrales se guardan al salir del campo
+    // (onBlur) y no en cada tecla: guardar por cada dígito manda un update por
+    // letra y deja estados intermedios raros como "1" mientras se escribe "120".
+    const cfgSuaves = taller.config_notificaciones?.avisos_suaves || {};
+    const [suavesHab, setSuavesHab] = useState(cfgSuaves.habilitado === true);
+    const [suavesPS, setSuavesPS] = useState(cfgSuaves.primerServiceDias ?? 30);
+    const [suavesNV, setSuavesNV] = useState(cfgSuaves.noVolvioDias ?? 120);
+    const [savingSuaves, setSavingSuaves] = useState(false);
+
+    const guardarSuaves = async (patch: { habilitado?: boolean; primerServiceDias?: number; noVolvioDias?: number }) => {
+        const antes = { habilitado: suavesHab, primerServiceDias: suavesPS, noVolvioDias: suavesNV };
+        if (patch.habilitado !== undefined) setSuavesHab(patch.habilitado);
+        try {
+            setSavingSuaves(true);
+            const avisos_suaves = { ...antes, ...patch };
+            const config_notificaciones = { ...(taller.config_notificaciones || {}), avisos_suaves };
+            const { error } = await supabase.from('talleres').update({ config_notificaciones }).eq('id', taller.id);
+            if (error) throw error;
+            setTaller({ ...taller, config_notificaciones: config_notificaciones as any });
+            if (patch.habilitado !== undefined) {
+                avisar('ok', patch.habilitado
+                    ? 'Listo. Los vas a ver en Retención, abajo de los vencimientos.'
+                    : 'Desactivado.');
+            }
+        } catch (error: any) {
+            setSuavesHab(antes.habilitado); setSuavesPS(antes.primerServiceDias); setSuavesNV(antes.noVolvioDias);
+            avisar('error', 'No se pudo guardar: ' + error.message);
+        } finally {
+            setSavingSuaves(false);
+        }
+    };
+
     // ── Quién hizo cada service (opt-in, 3-sep-2026).
     // Opt-in y no obligatorio porque un taller de una sola persona no tiene a
     // quién distinguir, y pedirle ese dato en cada service es fricción pura.
@@ -1067,6 +1099,58 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                         disabled={!tareasHab || savingTareas}
                     />
                 </div>
+            </CardContent>
+        </Card>
+
+        {/* ── Avisos suaves (Alejo, Once a Fondo, 3-sep-2026) ── */}
+        <Card className="flex flex-col">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                    <Bell className="h-5 w-5" /> Avisos de «vale una llamada»
+                </CardTitle>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                    Aparte de los vencimientos, Retención te puede avisar de dos cosas más blandas:
+                    la bici que se cargó y <strong>nunca vino al taller</strong> (le toca el primer
+                    service) y el cliente que <strong>vino una vez y no volvió</strong>.
+                </p>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col gap-3">
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <p className="font-semibold text-sm pr-3">Mostrar estos avisos</p>
+                    <Switch checked={suavesHab} onCheckedChange={v => guardarSuaves({ habilitado: v })} disabled={savingSuaves} />
+                </div>
+                <div className={`space-y-3 transition-opacity ${suavesHab ? '' : 'opacity-50 pointer-events-none'}`}>
+                    <div className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-muted/20">
+                        <div>
+                            <p className="text-sm font-medium">Primer service</p>
+                            <p className="text-[11px] text-muted-foreground">Días desde que se cargó una bici que nunca vino.</p>
+                        </div>
+                        <Input
+                            type="number" min={7} max={365} className="w-20 text-center"
+                            value={suavesPS}
+                            onChange={e => setSuavesPS(Number(e.target.value))}
+                            onBlur={() => guardarSuaves({ primerServiceDias: suavesPS })}
+                        />
+                    </div>
+                    <div className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-muted/20">
+                        <div>
+                            <p className="text-sm font-medium">No volvió</p>
+                            <p className="text-[11px] text-muted-foreground">Días sin aparecer para preguntarle qué onda.</p>
+                        </div>
+                        <Input
+                            type="number" min={30} max={730} className="w-20 text-center"
+                            value={suavesNV}
+                            onChange={e => setSuavesNV(Number(e.target.value))}
+                            onBlur={() => guardarSuaves({ noVolvioDias: suavesNV })}
+                        />
+                    </div>
+                </div>
+                {/* Por qué el default no es 90: con 90 días Probikes daba 109 nombres. */}
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Se muestran <strong>los 12 que más gastaron</strong>, no todos: una lista de cien
+                    no la llama nadie. Van en su propia sección, abajo de los vencimientos, para que
+                    nunca tapen lo urgente.
+                </p>
             </CardContent>
         </Card>
 

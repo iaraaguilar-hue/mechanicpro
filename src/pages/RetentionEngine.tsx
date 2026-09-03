@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing, Flag, Copy, User, Loader2 } from "lucide-react";
 import { buildRetentionAlerts, type RetentionAlert } from "@/lib/retentionAlerts";
+import { construirAvisosSuaves, CONFIG_SUAVES_DEFAULT, type AvisoSuave, type ResultadoSuaves } from "@/lib/avisosSuaves";
 import { clientesEnFuga, type ClienteEnFuga } from "@/lib/motorConCabeza";
 import { carreraEnFrase, nombreBiciAmigable, nombresBicisAmigables, primerNombre } from "@/lib/nombreAmigable";
 import { tieneFeature } from "@/lib/planFeatures";
@@ -233,6 +234,16 @@ export default function RetentionEngine() {
         [recordatorios, bicicletas, clientes, servicios, carreras, predictivo]
     );
 
+    // Los avisos suaves (Alejo, 3-sep-2026): el primer service de una bici que
+    // nunca vino, y el que vino una o dos veces y no volvió. Complementa a
+    // `fuga`, que solo ve a los que ya tienen ritmo (3+ visitas) — y en un
+    // taller nuevo eso es NADIE.
+    const configSuaves = { ...CONFIG_SUAVES_DEFAULT, ...(taller?.config_notificaciones?.avisos_suaves || {}) };
+    const avisosSuaves = useMemo(
+        () => construirAvisosSuaves({ clientes, bicicletas, servicios, config: configSuaves }),
+        [clientes, bicicletas, servicios, configSuaves.habilitado, configSuaves.primerServiceDias, configSuaves.noVolvioDias, configSuaves.limite]
+    );
+
     // Idea 6 (Pro/Expert): el que se está yendo, por comportamiento.
     const fuga = useMemo(
         () => predictivo ? clientesEnFuga({ clientes, bicicletas, servicios }) : null,
@@ -265,6 +276,12 @@ export default function RetentionEngine() {
 
             {/* Idea 6: pocos nombres con razón de estar, no doscientos. */}
             {fuga && fuga.enRiesgo.length > 0 && <SeccionFuga fuga={fuga} />}
+
+            {/* Los suaves van DESPUÉS de lo urgente y en su propia sección: un
+                aviso opcional que tapa un vencimiento deja de ser opcional. */}
+            {configSuaves.habilitado && (avisosSuaves.avisos.length > 0 || avisosSuaves.enCamino.cuantas > 0) && (
+                <SeccionAvisosSuaves resultado={avisosSuaves} />
+            )}
 
             {alerts.length === 0 && (
                 <Card className="border-dashed border-2 py-12 flex flex-col items-center justify-center text-center">
@@ -387,6 +404,88 @@ export default function RetentionEngine() {
 // IA: el argumento ES el dato). El contacto se registra en
 // contactos_retencion → el Panel de Retorno ya le atribuye la plata.
 // ─────────────────────────────────────────────────────────────
+function SeccionAvisosSuaves({ resultado }: { resultado: ResultadoSuaves }) {
+    const { avisos, enCamino } = resultado;
+    const registrar = useDataStore(s => s.registrarContactoRetencion);
+    const taller_id = useAuthStore(s => s.taller_id);
+    const [contactados, setContactados] = useState<Record<string, boolean>>({});
+
+    const contactar = (a: AvisoSuave) => {
+        const hola = primerNombre(a.clienteNombre) ? `Hola ${primerNombre(a.clienteNombre)}!` : 'Hola!';
+        // Dos textos distintos porque son dos conversaciones distintas: a uno le
+        // avisás de algo que le sirve, al otro le preguntás qué pasó.
+        const texto = a.motivo === 'primer_service'
+            ? `${hola} ¿Cómo va? Te escribo por la ${a.bicicletaModelo}. Como es nueva, le corresponde el primer service de asentamiento: se acomodan los cables y los rayos después de las primeras salidas. ¿Querés que la veamos?`
+            : `${hola} ¿Cómo andás? Hace un tiempo que no te vemos por el taller. ¿Cómo viene andando la bici? Cualquier cosa que necesites, acá estamos.`;
+        const tel = (a.clienteTelefono || '').replace(/[^0-9]/g, '');
+        if (!tel) { window.alert('Este cliente no tiene teléfono cargado.'); return; }
+        if (taller_id) {
+            registrar({
+                taller_id, cliente_id: a.clienteId, bicicleta_id: a.bicicletaId,
+                componente: a.motivo, canal: 'whatsapp_manual',
+                variante: `v1_${a.motivo}`, texto_enviado: texto,
+            });
+        }
+        setContactados(prev => ({ ...prev, [a.id]: true }));
+        window.open(`https://wa.me/${tel}?text=${encodeURIComponent(texto)}`, '_blank');
+    };
+
+    return (
+        <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sky-700">
+                <User className="h-6 w-6" />
+                <h2 className="text-xl font-bold">Vale una llamada</h2>
+            </div>
+            <p className="text-xs text-muted-foreground -mt-1">
+                No son vencimientos: son clientes que se están enfriando. Nadie se va a quedar sin
+                bici por esto, pero una pregunta a tiempo los trae de vuelta. Ordenados por lo que
+                dejaron en el taller.
+            </p>
+            {/* Decir que está trabajando aunque no haya nada que mostrar: si no,
+                el que lo prende un lunes ve una sección vacía y lo apaga. */}
+            {enCamino.cuantas > 0 && (
+                <p className="text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-md p-2.5">
+                    {enCamino.cuantas === 1 ? 'Hay 1 bici nueva' : `Hay ${enCamino.cuantas} bicis nuevas`} que
+                    todavía no vino al taller. {enCamino.cuantas === 1 ? 'Va a aparecer acá' : 'La primera va a aparecer acá'}
+                    {enCamino.enDias !== null && enCamino.enDias > 0 ? ` en ${enCamino.enDias} día${enCamino.enDias > 1 ? 's' : ''}` : ' pronto'},
+                    cuando le toque el primer service.
+                </p>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {avisos.map(a => (
+                    <Card key={a.id} className="border-l-4 border-l-sky-400 bg-sky-50/40 shadow-sm">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-lg font-bold text-slate-800">
+                                <Link
+                                    to={a.bicicletaId ? `/bikes/${a.bicicletaId}` : `/clients/${a.clienteId}`}
+                                    className="hover:underline"
+                                >
+                                    {a.clienteNombre}
+                                </Link>
+                            </CardTitle>
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">
+                                {a.motivo === 'primer_service' ? 'Primer service' : 'No volvió'}
+                            </span>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <p className="text-sm text-slate-700 leading-snug">{a.argumento}</p>
+                            <Button
+                                size="sm"
+                                variant={contactados[a.id] ? 'outline' : 'default'}
+                                className="w-full"
+                                onClick={() => contactar(a)}
+                            >
+                                <MessageCircle className="h-4 w-4 mr-1.5" />
+                                {contactados[a.id] ? 'Contactado' : 'Escribirle'}
+                            </Button>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 function SeccionFuga({ fuga }: { fuga: { enRiesgo: ClienteEnFuga[]; conBase: number; sinBase: number } }) {
     const registrar = useDataStore(s => s.registrarContactoRetencion);
     const taller_id = useAuthStore(s => s.taller_id);

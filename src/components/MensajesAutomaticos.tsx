@@ -180,13 +180,34 @@ export function MensajesAutomaticos({ taller, avisar }: {
                         desde tu WhatsApp, con el comprobante en PDF adjunto. Vos elegís qué se manda,
                         a quién y quién lo firma.
                     </p>
-                    <p className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3">
-                        <strong>Una aclaración para que no te sorprenda:</strong> WhatsApp solo deja mandar
-                        avisos con textos que Meta aprueba antes. Por eso el mensaje tiene una parte fija
-                        y vos completás la tuya: <strong>quién firma</strong> y <strong>una línea propia</strong> (por
-                        ejemplo, cómo se paga). Si el cliente te escribió hace menos de 24 horas, ahí sí le
-                        contestás lo que quieras desde el celular, como siempre.
-                    </p>
+                    <div className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
+                        <p>
+                            <strong>Una aclaración para que no te sorprenda:</strong> WhatsApp solo deja mandar
+                            avisos con textos que Meta aprueba antes. Por eso el mensaje tiene una parte fija
+                            y vos completás la tuya.
+                        </p>
+                        <p className="flex gap-2">
+                            <span className="text-green-700 font-semibold flex-shrink-0">Al instante:</span>
+                            <span>
+                                cambiar <strong>quién firma</strong>, <strong>tu línea</strong> (cómo se paga, el
+                                horario), a quién le llega, si adjunta el PDF, y prender o apagar cualquier aviso.
+                                Eso no pasa por Meta: lo cambiás y ya sale así.
+                            </span>
+                        </p>
+                        <p className="flex gap-2">
+                            <span className="text-amber-700 font-semibold flex-shrink-0">Hasta 24 hs:</span>
+                            <span>
+                                cambiar el <strong>texto fijo</strong> o pedir un mensaje nuevo que no esté en la
+                                lista. Eso lo tiene que aprobar Meta y suele tardar un día, así que
+                                <strong> escribinos y lo mandamos a aprobar</strong>. Mientras revisan, ese aviso
+                                puntual no se puede mandar.
+                            </span>
+                        </p>
+                        <p className="text-muted-foreground">
+                            Y si el cliente te escribió hace menos de 24 horas, ahí le contestás lo que quieras
+                            desde el celular, como siempre. Eso no necesita aprobación de nadie.
+                        </p>
+                    </div>
                 </CardContent>
             </Card>
 

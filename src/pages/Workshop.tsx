@@ -5,6 +5,7 @@ import { useAuthStore } from "@/store/authStore";
 import { supabase } from "@/lib/supabase";
 import { formatOrdenNumber, ordenNumberForWebhook } from "@/lib/formatId";
 import { printServiceReport } from "@/lib/printServiceBtn";
+import { dispararMensajesAutomaticos } from "@/lib/comprobanteALaNube";
 import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
@@ -163,10 +164,29 @@ export default function Workshop() {
     // Paso 2 del flujo: el cliente retiró la bici → recién ahí pasa al historial
     const doDeliver = async (job: DashboardJob) => {
         try {
+            const fechaEntregado = new Date().toISOString();
             await updateServicio(job.service_id, {
                 estado: 'delivered',
-                fecha_entregado: new Date().toISOString(),
+                fecha_entregado: fechaEntregado,
             });
+
+            // Los mensajes que el taller dejó configurados para este momento
+            // (Configuración → Mensajes automáticos). Va sin `await`: si el
+            // WhatsApp tarda, la bici ya se entregó y la pantalla no puede
+            // quedar esperando. Si no hay ninguna regla prendida, no hace nada.
+            const servicioEntregado = servicios.find(s => s.id === job.service_id);
+            if (servicioEntregado) {
+                void dispararMensajesAutomaticos({
+                    servicioId: job.service_id,
+                    evento: 'bici_entregada',
+                    // El store todavía tiene el estado viejo: se le pasa la fecha
+                    // real de entrega para que el comprobante no salga sin ella.
+                    serviceData: { ...servicioEntregado, estado: 'delivered', fecha_entregado: fechaEntregado },
+                    clientName: job.client_name,
+                    bikeModel: job.bike_model,
+                    clientPhone: job.client_phone || '',
+                });
+            }
 
             // Webhook "bici entregada" → el n8n del taller actualiza la fecha de la orden al
             // día real en que el cliente la retiró (a veces se cobra días después de finalizar).
@@ -893,6 +913,18 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                 // 1. UPDATE a Supabase para cambiar el estado
                 const fechaFinalizacion = new Date().toISOString();
                 await updateServicio(job.service_id, { estado: 'ready', fecha_finalizacion: fechaFinalizacion });
+
+                // El aviso de "ya está lista" con el comprobante, si el taller lo
+                // dejó prendido. Sin `await` a propósito: el mecánico ya terminó
+                // su trabajo y no tiene por qué esperar a que salga un WhatsApp.
+                void dispararMensajesAutomaticos({
+                    servicioId: job.service_id,
+                    evento: 'service_finalizado',
+                    serviceData: { ...service, estado: 'ready', fecha_finalizacion: fechaFinalizacion },
+                    clientName: job.client_name,
+                    bikeModel: job.bike_model,
+                    clientPhone: job.client_phone || '',
+                });
 
                 // 2. Inmediatamente después del éxito del update, enviamos el Webhook
                 try {

@@ -21,6 +21,7 @@ import { useTourStore } from '@/components/OnboardingTour';
 import { resetTours } from '@/lib/tourSeen';
 import { ProductosOcultos } from '@/components/ProductosOcultos';
 import ConectarWhatsApp from '@/pages/ConectarWhatsApp';
+import { MensajesAutomaticos } from '@/components/MensajesAutomaticos';
 
 // ─────────────────────────────────────────────────────────────
 // Guardrails del logo: la calidad del branding ya no pasa por Iara,
@@ -112,10 +113,11 @@ export default function Configuracion() {
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-5">
                     <TabsTrigger value="taller">Mi Taller</TabsTrigger>
                     <TabsTrigger value="servicios">Menú de Services</TabsTrigger>
                     <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
+                    <TabsTrigger value="automaticos">Mensajes automáticos</TabsTrigger>
                     <TabsTrigger value="preferencias">Preferencias</TabsTrigger>
                 </TabsList>
 
@@ -128,6 +130,10 @@ export default function Configuracion() {
                 <TabsContent value="whatsapp" className="mt-6">
                     <ConectarWhatsApp taller={taller} avisar={avisar} />
                 </TabsContent>
+                <TabsContent value="automaticos" className="mt-6">
+                    <MensajesAutomaticos taller={taller} avisar={avisar} />
+                </TabsContent>
+
                 <TabsContent value="preferencias" className="mt-6">
                     <TabPreferencias taller={taller} setTaller={setTaller} avisar={avisar} />
                 </TabsContent>

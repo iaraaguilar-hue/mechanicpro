@@ -31,17 +31,17 @@ import { Loader2, Plus, Trash2, Save, MessageSquare, AlertCircle, FileText, X } 
 // Vive duplicado a propósito y con esta nota: el frontend no puede importar de
 // una Edge Function. Si allá se agrega una plantilla, acá también.
 const PLANTILLAS: Record<string, { cuerpo: string; conPdf: boolean; titulo: string }> = {
-    bici_lista_comprobante: {
+    bici_lista_pdf: {
         titulo: 'Ya está lista, con el comprobante',
-        cuerpo: '¡Hola {{1}}! Soy {{2}}, de {{3}}. Ya está lista tu {{4}}. Te paso el comprobante con el detalle del trabajo. {{5}} Cuando quieras la pasás a buscar.',
+        cuerpo: 'Hola {{1}}! Soy {{2}}, de {{3}}. Ya está lista tu {{4}}. Te paso el comprobante con el detalle del trabajo. {{5}} Cuando quieras la pasás a buscar.',
         conPdf: true,
     },
-    comprobante_entrega: {
+    comprobante_entrega_pdf: {
         titulo: 'Gracias + comprobante',
-        cuerpo: '¡Hola {{1}}! Soy {{2}}, de {{3}}. Te dejo el comprobante del service de tu {{4}}, con el detalle del trabajo. {{5}} ¡Gracias por confiar en nosotros!',
+        cuerpo: 'Hola {{1}}! Soy {{2}}, de {{3}}. Te dejo el comprobante del service de tu {{4}}, con el detalle del trabajo. {{5}} Gracias por confiar en nosotros!',
         conPdf: true,
     },
-    aviso_interno_entrega: {
+    aviso_tienda_entrega: {
         titulo: 'Aviso interno (al número del negocio)',
         cuerpo: 'Bici entregada: {{1}} de {{2}}. Va el comprobante del service para la gestión del cobro.',
         conPdf: true,
@@ -52,12 +52,12 @@ const EVENTOS: Record<string, { titulo: string; cuando: string; plantillas: stri
     service_finalizado: {
         titulo: 'Cuando termina el service',
         cuando: 'En el momento en que el mecánico aprieta «Finalizar».',
-        plantillas: ['bici_lista_comprobante'],
+        plantillas: ['bici_lista_pdf'],
     },
     bici_entregada: {
         titulo: 'Cuando se entrega la bici',
         cuando: 'En el momento en que se aprieta «Entregar», cuando el cliente la retira.',
-        plantillas: ['comprobante_entrega', 'aviso_interno_entrega'],
+        plantillas: ['comprobante_entrega_pdf', 'aviso_tienda_entrega'],
     },
 };
 
@@ -82,7 +82,7 @@ function vistaPrevia(regla: Partial<Regla>, taller: TallerData): string {
     if (!p) return '';
     const firma = (regla.firma ?? '').trim() || (taller.firma_nombre ?? '').trim() || taller.nombre;
     const nota = (regla.nota ?? '').trim() || NOTA_POR_DEFECTO;
-    const valores = regla.plantilla === 'aviso_interno_entrega'
+    const valores = regla.plantilla === 'aviso_tienda_entrega'
         ? ['Tarmac SL7', 'Martín Gómez']
         : ['Martín', firma, taller.nombre, 'Tarmac SL7', nota];
     return valores.reduce((t, v, i) => t.replaceAll(`{{${i + 1}}}`, v), p.cuerpo);

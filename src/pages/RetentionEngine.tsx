@@ -469,15 +469,27 @@ function SeccionAvisosSuaves({ resultado }: { resultado: ResultadoSuaves }) {
                         </CardHeader>
                         <CardContent className="space-y-3">
                             <p className="text-sm text-slate-700 leading-snug">{a.argumento}</p>
-                            <Button
-                                size="sm"
-                                variant={contactados[a.id] ? 'outline' : 'default'}
-                                className="w-full"
-                                onClick={() => contactar(a)}
-                            >
-                                <MessageCircle className="h-4 w-4 mr-1.5" />
-                                {contactados[a.id] ? 'Contactado' : 'Escribirle'}
-                            </Button>
+                            {/* Sin teléfono no hay WhatsApp que mandar, y ofrecerlo igual
+                                para que después salte un cartel de error es peor que decirlo.
+                                Pasa con los que entraron solos desde una venta del ERP:
+                                Contabilium casi nunca guarda el teléfono (1 de 40). La acción
+                                real ahí no es escribirle: es conseguir el número. */}
+                            {a.clienteTelefono ? (
+                                <Button
+                                    size="sm"
+                                    variant={contactados[a.id] ? 'outline' : 'default'}
+                                    className="w-full"
+                                    onClick={() => contactar(a)}
+                                >
+                                    <MessageCircle className="h-4 w-4 mr-1.5" />
+                                    {contactados[a.id] ? 'Contactado' : 'Escribirle'}
+                                </Button>
+                            ) : (
+                                <div className="text-xs text-slate-600 bg-white/70 border border-sky-200 rounded-md p-2 text-center">
+                                    <strong>No tenemos su teléfono.</strong> Pedíselo cuando pase por el local
+                                    y cargalo en su ficha.
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 ))}

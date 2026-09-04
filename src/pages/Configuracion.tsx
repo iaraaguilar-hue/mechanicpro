@@ -114,12 +114,17 @@ export default function Configuracion() {
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
-                <TabsList className="grid w-full grid-cols-5">
-                    <TabsTrigger value="taller">Mi Taller</TabsTrigger>
-                    <TabsTrigger value="servicios">Menú de Services</TabsTrigger>
-                    <TabsTrigger value="whatsapp">WhatsApp</TabsTrigger>
-                    <TabsTrigger value="automaticos">Mensajes automáticos</TabsTrigger>
-                    <TabsTrigger value="preferencias">Preferencias</TabsTrigger>
+                {/* 🔴 `grid-cols-5` en 390px comprime las cinco pestañas hasta que se
+                    pisan entre sí: se leía "Mi TallMenú de ServiMasMAppajes auton". Pasó
+                    al sumar la quinta (Mensajes automáticos, 3-sep-2026). En pantalla
+                    chica van en fila con scroll horizontal, que es lo que hace cualquier
+                    app con más pestañas que ancho; desde `sm` vuelve la grilla pareja. */}
+                <TabsList className="flex w-full justify-start overflow-x-auto sm:grid sm:grid-cols-5">
+                    <TabsTrigger value="taller" className="flex-shrink-0">Mi Taller</TabsTrigger>
+                    <TabsTrigger value="servicios" className="flex-shrink-0">Menú de Services</TabsTrigger>
+                    <TabsTrigger value="whatsapp" className="flex-shrink-0">WhatsApp</TabsTrigger>
+                    <TabsTrigger value="automaticos" className="flex-shrink-0">Mensajes automáticos</TabsTrigger>
+                    <TabsTrigger value="preferencias" className="flex-shrink-0">Preferencias</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="taller" className="mt-6">

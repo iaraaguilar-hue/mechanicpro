@@ -129,7 +129,12 @@ export function AltasDesdeERP({ taller, setTaller, avisar }: {
                 </div>
 
                 <div className="space-y-2 pt-1 border-t">
-                    <Label className="pt-2 block">¿Desde cuántas bicis es venta mayorista?</Label>
+                    {/* La pregunta va del lado del cliente, no del mayorista: puesta al
+                        revés ("¿desde cuántas es mayorista?") con el valor 1 se lee como
+                        que TODA venta es mayorista, y el sistema hace lo contrario — con
+                        1, recién a partir de 2 descarta. La etiqueta tiene que decir lo
+                        que el número hace. */}
+                    <Label className="pt-2 block">¿Cuántas bicis compra un cliente, como mucho?</Label>
                     <div className="flex items-center gap-3">
                         <Input
                             type="number" min={1} max={20} className="w-20 text-center"
@@ -139,12 +144,13 @@ export function AltasDesdeERP({ taller, setTaller, avisar }: {
                             disabled={guardando}
                         />
                         <span className="text-sm text-muted-foreground">
-                            o más en una misma factura
+                            {maxBicis === 1 ? 'bici en una misma factura' : 'bicis en una misma factura'}
                         </span>
                     </div>
                     {/* El matiz que hace falta explicar, porque es contraintuitivo. */}
                     <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        Si una factura tiene más bicis que eso, es venta a un negocio y no se carga.
+                        Una factura con más de {maxBicis === 1 ? 'una bici' : `${maxBicis} bicis`} es
+                        venta a un negocio y no se carga.
                         Con una sola, aunque esté facturada a una empresa, se anota para que preguntes
                         de quién es la bici: <strong>mucha gente factura su bicicleta a su empresa</strong> y
                         esos sí son clientes tuyos.

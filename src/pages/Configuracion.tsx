@@ -22,6 +22,7 @@ import { resetTours } from '@/lib/tourSeen';
 import { ProductosOcultos } from '@/components/ProductosOcultos';
 import ConectarWhatsApp from '@/pages/ConectarWhatsApp';
 import { MensajesAutomaticos } from '@/components/MensajesAutomaticos';
+import { AltasDesdeERP } from '@/components/AltasDesdeERP';
 
 // ─────────────────────────────────────────────────────────────
 // Guardrails del logo: la calidad del branding ya no pasa por Iara,
@@ -1153,6 +1154,9 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                 </p>
             </CardContent>
         </Card>
+
+        {/* ── La bici vendida entra sola (3-sep-2026) ── */}
+        <AltasDesdeERP taller={taller} setTaller={setTaller} avisar={avisar} />
 
         {/* ── Quién hizo cada service (opt-in, 3-sep-2026) ── */}
         <Card className="flex flex-col">

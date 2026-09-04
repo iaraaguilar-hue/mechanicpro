@@ -155,7 +155,10 @@ export default function FichaCliente({ clienteId }: { clienteId: string }) {
                                 <div key={v.servicioId} className="text-sm border-l-2 border-slate-200 pl-2">
                                     <div className="text-xs text-muted-foreground leading-tight">
                                         {v.fecha ? instanteAR(v.fecha) : "sin fecha"}
-                                        {v.bici && (
+                                        {/* La bici solo si tiene más de una: con una sola, su
+                                            nombre ya está en el chip del encabezado y repetirlo
+                                            en cada línea del historial no distingue nada. */}
+                                        {v.bici && bicis.length > 1 && (
                                             <>
                                                 {" · "}
                                                 <span className="font-semibold text-slate-600">{v.bici}</span>

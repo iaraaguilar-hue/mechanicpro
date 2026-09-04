@@ -167,6 +167,14 @@ function leerProducto(nombre) {
     if (talleres.length > 1) die(`hay más de un taller que matchea "${TALLER}"`);
     const taller = talleres[0];
 
+    // Dónde atiende el taller y a partir de cuántas bicis es venta mayorista.
+    // Sin config, no se filtra por provincia (mejor no cargar de menos por un
+    // default que el taller no eligió) y una sola bici por venta.
+    const { data: cfgRow } = await db.from('talleres').select('config_altas_erp').eq('id', taller.id).maybeSingle();
+    const cfg = cfgRow?.config_altas_erp || {};
+    const PROVINCIAS = Array.isArray(cfg.provincias) ? cfg.provincias : [];
+    const MAX_BICIS = Number(cfg.max_bicis_por_venta) || 1;
+
     const hasta = new Date();
     const desde = new Date(Date.now() - DIAS * 86400000);
     const f = (d) => d.toISOString().slice(0, 10);
@@ -204,7 +212,8 @@ function leerProducto(nombre) {
     const porDni = new Map();
     for (const c of clientesMP ?? []) { const d = dniDe(c.dni); if (d) porDni.set(d, c); }
 
-    const resumen = { vinculado: 0, creado: 0, sin_cliente: 0, omitido: 0, fallo: 0, saltados: 0 };
+    const resumen = { vinculado: 0, creado: 0, lejos: 0, mayorista: 0, a_revisar: 0,
+                      generico: 0, sin_cliente: 0, omitido: 0, fallo: 0, saltados: 0 };
 
     for (const c of comprobantes) {
         const id = String(c.Id);
@@ -231,8 +240,45 @@ function leerProducto(nombre) {
         const dni = dniDe(cli?.NroDoc);
         if (!nombre) { await anotar('sin_cliente', 'el comprobante no trae nombre'); continue; }
 
+        // ── 1. El cliente genérico de facturación no es nadie.
+        // "CONSUMIDOR FINAL" aparece en las ventas sin datos: cargarlo como cliente
+        // del taller crea una ficha a nombre de nadie que después nadie borra.
+        if (/^(consumidor final|sin identificar|cliente ocasional|s\/?d)$/i.test(nombre.trim())) {
+            await anotar('generico', `"${nombre}": es el cliente genérico de facturación`);
+            continue;
+        }
+
+        // ── 2. El que compra desde afuera.
+        // Iara: "si nos compra una bici en Mendoza, no nos sirve de nada tenerlo en
+        // Mechanic Pro". Es una venta, pero no un cliente de taller: no va a traer
+        // la bici, y el aviso de service le llegaría a 1.000 km. Se registra igual
+        // para que el taller lo pueda mirar, pero no entra a la base de clientes.
+        const provincia = (cli?.Provincia || '').trim();
+        if (PROVINCIAS.length && provincia && !PROVINCIAS.some(p => p.toLowerCase() === provincia.toLowerCase())) {
+            await anotar('lejos', `${nombre} · ${provincia}: fuera de donde atiende el taller`);
+            console.log(`  🌎 ${nombre} — ${provincia} (no se carga: está lejos)`);
+            continue;
+        }
+
+        // ── 3. El que factura a su empresa.
+        // Saltear TODA venta con CUIT de empresa tiraba al bebé con el agua: una
+        // persona que compra su bici y la factura a su empresa para descargar IVA
+        // SÍ es cliente del taller. Lo que no lo es, es la S.A. que se lleva tres.
+        // Por eso el corte es por CANTIDAD DE BICIS, no por tipo de documento.
         if (esEmpresa(cli?.NroDoc)) {
-            await anotar('omitido', `${nombre}: es una empresa (CUIT ${cli?.NroDoc}), venta mayorista`);
+            if (bicis.length > MAX_BICIS) {
+                await anotar('mayorista', `${nombre}: empresa con ${bicis.length} bicis en un comprobante`);
+                console.log(`  🏢 ${nombre} — ${bicis.length} bicis (mayorista, no se carga)`);
+                continue;
+            }
+            // Una sola bici a nombre de una empresa: probablemente hay una persona
+            // atrás. Se registra para que el taller pregunte de quién es, pero no se
+            // crea un cliente con el nombre de la empresa.
+            const { modelo: mod, talle: tal } = leerProducto(bicis[0].Concepto);
+            await anotar('a_revisar',
+                `${nombre} (CUIT ${cli?.NroDoc}) compró 1 ${mod}${tal ? ' ' + tal : ''}. `
+                + `Facturado a una empresa: preguntar de quién es la bici.`);
+            console.log(`  ❓ ${nombre} — 1 ${mod}: facturado a empresa, hay que preguntar de quién es`);
             continue;
         }
 
@@ -291,6 +337,13 @@ function leerProducto(nombre) {
     console.log(`  sin documento utilizable:                    ${resumen.sin_cliente}`);
     console.log(`  fallaron:                                    ${resumen.fallo}`);
     console.log(`  ya procesados antes:                         ${resumen.saltados}`);
+    if (resumen.lejos + resumen.mayorista + resumen.a_revisar + resumen.generico > 0) {
+        console.log('\n── ventas que NO se cargaron, y por qué ──');
+        if (resumen.lejos)     console.log(`  🌎 ${resumen.lejos} de otra provincia (no van a traer la bici acá)`);
+        if (resumen.mayorista) console.log(`  🏢 ${resumen.mayorista} mayoristas (empresa con varias bicis)`);
+        if (resumen.generico)  console.log(`  👤 ${resumen.generico} a "consumidor final" (no es nadie)`);
+        if (resumen.a_revisar) console.log(`  ❓ ${resumen.a_revisar} facturadas a una empresa: HAY QUE PREGUNTAR de quién es la bici`);
+    }
     if (resumen.creado > 0) {
         console.log(`\n⚠️  Hay ${resumen.creado} cliente(s) sin teléfono. Contabilium no lo guarda:`);
         console.log('   se los pide el taller cuando pasen. Salen en la lista de clientes con origen "erp".');

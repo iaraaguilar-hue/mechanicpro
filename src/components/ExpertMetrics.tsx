@@ -285,7 +285,20 @@ export default function ExpertMetrics({ servicios, isLoading }: Props) {
                                     />
                                     <YAxis
                                         tick={{ fontSize: 12, fill: '#64748b' }}
-                                        tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                                        // El eje mostraba los montos CORTADOS por la izquierda: el DOM decía
+                                        // "$340k" y en pantalla se leía "40k" (y "$255k" se leía "55k"). El
+                                        // ancho por defecto del eje son 60 px, "$340k" no entra, y el dx=-10
+                                        // lo empujaba todavía más afuera del área que el SVG recorta. Un
+                                        // dueño de taller leía 40k donde había 340k. (4-sep-2026)
+                                        width={84}
+                                        // Y arriba del millón se rompía igual aunque sobre ancho: un taller
+                                        // que factura 4 millones daba "$4000k", 6 caracteres que vuelven a no
+                                        // entrar. Arriba de 1 M se muestra en millones.
+                                        tickFormatter={(v) => (
+                                            Math.abs(v) >= 1_000_000
+                                                ? `$${(v / 1_000_000).toFixed(1).replace('.', ',')}M`
+                                                : `$${(v / 1000).toFixed(0)}k`
+                                        )}
                                         axisLine={false}
                                         tickLine={false}
                                         dx={-10}

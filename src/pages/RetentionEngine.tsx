@@ -445,8 +445,9 @@ function SeccionAvisosSuaves({ resultado }: { resultado: ResultadoSuaves }) {
                 el que lo prende un lunes ve una sección vacía y lo apaga. */}
             {enCamino.cuantas > 0 && (
                 <p className="text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded-md p-2.5">
-                    {enCamino.cuantas === 1 ? 'Hay 1 bici nueva' : `Hay ${enCamino.cuantas} bicis nuevas`} que
-                    todavía no vino al taller. {enCamino.cuantas === 1 ? 'Va a aparecer acá' : 'La primera va a aparecer acá'}
+                    {enCamino.cuantas === 1
+                        ? 'Hay 1 bici nueva que todavía no vino al taller. Va a aparecer acá'
+                        : `Hay ${enCamino.cuantas} bicis nuevas que todavía no vinieron al taller. La primera va a aparecer acá`}
                     {enCamino.enDias !== null && enCamino.enDias > 0 ? ` en ${enCamino.enDias} día${enCamino.enDias > 1 ? 's' : ''}` : ' pronto'},
                     cuando le toque el primer service.
                 </p>

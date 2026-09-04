@@ -56,6 +56,11 @@ export default function BandejaRespuestas() {
     const [redactando, setRedactando] = useState(false);
     const [enviando, setEnviando] = useState(false);
     const [aviso, setAviso] = useState<string | null>(null);
+    // En el celular la lista se hacía interminable y había que scrollear todo para
+    // pasar de largo (Iara, 3-sep). Se muestran las 4 más nuevas y el resto queda
+    // a un toque: la ventana de 24hs premia atender lo reciente, así que el orden
+    // ya pone arriba lo que importa.
+    const [verTodas, setVerTodas] = useState(false);
 
     const cargar = async () => {
         // Últimos 7 días: más atrás ya no es una conversación abierta, es
@@ -67,7 +72,9 @@ export default function BandejaRespuestas() {
             .eq("atendido", false)
             .gte("recibido_at", desde)
             .order("recibido_at", { ascending: false })
-            .limit(20);
+            // 50 y no 20: con 20 el encabezado decía "te contestaron 20 clientes"
+            // cuando podía haber más, o sea que el número era el techo y no el dato.
+            .limit(50);
         setMensajes((data ?? []) as Entrante[]);
     };
 
@@ -78,6 +85,28 @@ export default function BandejaRespuestas() {
     }, [taller_id]);
 
     if (!mensajes || mensajes.length === 0) return null;
+
+    // ── Una tarjeta por PERSONA, no por mensaje (3-sep-2026, corrección de Iara:
+    // "aparecen tres mensajes de la misma persona para responder y seguramente ya
+    // avanzó la conversación").
+    //
+    // Un cliente que escribe "hola", "cómo va" y "necesito un service" ocupaba tres
+    // tarjetas y pedía tres respuestas, cuando es UNA conversación. Se agrupa por
+    // cliente (o por teléfono si no está identificado) y queda el último mensaje,
+    // que es el que hay que contestar. Los mensajes vienen ordenados por fecha
+    // descendente, así que el primero de cada grupo ya es el más nuevo.
+    const conversaciones: { ultimo: Entrante; cuantos: number }[] = [];
+    const vistos = new Map<string, number>();
+    for (const m of mensajes) {
+        const quien = m.cliente_id ?? m.telefono ?? m.id;
+        const i = vistos.get(quien);
+        if (i === undefined) {
+            vistos.set(quien, conversaciones.length);
+            conversaciones.push({ ultimo: m, cuantos: 1 });
+        } else {
+            conversaciones[i].cuantos++;
+        }
+    }
 
     const nombreDe = (m: Entrante) =>
         clientes.find(c => c.id === m.cliente_id)?.nombre ?? m.telefono;
@@ -160,13 +189,16 @@ export default function BandejaRespuestas() {
             <CardContent className="p-4 space-y-3">
                 <div className="flex items-center gap-2">
                     <MessageSquare className="w-4 h-4 text-blue-600" />
+                    {/* "Te contestaron" decía también el panel de arriba, que mide otra
+                        cosa (cuántos respondieron TU recontacto). Se veían 0 arriba y 20
+                        acá, en la misma pantalla. Acá son mensajes entrantes sin responder. */}
                     <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">
-                        Te contestaron {mensajes.length} cliente{mensajes.length === 1 ? "" : "s"}
+                        {conversaciones.length} conversación{conversaciones.length === 1 ? "" : "es"} sin responder
                     </h3>
                 </div>
 
                 <div className="space-y-2">
-                    {mensajes.map(m => {
+                    {(verTodas ? conversaciones : conversaciones.slice(0, 4)).map(({ ultimo: m, cuantos }) => {
                         const horas = horasDesde(m.recibido_at);
                         const quedan = Math.max(0, Math.floor(HORAS_VENTANA - horas));
                         return (
@@ -194,6 +226,11 @@ export default function BandejaRespuestas() {
                                             )}
                                         </div>
                                         <p className="text-sm text-slate-700 mt-1">“{m.texto || "(sin texto)"}”</p>
+                                        {cuantos > 1 && (
+                                            <p className="text-[11px] text-slate-500 mt-0.5">
+                                                Es el último de {cuantos} mensajes suyos.
+                                            </p>
+                                        )}
                                     </div>
                                     <span className={`text-[11px] whitespace-nowrap ${quedan <= 4 ? "text-red-600 font-semibold" : "text-muted-foreground"}`}>
                                         {quedan > 0 ? `quedan ${quedan} h` : "ventana cerrada"}
@@ -243,6 +280,17 @@ export default function BandejaRespuestas() {
                         );
                     })}
                 </div>
+
+                {conversaciones.length > 4 && (
+                    <button
+                        onClick={() => setVerTodas(v => !v)}
+                        className="w-full text-xs font-medium text-blue-700 hover:text-blue-900 py-2 rounded-md hover:bg-blue-50 transition-colors"
+                    >
+                        {verTodas
+                            ? "Mostrar solo las más nuevas"
+                            : `Ver las otras ${conversaciones.length - 4}`}
+                    </button>
+                )}
             </CardContent>
         </Card>
     );

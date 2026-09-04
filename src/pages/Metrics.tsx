@@ -737,15 +737,39 @@ export function PorMecanico({ servicios, tallerId }: { servicios: any[]; tallerI
                     </p>
                 ) : (
                     <>
-                        <div className="overflow-x-auto">
+                        {/* 📱 En el celular, tarjetas. Cinco columnas no entran en 390px: la
+                            primera versión cortaba los repuestos y el total a la mitad, y en el
+                            teléfono es donde el taller mira esto. La tabla vuelve en pantalla ancha. */}
+                        <div className="space-y-2.5 sm:hidden">
+                            {filas.map((f) => (
+                                <div key={f.id} className="rounded-lg border p-3">
+                                    <div className="flex items-baseline justify-between gap-2">
+                                        <span className="font-semibold">{f.nombre}</span>
+                                        <span className="text-xs text-muted-foreground">
+                                            {f.services} service{f.services > 1 ? 's' : ''}
+                                        </span>
+                                    </div>
+                                    <div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+                                        <span className="text-muted-foreground">Mano de obra</span>
+                                        <span className="text-right tabular-nums font-semibold">{fmt(f.labor)}</span>
+                                        <span className="text-muted-foreground">Repuestos</span>
+                                        <span className="text-right tabular-nums">{fmt(f.parts)}</span>
+                                        <span className="text-muted-foreground border-t pt-1.5">Total</span>
+                                        <span className="text-right tabular-nums border-t pt-1.5">{fmt(f.labor + f.parts)}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="hidden sm:block overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead className="text-xs text-muted-foreground border-b">
                                     <tr>
                                         <th className="text-left font-medium py-2">Mecánico</th>
-                                        <th className="text-right font-medium py-2">Services</th>
-                                        <th className="text-right font-medium py-2">Mano de obra</th>
-                                        <th className="text-right font-medium py-2">Repuestos</th>
-                                        <th className="text-right font-medium py-2">Total</th>
+                                        <th className="text-right font-medium py-2 whitespace-nowrap">Services</th>
+                                        <th className="text-right font-medium py-2 whitespace-nowrap">Mano de obra</th>
+                                        <th className="text-right font-medium py-2 whitespace-nowrap">Repuestos</th>
+                                        <th className="text-right font-medium py-2 whitespace-nowrap">Total</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -753,21 +777,25 @@ export function PorMecanico({ servicios, tallerId }: { servicios: any[]; tallerI
                                         <tr key={f.id} className="border-b last:border-0">
                                             <td className="py-2.5 font-medium">{f.nombre}</td>
                                             <td className="py-2.5 text-right tabular-nums">{f.services}</td>
-                                            <td className="py-2.5 text-right tabular-nums font-semibold">{fmt(f.labor)}</td>
-                                            <td className="py-2.5 text-right tabular-nums text-muted-foreground">{fmt(f.parts)}</td>
-                                            <td className="py-2.5 text-right tabular-nums">{fmt(f.labor + f.parts)}</td>
+                                            <td className="py-2.5 text-right tabular-nums font-semibold whitespace-nowrap">{fmt(f.labor)}</td>
+                                            <td className="py-2.5 text-right tabular-nums text-muted-foreground whitespace-nowrap">{fmt(f.parts)}</td>
+                                            <td className="py-2.5 text-right tabular-nums whitespace-nowrap">{fmt(f.labor + f.parts)}</td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
+
                         {sinRegistrar > 0 && (
-                            // Decirlo es lo que evita que alguien reparta sueldos sobre una tabla
-                            // que no cubre todo el trabajo del mes.
-                            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2 mt-3">
-                                Ojo: {sinRegistrar} service{sinRegistrar > 1 ? 's' : ''} del período no
-                                {sinRegistrar > 1 ? ' tienen' : ' tiene'} mecánico registrado, así que
-                                {sinRegistrar > 1 ? ' no están' : ' no está'} en esta tabla.
+                            // Se dice para que nadie reparta sueldos sobre una tabla que no cubre
+                            // todo el mes. Pero se dice sin alarma: al arrancar, TODO el histórico
+                            // está sin registrar, y un "Ojo: 297 services" leído el primer día
+                            // parece un error del sistema en vez de lo normal.
+                            <p className="text-[11px] text-muted-foreground bg-muted/50 border rounded-md p-2.5 mt-3">
+                                Quedan <strong className="text-foreground">{sinRegistrar}</strong> service{sinRegistrar > 1 ? 's' : ''} del
+                                período sin mecánico anotado, así que no {sinRegistrar > 1 ? 'entran' : 'entra'} en la
+                                cuenta. Es lo esperable al principio: solo se guarda desde que
+                                empezaste a elegir quién hizo cada uno.
                             </p>
                         )}
                     </>

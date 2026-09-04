@@ -159,7 +159,7 @@ export default function PanelRetorno() {
                     />
                     <Numero
                         icono={<MessageSquare className="w-3 h-3" />}
-                        etiqueta="Te contestaron"
+                        etiqueta="Respondieron tu mensaje"
                         valor={String(contestaron)}
                         detalle={recontactados ? `${Math.round((contestaron / recontactados) * 100)}% de los que escribiste` : undefined}
                     />

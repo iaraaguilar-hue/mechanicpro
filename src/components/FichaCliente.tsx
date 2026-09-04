@@ -2,11 +2,10 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useDataStore } from "@/store/dataStore";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { construirDossier } from "@/lib/dossierCliente";
 import { instanteAR } from '@/lib/fechaAR';
 import {
-    Bike, Flag, Wrench, AlertTriangle, CalendarClock, Coins, History,
+    Bike, Wrench, AlertTriangle, Coins, History,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
@@ -60,7 +59,7 @@ export default function FichaCliente({ clienteId }: { clienteId: string }) {
 
     if (!dossier) return null;
 
-    const { plata: guita, ultimaVisita, salud, carreras: corrio, historial, bicis } = dossier;
+    const { plata: guita, ultimaVisita, salud, historial, bicis } = dossier;
     const vencidos = salud.filter(s => s.diasRestantes < 0);
 
     // Un cliente sin una sola visita todavía no tiene historia que mostrar:
@@ -104,54 +103,17 @@ export default function FichaCliente({ clienteId }: { clienteId: string }) {
                     />
                 </div>
 
-                {/* Lo que está por vencer: la razón concreta para escribirle. */}
-                {salud.length > 0 && (
-                    <div>
-                        <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1.5 flex items-center gap-1.5">
-                            <CalendarClock className="w-3.5 h-3.5" /> Salud de componentes
-                        </h4>
-                        <div className="flex flex-wrap gap-1.5">
-                            {salud.slice(0, 6).map((s, i) => (
-                                <Badge
-                                    key={`${s.componente}-${i}`}
-                                    variant="outline"
-                                    className={s.diasRestantes < 0
-                                        ? "bg-red-50 text-red-700 border-red-200"
-                                        : s.diasRestantes < 30
-                                            ? "bg-amber-50 text-amber-700 border-amber-200"
-                                            : "bg-slate-50 text-slate-600 border-slate-200"}
-                                >
-                                    {s.componente}
-                                    <span className="ml-1 opacity-70">
-                                        {s.diasRestantes < 0 ? `venció hace ${Math.abs(s.diasRestantes)} d` : `en ${s.diasRestantes} d`}
-                                    </span>
-                                </Badge>
-                            ))}
-                        </div>
-                    </div>
-                )}
+                {/* 🔴 Acá vivía "Salud de componentes", con los mismos vencimientos que la
+                    sección "Estado de Salud & Mantenimiento" de más abajo — que además los
+                    muestra mejor: con barra, porcentaje y botón de agendar. Se sacó el 3-sep-2026
+                    (Iara: "hay demasiada información y mucha información repetida"). FichaCliente
+                    solo se usa en BikeDetail, y ahí esa sección está SIEMPRE, así que era una
+                    duplicación sistemática y no un caso de borde. */}
 
-                {/* Las carreras: el dato que ningún taller se acuerda. */}
-                {corrio.length > 0 && (
-                    <div>
-                        <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1.5 flex items-center gap-1.5">
-                            <Flag className="w-3.5 h-3.5" /> Carreras que corrió
-                        </h4>
-                        <div className="flex flex-wrap gap-1.5">
-                            {corrio.slice(0, 5).map((c, i) => (
-                                <Badge key={`${c.nombre}-${i}`} variant="outline" className="bg-violet-50 text-violet-700 border-violet-200">
-                                    {c.nombre}
-                                    <span className="ml-1 opacity-70">
-                                        {c.diasRestantes > 0 ? `en ${c.diasRestantes} d` : `hace ${Math.abs(c.diasRestantes)} d`}
-                                    </span>
-                                </Badge>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Las bicis, con cuánto hace que no pasa cada una. */}
-                {bicis.length > 0 && (
+                {/* Las bicis, con cuánto hace que no pasa cada una.
+                    Con UNA sola no se muestra: el encabezado de la pantalla ya la nombra, y
+                    repetirla es una línea que el mecánico tiene que leer para no enterarse de nada. */}
+                {bicis.length > 1 && (
                     <div>
                         <h4 className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1.5 flex items-center gap-1.5">
                             <Bike className="w-3.5 h-3.5" /> Sus bicis

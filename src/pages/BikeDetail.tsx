@@ -84,19 +84,9 @@ export default function BikeDetail() {
         [storeRecordatorios, activeBikeId]
     );
 
-    // Client total services (completed)
-    // 🔴 Cuenta TODAS las órdenes no borradas del cliente, igual que la ficha
-    //    de abajo (10-ago-2026). Antes contaba solo las terminadas, así que la
-    //    misma pantalla decía "Total Services: 8" arriba y "VISITAS 10" abajo,
-    //    con "Sus bicis" sumando 5+5: tres números para lo mismo, dos de ellos
-    //    contradiciéndose. Una bici que está AHORA en el taller también es una
-    //    visita. El criterio único es el de `dossierCliente`: no borradas.
-    const clientTotalServices = useMemo(() => {
-        const clientBikeIds = clientBikes.map(b => b.id);
-        return storeServicios.filter(s =>
-            clientBikeIds.includes(s.bicicleta_id) && !s.eliminado_en
-        ).length;
-    }, [storeServicios, clientBikes]);
+    // 🗑️ Acá se calculaba `clientTotalServices`. Su único uso era el "Total Services: N"
+    // del encabezado, que salió el 3-sep-2026 por estar repetido tres veces en la pantalla.
+    // El número sigue existiendo, calculado una sola vez, en `dossierCliente` → "Visitas".
 
     // UI State
     const [isEditOpen, setIsEditOpen] = useState(false);
@@ -197,8 +187,6 @@ export default function BikeDetail() {
     const isClientMode = !activeBikeId && clientBikes.length === 0;
     if (!client && !isHydrating) return <div className="p-8">Cliente no encontrado.</div>;
 
-    const completedStatuses = ['completed', 'finalizado', 'entregado', 'ready', 'delivered'];
-    const totalServices = services.filter(s => completedStatuses.includes((s.estado || '').toLowerCase())).length;
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500 max-w-5xl mx-auto">
@@ -227,11 +215,10 @@ export default function BikeDetail() {
                                     <Pencil className="w-5 h-5" />
                                 </Button>
                             </h1>
-                            <div className="flex items-center gap-3 mt-1 text-muted-foreground">
-                                <span className="flex items-center gap-1">
-                                    Total Services: <span className="font-bold text-slate-900">{clientTotalServices}</span>
-                                </span>
-                            </div>
+                            {/* Acá decía "Total Services: N". El mismo número estaba además en
+                                la ficha de abajo ("Visitas") y en el historial ("Total Realizados"):
+                                tres veces en la misma pantalla. Se sacó el 3-sep-2026, pedido de
+                                Iara ("mucha información repetida"). Queda una sola vez, en la ficha. */}
                         </div>
                         <div className="flex items-center gap-3">
                             <Button onClick={() => setIsAddBikeOpen(true)} variant="outline">
@@ -284,13 +271,14 @@ export default function BikeDetail() {
                     )}
                 </div>
 
-                {/* Todo lo que sabemos de este cliente, junto y arriba: es lo
-                    que hay que tener a mano cuando lo tenés del otro lado del
-                    mostrador o estás por escribirle. */}
-                {client && <FichaCliente clienteId={client.id} />}
             </div>
 
             {isClientMode ? (
+                <>
+                {/* Sin bicis no hay estado que mostrar, pero la ficha del cliente
+                    SÍ tiene que estar: al bajarla de lugar quedó dentro de la otra
+                    rama y un cliente sin bicicletas se habría quedado sin su ficha. */}
+                {client && <FichaCliente clienteId={client.id} />}
                 <div className="py-12 text-center border-2 border-dashed rounded-lg bg-slate-50">
                     <h3 className="text-xl font-bold text-slate-800">Este cliente no tiene bicicletas seleccionadas</h3>
                     <p className="text-muted-foreground mb-4">Agrega una bicicleta para ver su historial y mantenimiento.</p>
@@ -298,6 +286,7 @@ export default function BikeDetail() {
                         <Plus className="mr-2 h-4 w-4" /> Agregar Primera Bicicleta
                     </Button>
                 </div>
+                </>
             ) : (
                 <>
                     {/* 2. Bike Health */}
@@ -376,15 +365,22 @@ export default function BikeDetail() {
                         </div>
                     </section>
 
+                    {/* La ficha del cliente va DESPUÉS del estado de la bici (3-sep-2026).
+                        Antes iba arriba de todo y empujaba lo accionable —"Líquido Tubeless,
+                        vencido hace 16 días"— abajo del pliegue: en el celular había que
+                        scrollear toda la ficha para enterarse de lo único que hay que hacer.
+                        El orden ahora es: quién es y qué bici → qué le falta → su contexto. */}
+                    {client && <FichaCliente clienteId={client.id} />}
+
                     {/* 3. Service History */}
                     <section data-tour="garage-historial" className="space-y-4 pt-4 border-t">
                         <div className="flex items-center justify-between">
                             <h3 className="text-xl font-bold flex items-center gap-2 text-slate-800">
                                 <Wrench className="h-5 w-5 text-primary" /> Historial de Servicios
                             </h3>
-                            <Badge variant="outline" className="text-base py-1 px-3 bg-white">
-                                Total Realizados: <span className="font-bold ml-1">{totalServices}</span>
-                            </Badge>
+                            <span className="text-sm text-muted-foreground">
+                                {services.length === 1 ? "1 orden" : `${services.length} órdenes`}
+                            </span>
                         </div>
 
                         <Card className="border-0 shadow-none bg-transparent">

@@ -48,6 +48,11 @@ const PLANTILLAS: Record<string, { cuerpo: string; conPdf: boolean; titulo: stri
         cuerpo: 'Bici entregada: {{1}} de {{2}}. Va el comprobante del service para la gestión del cobro.',
         conPdf: true,
     },
+    seguimiento_service: {
+        titulo: 'Cómo venís sintiendo la bici',
+        cuerpo: 'Hola {{1}}! Soy {{2}}, de {{3}}. Te escribo por el service que le hicimos a tu {{4}} y quería saber cómo la venís sintiendo, contame si notaste algo raro.',
+        conPdf: false,
+    },
 };
 
 const EVENTOS: Record<string, { titulo: string; cuando: string; plantillas: string[] }> = {
@@ -61,7 +66,19 @@ const EVENTOS: Record<string, { titulo: string; cuando: string; plantillas: stri
         cuando: 'En el momento en que se aprieta «Entregar», cuando el cliente la retira.',
         plantillas: ['comprobante_entrega_pdf', 'aviso_tienda_entrega'],
     },
+    // ── EL PRIMER MOMENTO QUE NO ES UN BOTÓN (5-sep-2026).
+    // Pedido de Iara: "que a los 30 días se envíe un mensaje automático de cómo se
+    // sintió la bici después del service". Los otros dos los dispara el mecánico
+    // apretando algo; este lo dispara el reloj, desde un cron en la nube.
+    dias_despues: {
+        titulo: 'Un tiempo después de que se llevó la bici',
+        cuando: 'Sale solo, a la mañana, sin que nadie apriete nada.',
+        plantillas: ['seguimiento_service'],
+    },
 };
+
+/** Los días por defecto del aviso por tiempo: los que pidió Iara. */
+const DIAS_POR_DEFECTO = 30;
 
 const NOTA_POR_DEFECTO = 'Cualquier duda me escribís por acá.';
 
@@ -69,6 +86,8 @@ type Regla = {
     id: string;
     nombre: string;
     evento: string;
+    /** Solo para evento = dias_despues: cuántos días después de que salió del taller. */
+    dias_despues: number | null;
     destino: 'cliente' | 'numero_fijo';
     numero_fijo: string | null;
     plantilla: string;
@@ -102,9 +121,14 @@ function vistaPrevia(
 
     const p = PLANTILLAS[regla.plantilla ?? ''];
     if (!p) return '';
+    // Cada plantilla del sistema tiene su propio orden de valores, igual que en el
+    // motor (`_shared/motor_wa.ts` → ORDEN_DEL_SISTEMA). El seguimiento lleva CUATRO
+    // y no cinco: no usa la línea del taller.
     const valores = regla.plantilla === 'aviso_tienda_entrega'
         ? ['Tarmac SL7', 'Martín Gómez']
-        : ['Martín', firma, taller.nombre ?? '', 'Tarmac SL7', nota];
+        : regla.plantilla === 'seguimiento_service'
+            ? ['Martín', firma, taller.nombre ?? '', 'Tarmac SL7']
+            : ['Martín', firma, taller.nombre ?? '', 'Tarmac SL7', nota];
     return valores.reduce((t, v, i) => t.replaceAll(`{{${i + 1}}}`, v), p.cuerpo);
 }
 
@@ -193,6 +217,7 @@ export function MensajesAutomaticos({ taller, avisar }: {
             destino: regla.destino ?? 'cliente',
             numero_fijo: regla.destino === 'numero_fijo' ? regla.numero_fijo : null,
             plantilla: regla.plantilla,
+            dias_despues: regla.evento === 'dias_despues' ? (regla.dias_despues ?? DIAS_POR_DEFECTO) : null,
             adjunta_pdf: regla.adjunta_pdf ?? true,
             nota: (regla.nota ?? '').trim() || null,
             firma: (regla.firma ?? '').trim() || null,
@@ -331,7 +356,12 @@ export function MensajesAutomaticos({ taller, avisar }: {
                                         variant="outline" size="sm"
                                         onClick={() => setNueva({
                                             nombre: '', evento, destino: 'cliente',
-                                            plantilla: cfg.plantillas[0], adjunta_pdf: true, activa: true,
+                                            plantilla: cfg.plantillas[0],
+                                            // El aviso por tiempo nunca lleva comprobante: sale un mes
+                                            // después y el cliente ya lo tiene desde que retiró la bici.
+                                            adjunta_pdf: evento !== 'dias_despues',
+                                            dias_despues: evento === 'dias_despues' ? DIAS_POR_DEFECTO : null,
+                                            activa: true,
                                         })}
                                     >
                                         <Plus className="h-4 w-4 mr-1" /> Agregar un mensaje acá
@@ -438,6 +468,29 @@ function Editor({ regla, taller, propias, guardando, onCambio, onGuardar, onCanc
                 />
                 <p className="text-xs text-muted-foreground">Es solo para que lo reconozcas acá. El cliente no lo ve.</p>
             </div>
+
+            {/* ── LOS DÍAS. Solo en el momento por tiempo.
+                Va ANTES de "qué se manda" porque es lo que define el momento: si va
+                después, el taller elige el mensaje sin saber cuándo va a salir. */}
+            {regla.evento === 'dias_despues' && (
+                <div className="space-y-2">
+                    <Label>¿Cuántos días después?</Label>
+                    <div className="flex items-center gap-3">
+                        <Input
+                            type="number" min={1} max={365} className="w-24 text-center"
+                            value={regla.dias_despues ?? DIAS_POR_DEFECTO}
+                            onChange={(e) => onCambio({ ...regla, dias_despues: Number(e.target.value) })}
+                        />
+                        <span className="text-sm text-muted-foreground">
+                            días desde que se llevó la bici
+                        </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                        Se cuenta desde el día que la retiró. Si nunca marcaste la entrega, desde el día
+                        que la terminaste. Sale a la mañana, sin que nadie apriete nada.
+                    </p>
+                </div>
+            )}
 
             <div className="space-y-2">
                 <Label>¿Qué se manda?</Label>

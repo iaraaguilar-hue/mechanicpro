@@ -29,7 +29,7 @@
 //    rechazo es una revisión perdida y un mecánico que no entiende qué hizo mal.
 // ─────────────────────────────────────────────────────────────
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { TallerData } from '@/store/authStore';
 import { Button } from '@/components/ui/button';
@@ -43,7 +43,7 @@ import {
 } from 'lucide-react';
 import {
     CAMPOS, CAMPOS_VALIDOS, LARGO_MAXIMO, validarCuerpo, vistaPreviaDeCuerpo,
-    type Campo,
+    camposDelCuerpo, type Campo,
 } from '@/lib/plantillasTaller';
 
 export type PlantillaDelTaller = {
@@ -52,7 +52,8 @@ export type PlantillaDelTaller = {
     nombre_meta: string;
     cuerpo: string;
     variables: string[];
-    evento: 'service_finalizado' | 'bici_entregada' | 'cualquiera';
+    evento: 'service_finalizado' | 'bici_entregada' | 'cualquiera' | 'manual';
+    cuando_texto: string | null;
     lleva_pdf: boolean;
     categoria: 'UTILITY' | 'MARKETING';
     estado: 'pendiente' | 'aprobada' | 'rechazada' | 'pausada' | 'deshabilitada' | 'error';
@@ -61,9 +62,12 @@ export type PlantillaDelTaller = {
 };
 
 const CUANDO: Record<PlantillaDelTaller['evento'], string> = {
-    service_finalizado: 'Cuando termina el service',
-    bici_entregada: 'Cuando se entrega la bici',
-    cualquiera: 'En los dos momentos',
+    service_finalizado: 'Sale sola cuando termina el service',
+    bici_entregada: 'Sale sola cuando se entrega la bici',
+    cualquiera: 'Sale sola en los dos momentos',
+    // No hay disparador para esto todavía. Se dice así y no "sin configurar":
+    // la plantilla funciona, lo que falta es que salga sola.
+    manual: 'La mandás vos cuando quieras',
 };
 
 /**
@@ -118,14 +122,20 @@ type Borrador = {
     id?: string;
     titulo: string;
     cuerpo: string;
+    /** Cuándo la quiere usar, EN SUS PALABRAS. Es lo que el mecánico escribe. */
+    cuandoTexto: string;
+    /** A qué momento de los que existen se parece. Lo dice la IA, lo confirma él. */
     evento: PlantillaDelTaller['evento'];
+    /** Lo que va a `pedidos_del_taller` cuando no se parece a ninguno. */
+    resumen?: string | null;
     lleva_pdf: boolean;
     categoria: 'UTILITY' | 'MARKETING';
     estadoPrevio?: PlantillaDelTaller['estado'];
 };
 
 const EN_BLANCO: Borrador = {
-    titulo: '', cuerpo: '', evento: 'cualquiera', lleva_pdf: false, categoria: 'UTILITY',
+    titulo: '', cuerpo: '', cuandoTexto: '', evento: 'manual',
+    lleva_pdf: false, categoria: 'UTILITY',
 };
 
 export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waListo }: {
@@ -163,7 +173,11 @@ export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waLi
                 id: borrador.id,
                 titulo: borrador.titulo.trim(),
                 cuerpo: borrador.cuerpo.trim(),
+                cuando_texto: borrador.cuandoTexto.trim(),
                 evento: borrador.evento,
+                // Lo que la IA entendió que le faltaría al sistema. Solo viaja
+                // cuando no hay disparador: es lo que se lee después en la bandeja.
+                resumen: borrador.evento === 'manual' ? (borrador.resumen ?? null) : null,
                 lleva_pdf: borrador.lleva_pdf,
                 categoria: borrador.categoria,
             },
@@ -256,7 +270,16 @@ export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waLi
                                             </span>
                                         )}
                                     </div>
-                                    <p className="text-xs text-muted-foreground mt-1">{CUANDO[p.evento]}</p>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        {CUANDO[p.evento]}
+                                        {/* Lo que escribió con sus palabras, si no coincide con
+                                            la etiqueta. Es lo que le permite reconocer SU plantilla
+                                            seis meses después, cuando "cuando se entrega la bici"
+                                            ya no le dice nada. */}
+                                        {p.cuando_texto && (
+                                            <span className="italic"> · «{p.cuando_texto}»</span>
+                                        )}
+                                    </p>
                                     <p className="text-xs text-slate-600 mt-1 line-clamp-2">
                                         {vistaPreviaDeCuerpo(p.cuerpo, {
                                             taller: taller.nombre,
@@ -270,6 +293,7 @@ export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waLi
                                         title={enRevision ? 'Meta la está revisando: no deja editarla hasta que conteste' : 'Editar'}
                                         onClick={() => setBorrador({
                                             id: p.id, titulo: p.titulo, cuerpo: p.cuerpo, evento: p.evento,
+                                            cuandoTexto: p.cuando_texto ?? '',
                                             lleva_pdf: p.lleva_pdf, categoria: p.categoria, estadoPrevio: p.estado,
                                         })}
                                     >
@@ -320,10 +344,63 @@ function EditorDePlantilla({ borrador, taller, mandando, onCambio, onMandar, onC
 }) {
     const areaRef = useRef<HTMLTextAreaElement>(null);
     const problema = borrador.cuerpo.trim() ? validarCuerpo(borrador.cuerpo) : null;
+
+    // ── Lo que la IA leyó del «cuándo».
+    const [lectura, setLectura] = useState<{ evento: Borrador['evento'] | null; pregunta?: string | null; resumen?: string | null } | null>(null);
+    const [interpretando, setInterpretando] = useState(false);
+    const [confirmado, setConfirmado] = useState(!!borrador.id);
+    const [aMano, setAMano] = useState(false);
+    // Contra qué texto se interpretó la última vez. Sin esto, cada vez que el
+    // mecánico toca el campo y sale sin cambiar nada se paga otra llamada.
+    const yaLeido = useRef<string>(borrador.cuandoTexto);
+
+    const interpretar = async () => {
+        const texto = borrador.cuandoTexto.trim();
+        if (texto.length < 8 || texto === yaLeido.current) return;
+        yaLeido.current = texto;
+        setInterpretando(true);
+        setConfirmado(false);
+        const { data, error } = await supabase.functions.invoke('plantillas-taller', {
+            body: { accion: 'interpretar', cuando_texto: texto },
+        });
+        setInterpretando(false);
+        // Si la IA no contesta no se rompe nada: se ofrece elegir a mano. Trabar la
+        // creación de una plantilla porque un modelo no respondió sería cambiar un
+        // desplegable molesto por una pantalla que no deja avanzar.
+        if (error || !data?.ok) { setAMano(true); return; }
+        setLectura({ evento: data.evento ?? null, pregunta: data.pregunta, resumen: data.resumen });
+        if (!data.evento) onCambio({ ...borrador, evento: 'manual', resumen: data.resumen ?? texto });
+    };
+
+    // La salida de emergencia de la lista de botones (Iara: "una forma de decir:
+    // che, hay algo que no está acá").
+    const [pidiendo, setPidiendo] = useState(false);
+    const [pedido, setPedido] = useState('');
+    const [pedidoHecho, setPedidoHecho] = useState(false);
+
+    const mandarPedido = async () => {
+        const texto = pedido.trim();
+        if (texto.length < 3) return;
+        await supabase.functions.invoke('plantillas-taller', {
+            body: { accion: 'pedir', tipo: 'campo', texto, plantilla_id: borrador.id ?? null },
+        });
+        setPedidoHecho(true);
+        setPidiendo(false);
+        setPedido('');
+    };
+
     const previa = vistaPreviaDeCuerpo(borrador.cuerpo, {
         taller: taller.nombre,
         firma: taller.firma_nombre || undefined,
     });
+
+    // Solo los avisos de los campos que metió, sin repetir. Mostrarlos todos
+    // siempre sería una pared de advertencias que nadie lee.
+    const avisosDeCampos = [...new Set(
+        camposDelCuerpo(borrador.cuerpo)
+            .map((c) => CAMPOS[c as Campo]?.siFalta)
+            .filter(Boolean) as string[],
+    )];
 
     /**
      * Mete el campo DONDE ESTÁ EL CURSOR, no al final.
@@ -331,18 +408,33 @@ function EditorDePlantilla({ borrador, taller, mandando, onCambio, onMandar, onC
      * Que se pegue al final obliga a cortar y pegar a mano, y es justo donde se
      * rompe la regla de Meta de "no puede terminar con un campo".
      */
+    // 🔴 El cursor se reposiciona en un `useEffect` y NO en un `requestAnimationFrame`.
+    // Con el RAF hay una ventana de un frame entre que React pinta el texto nuevo y
+    // que se mueve el cursor: si el mecánico empieza a tipear justo ahí, esas teclas
+    // se escriben en la posición vieja y se pierden al reordenarse el estado. Se vio
+    // en el QA con Playwright, que tipea al instante. Un dedo humano tarda más, pero
+    // "casi nunca pasa" no es "no pasa", y el síntoma sería una letra que desaparece
+    // sin explicación — de las peores de reportar y de reproducir.
+    const cursorPendiente = useRef<number | null>(null);
+
+    useEffect(() => {
+        if (cursorPendiente.current == null) return;
+        const pos = cursorPendiente.current;
+        cursorPendiente.current = null;
+        const area = areaRef.current;
+        if (!area) return;
+        area.focus();
+        area.setSelectionRange(pos, pos);
+    }, [borrador.cuerpo]);
+
     const insertar = (campo: Campo) => {
         const area = areaRef.current;
         const texto = borrador.cuerpo;
         const desde = area?.selectionStart ?? texto.length;
         const hasta = area?.selectionEnd ?? texto.length;
         const token = `{{${campo}}}`;
-        const nuevo = texto.slice(0, desde) + token + texto.slice(hasta);
-        onCambio({ ...borrador, cuerpo: nuevo });
-        requestAnimationFrame(() => {
-            area?.focus();
-            area?.setSelectionRange(desde + token.length, desde + token.length);
-        });
+        cursorPendiente.current = desde + token.length;
+        onCambio({ ...borrador, cuerpo: texto.slice(0, desde) + token + texto.slice(hasta) });
     };
 
     return (
@@ -357,17 +449,104 @@ function EditorDePlantilla({ borrador, taller, mandando, onCambio, onMandar, onC
                 <p className="text-xs text-muted-foreground">Es para tu lista. El cliente no lo ve.</p>
             </div>
 
+            {/* ── EL «CUÁNDO», ESCRITO CON PALABRAS.
+                Acá había un desplegable con tres opciones. Iara, 5-sep-2026:
+                *"yo lo haría como que el mecánico escriba lo que él quiera y que ya
+                después vos lo interpretes (…) porque si se les ocurre una acción que
+                no hay, es como que no tiene sentido; o poner todas las acciones
+                posibles, pero va a ser demasiada información"*.
+
+                La lista cerrada no fallaba por corta: fallaba porque a lo que no
+                estaba en ella le decía que no existe. Escrito con palabras, lo que
+                todavía no podemos disparar QUEDA ANOTADO, que es lo único que nos
+                dice qué construir después. */}
             <div className="space-y-2">
-                <Label>¿Cuándo la vas a usar?</Label>
-                <select
-                    className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    value={borrador.evento}
-                    onChange={(e) => onCambio({ ...borrador, evento: e.target.value as Borrador['evento'] })}
-                >
-                    <option value="cualquiera">En los dos momentos</option>
-                    <option value="service_finalizado">Cuando termina el service</option>
-                    <option value="bici_entregada">Cuando se entrega la bici</option>
-                </select>
+                <Label>¿Cuándo querés que salga?</Label>
+                <textarea
+                    className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={borrador.cuandoTexto}
+                    onChange={(e) => onCambio({ ...borrador, cuandoTexto: e.target.value })}
+                    onBlur={interpretar}
+                    placeholder="Contalo como se lo dirías a alguien. Por ejemplo: cuando termino la bici y queda lista para que la vengan a buscar."
+                />
+
+                {interpretando && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Fijándonos si lo podemos hacer solo…
+                    </p>
+                )}
+
+                {/* La IA lo reconoció: se PREGUNTA, no se asume. Mandar el mensaje en
+                    el momento equivocado es peor que preguntar de más. */}
+                {!interpretando && lectura?.evento && !confirmado && (
+                    <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 space-y-2">
+                        <p className="text-sm text-sky-900">
+                            {lectura.pregunta || `Lo mandamos ${CUANDO[lectura.evento].toLowerCase()}. Es eso?`}
+                        </p>
+                        <div className="flex gap-2">
+                            <Button
+                                type="button" size="sm"
+                                onClick={() => { onCambio({ ...borrador, evento: lectura.evento!, resumen: null }); setConfirmado(true); }}
+                            >
+                                Sí, es eso
+                            </Button>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setAMano(true)}>
+                                No, dejame elegir
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {/* No mapea a nada. Se dice completo y sin vueltas: qué NO se puede,
+                    qué SÍ se puede igual, y que el pedido queda anotado. Un cartel de
+                    "no se puede" a secas es donde el mecánico deja de escribir. */}
+                {!interpretando && lectura && !lectura.evento && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-1.5">
+                        {lectura.pregunta && <p className="text-sm text-amber-900">{lectura.pregunta}</p>}
+                        <p className="text-sm text-amber-900">
+                            <strong>Eso todavía no lo sabemos disparar solo.</strong> Te creamos igual la
+                            plantilla y la mandás vos cuando quieras, y nos queda anotado que la querés
+                            automática.
+                        </p>
+                        <button
+                            type="button"
+                            className="text-xs text-amber-900 underline underline-offset-2"
+                            onClick={() => setAMano(true)}
+                        >
+                            O elegí a mano uno de los momentos que ya andan
+                        </button>
+                    </div>
+                )}
+
+                {confirmado && borrador.evento !== 'manual' && (
+                    <p className="text-xs text-green-800 flex items-center gap-1.5">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> {CUANDO[borrador.evento]}.
+                    </p>
+                )}
+
+                {/* La salida a mano existe siempre: si la IA no está o se equivoca, el
+                    taller no puede quedar trabado sin poder elegir. */}
+                {aMano && (
+                    <select
+                        className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                        value={borrador.evento}
+                        onChange={(e) => { onCambio({ ...borrador, evento: e.target.value as Borrador['evento'] }); setConfirmado(true); }}
+                    >
+                        <option value="manual">La mando yo cuando quiera</option>
+                        <option value="service_finalizado">Sola, cuando termina el service</option>
+                        <option value="bici_entregada">Sola, cuando se entrega la bici</option>
+                        <option value="cualquiera">Sola, en los dos momentos</option>
+                    </select>
+                )}
+                {!aMano && !lectura && !interpretando && (
+                    <button
+                        type="button"
+                        className="text-xs text-muted-foreground underline underline-offset-2"
+                        onClick={() => setAMano(true)}
+                    >
+                        Prefiero elegirlo de una lista
+                    </button>
+                )}
             </div>
 
             <div className="space-y-2">
@@ -390,11 +569,63 @@ function EditorDePlantilla({ borrador, taller, mandando, onCambio, onMandar, onC
                             <Plus className="h-3 w-3 mr-1" /> {CAMPOS[c].etiqueta}
                         </Button>
                     ))}
+                    {/* La salida de emergencia. Iara, 5-sep-2026: *"una forma de decir:
+                        che, hay algo que no está acá"*. Sin esto, el mecánico que
+                        necesita un dato que no ofrecemos se queda mirando la pantalla y
+                        nosotros no nos enteramos nunca — y ese es el pedido más valioso
+                        que existe: un cliente diciendo qué le falta, justo cuando le
+                        hace falta. */}
+                    <Button
+                        type="button" variant="ghost" size="sm"
+                        className="h-7 text-xs text-muted-foreground"
+                        onClick={() => setPidiendo((v) => !v)}
+                    >
+                        Falta el que necesito
+                    </Button>
                 </div>
+
+                {pidiendo && (
+                    <div className="rounded-lg border border-slate-300 bg-white p-3 space-y-2">
+                        <Label className="text-xs">¿Qué dato te falta?</Label>
+                        <Input
+                            value={pedido}
+                            onChange={(e) => setPedido(e.target.value)}
+                            placeholder="La fecha en que la puede venir a buscar"
+                        />
+                        <div className="flex gap-2">
+                            <Button type="button" size="sm" onClick={mandarPedido} disabled={pedido.trim().length < 3}>
+                                Mandarlo
+                            </Button>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => setPidiendo(false)}>
+                                Cancelar
+                            </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            No lo podemos agregar en el momento, pero nos llega y lo miramos.
+                        </p>
+                    </div>
+                )}
+                {pedidoHecho && (
+                    <p className="text-xs text-green-800 flex items-center gap-1.5">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Nos llegó. Gracias, sirve más de lo que parece.
+                    </p>
+                )}
+
                 <p className="text-xs text-muted-foreground">
                     Los botones meten datos que se completan solos con cada service. Todo lo demás lo
                     escribís vos y sale siempre igual. {borrador.cuerpo.trim().length}/{LARGO_MAXIMO}
                 </p>
+
+                {/* 🔴 Lo que pasa si el dato no está cargado, dicho ANTES y solo de los
+                    campos que se usaron. Medido contra las 352 órdenes reales de
+                    Probikes: «lo que se hizo» está vacío en el 89% de las órdenes, así
+                    que ofrecerlo callado es regalar un aviso que falla 9 de cada 10
+                    veces y que nadie sabe por qué no salió. */}
+                {avisosDeCampos.length > 0 && (
+                    <div className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded p-2 space-y-1">
+                        {avisosDeCampos.map((a) => <p key={a}>{a}</p>)}
+                    </div>
+                )}
                 {problema && (
                     <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">{problema}</p>
                 )}

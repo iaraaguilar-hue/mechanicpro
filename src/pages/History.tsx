@@ -1,6 +1,6 @@
 import { useState, Fragment, useMemo } from 'react';
 import { useAuthStore } from '@/store/authStore';
-import { StatusBadge } from "@/components/StatusBadge";
+import { StatusBadge, grupoDeEstado, type GrupoDeEstado } from "@/components/StatusBadge";
 import { useDataStore } from '@/store/dataStore';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatOrdenNumber } from '@/lib/formatId';
@@ -194,11 +194,16 @@ export default function History() {
                     id: service.id,
                     numero_orden: service.numero_orden,
                     status: service.estado || "Unknown",
+                    // En qué grupo cae, con las mismas palabras que la chapita.
+                    grupo: grupoDeEstado(service.estado),
                     displayDateIn,
                     entrega,
                     rawDateOut,
                     rawDate: rawDateIn,
                     rawFechaFinalizacion: service.fecha_finalizacion,
+                    // Para una bici ya entregada, la fecha que la ubica en el tiempo
+                    // es cuándo se la llevaron, no cuándo el mecánico apretó Finalizar.
+                    rawFechaEntregado: service.fecha_entregado,
                     displayFinalizacion: instanteAR(service.fecha_finalizacion),
                     displayFinalizacionHora: instanteARConHora(service.fecha_finalizacion),
                     dateObj,
@@ -228,10 +233,32 @@ export default function History() {
                     },
                 };
             })
+            // ── EL ORDEN, ARREGLADO EL 5-SEP-2026.
+            //
+            // Leandro (Probikes) avisó que en el Historial "se le mezclan las bicis que
+            // están en curso y las que están finalizadas". Tenía razón y la causa era el
+            // criterio de orden: una sola lista ordenada por
+            // `fecha_finalizacion || fecha_ingreso`, o sea DOS FECHAS CON SIGNIFICADOS
+            // DISTINTOS metidas en la misma clave. Una bici que entró hoy y sigue en el
+            // taller quedaba arriba de una que se terminó ayer, y la columna que
+            // explicaba por qué estaba en ese lugar era distinta en cada fila.
+            //
+            // Medido: Probikes tiene 4 en curso repartidas entre 300 filas, y 48
+            // services SIN `fecha_finalizacion` que por eso ordenaban por su fecha de
+            // ingreso — así que ni siquiera las terminadas caían donde correspondía.
+            //
+            // Ahora son DOS BLOQUES y cada uno ordena por la fecha que le da sentido:
+            // lo que está en el taller, por cuándo entró; lo que ya salió, por cuándo
+            // se terminó. Nada se esconde: se dejan de intercalar.
             .sort((a, b) => {
-                const dateA = new Date(a.rawFechaFinalizacion || a.rawDate).getTime();
-                const dateB = new Date(b.rawFechaFinalizacion || b.rawDate).getTime();
-                return dateB - dateA; // Orden descendente
+                if (a.grupo === 'en_curso' && b.grupo !== 'en_curso') return -1;
+                if (b.grupo === 'en_curso' && a.grupo !== 'en_curso') return 1;
+                const cuando = (j: typeof a) => new Date(
+                    j.grupo === 'en_curso'
+                        ? j.rawDate
+                        : (j.rawFechaEntregado || j.rawFechaFinalizacion || j.rawDate)
+                ).getTime();
+                return cuando(b) - cuando(a);
             });
     }, [storeServicios, storeBicicletas, storeClientes]);
 
@@ -245,6 +272,11 @@ export default function History() {
     const [categoryFilter, setCategoryFilter] = useState("Todas");
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
     const [brandFilter, setBrandFilter] = useState("all");
+    // Arranca en "todos" a propósito: el Historial es donde el taller BUSCA una
+    // bici, y un filtro puesto de fábrica que esconde 4 de 300 hace que la
+    // búsqueda falle sin decir por qué. Lo que se arregló es que no se intercalen,
+    // no que no se vean.
+    const [estadoFilter, setEstadoFilter] = useState<GrupoDeEstado | "todos">("todos");
 
     const toggleExpand = (id: string) => {
         setExpandedIds(prev =>
@@ -318,6 +350,10 @@ export default function History() {
             // 3. Brand Filter
             if (brandFilter !== "all" && job.bikeBrand.trim().toLowerCase() !== brandFilter.trim().toLowerCase()) return false;
 
+            // 3-bis. Estado (pedido de Leandro, 5-sep-2026: "se me mezclan las que
+            // están en curso con las finalizadas").
+            if (estadoFilter !== "todos" && job.grupo !== estadoFilter) return false;
+
             // 4. Date Range Filter
             if (dateRange?.from) {
                 const jobDate = new Date(job.dateObj);
@@ -337,12 +373,13 @@ export default function History() {
 
             return true;
         });
-    }, [allJobs, searchQuery, categoryFilter, brandFilter, dateRange]);
+    }, [allJobs, searchQuery, categoryFilter, brandFilter, dateRange, estadoFilter]);
 
     const clearFilters = () => {
         setSearchQuery("");
         setCategoryFilter("Todas");
         setBrandFilter("all");
+        setEstadoFilter("todos");
         setDateRange(undefined);
     };
 
@@ -432,6 +469,25 @@ export default function History() {
                         </Select>
                     </div>
 
+                    {/* Estado — pedido de Leandro (Probikes, 5-sep-2026): las bicis en
+                        curso y las terminadas se le mezclaban. Ya no se intercalan solas,
+                        y además puede quedarse con un solo grupo. Las palabras son las
+                        mismas que muestra la chapita de cada fila: si el filtro dijera
+                        "Terminadas" y la fila "Finalizado", parecerían dos cosas. */}
+                    <div className="w-[180px]">
+                        <Select value={estadoFilter} onValueChange={(v) => setEstadoFilter(v as GrupoDeEstado | "todos")}>
+                            <SelectTrigger className="bg-slate-50 border-slate-200 text-slate-700">
+                                <SelectValue placeholder="Estado" />
+                            </SelectTrigger>
+                            <SelectContent className="z-50 bg-white">
+                                <SelectItem value="todos">Todos los estados</SelectItem>
+                                <SelectItem value="en_curso">En curso</SelectItem>
+                                <SelectItem value="finalizado">Finalizado</SelectItem>
+                                <SelectItem value="entregado">Entregado</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     {/* Brand Filter */}
                     <div className="w-[180px]">
                         <Select value={brandFilter} onValueChange={setBrandFilter}>
@@ -448,7 +504,7 @@ export default function History() {
                     </div>
 
                     {/* Clear Filters */}
-                    {(categoryFilter !== "Todas" || brandFilter !== "all" || searchQuery) && (
+                    {(categoryFilter !== "Todas" || brandFilter !== "all" || estadoFilter !== "todos" || searchQuery) && (
                         <Button
                             variant="ghost"
                             size="icon"
@@ -482,16 +538,25 @@ export default function History() {
                         <p className="font-medium text-slate-600">No se encontraron resultados</p>
                         <button onClick={clearFilters} className="text-sm text-primary underline">Limpiar filtros</button>
                     </div>
-                ) : filteredJobs.map((job) => (
-                    <MobileHistoryCard
-                        key={job.uniqueId}
-                        job={job}
-                        isExpanded={expandedIds.includes(job.id)}
-                        onToggle={() => toggleExpand(job.id)}
-                        onEdit={() => setEditingServiceId(job.id)}
-                        onDelete={() => handleDelete(job.id)}
-                        onPrint={() => printServiceReport(job.rawJob, job.clientName, job.bikeModel, job.clientDni, job.clientPhone)}
-                    />
+                ) : filteredJobs.map((job, i) => (
+                    <Fragment key={job.uniqueId}>
+                        {/* El mismo corte que en la tabla. El celular es DONDE el taller
+                            mira esto, así que la separación tiene que estar en los dos
+                            lados: arreglarla solo en la tabla sería arreglar la mitad. */}
+                        {job.grupo !== 'en_curso' && i > 0 && filteredJobs[i - 1].grupo === 'en_curso' && (
+                            <p className="px-1 pt-4 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                                Ya salieron del taller
+                            </p>
+                        )}
+                        <MobileHistoryCard
+                            job={job}
+                            isExpanded={expandedIds.includes(job.id)}
+                            onToggle={() => toggleExpand(job.id)}
+                            onEdit={() => setEditingServiceId(job.id)}
+                            onDelete={() => handleDelete(job.id)}
+                            onPrint={() => printServiceReport(job.rawJob, job.clientName, job.bikeModel, job.clientDni, job.clientPhone)}
+                        />
+                    </Fragment>
                 ))}
             </div>
 
@@ -512,11 +577,23 @@ export default function History() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredJobs.map((job) => {
+                            {filteredJobs.map((job, i) => {
                                 const isExpanded = expandedIds.includes(job.id);
+                                // El renglón que parte la lista en dos. Solo aparece cuando
+                                // conviven los dos grupos: si el taller filtró, o si no hay
+                                // nada en curso, un separador sería mueble.
+                                const abreCerradas = job.grupo !== 'en_curso'
+                                    && i > 0 && filteredJobs[i - 1].grupo === 'en_curso';
 
                                 return (
                                     <Fragment key={job.uniqueId}>
+                                        {abreCerradas && (
+                                            <TableRow className="hover:bg-transparent">
+                                                <TableCell colSpan={8} className="py-2 pl-6 bg-slate-50/60 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                                                    Ya salieron del taller
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
                                         <TableRow className={cn(
                                             "hover:bg-slate-50/50 transition-colors cursor-pointer border-slate-100",
                                             isExpanded && "bg-slate-50/80 border-b-0"

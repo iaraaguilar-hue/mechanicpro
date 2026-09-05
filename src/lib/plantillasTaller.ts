@@ -43,26 +43,72 @@ export const CAMPOS = {
         etiqueta: 'el nombre del cliente',
         ayuda: 'El nombre de pila del dueño de la bici.',
         ejemplo: 'Martín',
+        siFalta: null,
     },
     bici: {
         etiqueta: 'la bici',
         ayuda: 'La marca y el modelo, como están cargados en la ficha.',
         ejemplo: 'Tarmac SL7',
+        siFalta: null,
     },
     taller: {
         etiqueta: 'el nombre del taller',
         ayuda: 'El nombre de tu negocio.',
         ejemplo: 'Probikes',
+        siFalta: null,
     },
     firma: {
         etiqueta: 'quién firma',
         ayuda: 'El nombre del que atiende. Sale de la regla, o del que pusiste en Mi Taller.',
         ejemplo: 'Leandro',
+        siFalta: null,
     },
     nota: {
         etiqueta: 'tu línea',
         ayuda: 'La frase que escribís en la regla: cómo se paga, el horario, lo que sea.',
         ejemplo: 'La mano de obra se abona en efectivo o transferencia.',
+        siFalta: null,
+    },
+
+    // ── LOS QUE SE SUMARON EL 5-SEP-2026 (Iara: "pondría más opciones, todas las
+    // que puedan hacer"). Cada uno se MIDIÓ contra las 352 órdenes reales de
+    // Probikes antes de ofrecerlo: un campo que en la práctica está vacío no es
+    // una opción más, es un aviso que no sale y nadie sabe por qué.
+    orden: {
+        etiqueta: 'el número de orden',
+        ayuda: 'El número con el que figura el trabajo, como #0054.',
+        ejemplo: '#0054',
+        // Medido: 0 de 352 órdenes de Probikes sin número. Siempre está.
+        siFalta: null,
+    },
+    total: {
+        etiqueta: 'lo que salió',
+        ayuda: 'El total del service, en pesos.',
+        ejemplo: '$85.000',
+        // Medido: 18 de 352 (5%) sin precio cargado.
+        siFalta: 'Si la orden no tiene el precio cargado, ese aviso no sale.',
+    },
+    tipo: {
+        etiqueta: 'el tipo de service',
+        ayuda: 'Lo que figura como tipo de trabajo en la orden.',
+        ejemplo: 'Service completo',
+        // Medido: 5 de 352 (1,4%).
+        siFalta: 'Si la orden no tiene el tipo cargado, ese aviso no sale.',
+    },
+    trabajo: {
+        etiqueta: 'lo que se hizo',
+        ayuda: 'Las notas para el cliente que escribiste en la orden. Nunca las internas.',
+        ejemplo: 'Cambio de cadena y regulación de cambios',
+        // 🔴 Medido: 315 de 352 (89%) SIN notas para el cliente. Es el campo más
+        // pedido y el que menos se llena; ofrecerlo callado sería regalar un aviso
+        // que falla 9 de cada 10 veces.
+        siFalta: 'Ojo: hoy casi ninguna orden tiene estas notas cargadas, y sin ellas el aviso no sale.',
+    },
+    pago: {
+        etiqueta: 'cómo se paga',
+        ayuda: 'Lo que pusiste en Mi Taller como formas de pago. Se cambia una vez y vale para todos.',
+        ejemplo: 'Efectivo o transferencia',
+        siFalta: 'Cargá las formas de pago en Mi Taller, o ese aviso no sale.',
     },
 } as const;
 
@@ -74,7 +120,7 @@ export const CAMPOS_VALIDOS = Object.keys(CAMPOS) as Campo[];
 export const LARGO_MAXIMO = 900;
 export const LARGO_MINIMO = 15;
 /** Meta acepta más, pero una plantilla con 10 huecos no la llena nadie bien. */
-export const MAXIMO_DE_CAMPOS = 8;
+export const MAXIMO_DE_CAMPOS = 10;
 
 const TOKEN = /\{\{\s*([a-zA-Z_]+)\s*\}\}/g;
 const HAY_LETRA = /\p{L}/u;

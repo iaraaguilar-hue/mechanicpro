@@ -2,6 +2,38 @@ interface StatusBadgeProps {
     status: string;
 }
 
+/**
+ * En qué grupo cae un service, con las MISMAS tres palabras que muestra la chapita.
+ *
+ * POR QUÉ VIVE ACÁ Y NO EN LA PANTALLA QUE LO USA: la base guarda cuatro valores
+ * para tres estados (`in_progress`, `ready`, `Completed`, `delivered`) más
+ * variantes viejas en castellano, y esta normalización ya existía adentro del
+ * badge. Cuando el Historial necesitó agrupar por estado, la opción fácil era
+ * escribir un `if` parecido allá — y ahí es donde un día el badge dice
+ * "Finalizado" y el filtro lo cuenta como otra cosa. Una sola función, un solo
+ * vocabulario.
+ *
+ * 🔴 Las palabras son las de Iara (21-jul-2026): "Finalizado" = el mecánico
+ * terminó y la bici SIGUE en el taller; "Entregado" = el cliente ya la retiró.
+ */
+export type GrupoDeEstado = 'en_curso' | 'finalizado' | 'entregado';
+
+export function grupoDeEstado(status?: string | null): GrupoDeEstado {
+    const n = typeof status === 'string' ? status.trim().toLowerCase() : '';
+    if (n === 'delivered' || n === 'entregado') return 'entregado';
+    if (n === 'ready' || n === 'completed' || n === 'completado' || n === 'terminado') return 'finalizado';
+    // Todo lo demás —incluido un estado que no conocemos— se trata como trabajo
+    // abierto: es el error barato. Esconder una bici que sigue en el taller es
+    // peor que mostrar de más una que ya se fue.
+    return 'en_curso';
+}
+
+export const ETIQUETA_DE_GRUPO: Record<GrupoDeEstado, string> = {
+    en_curso: 'En curso',
+    finalizado: 'Finalizado',
+    entregado: 'Entregado',
+};
+
 export function StatusBadge({ status }: StatusBadgeProps) {
     // Normalize status strings from the DB
     const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';

@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Pencil, Loader2, Save, UploadCloud, Plus, Trash2, Edit2, Check, X, AlertCircle } from 'lucide-react';
+import { PedidosDelTaller } from '@/components/PedidosDelTaller';
 import { NovedadesAdmin } from '@/components/NovedadesAdmin';
 import { RichTextEditor } from '@/components/RichTextEditor';
 
@@ -351,6 +352,11 @@ export default function SuperAdmin() {
             </div>
 
             <NovedadesAdmin />
+
+            {/* Los pedidos van ARRIBA de la lista de talleres: es lo único de esta
+                pantalla que caduca. La lista de talleres sigue estando mañana; un
+                mecánico que pidió algo hace tres semanas y no tuvo respuesta, no. */}
+            <PedidosDelTaller />
 
             <Card>
                 <CardHeader>

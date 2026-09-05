@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useDataStore, type SupabaseBike } from "@/store/dataStore";
 import { RapidIntakeWizard } from "@/components/RapidIntakeWizard";
+import { VentasSinCargar } from "@/components/VentasSinCargar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 import { Input } from "@/components/ui/input";
@@ -125,6 +126,12 @@ export default function Home() {
                     </div>
                 </div>
             </div>
+
+            {/* Las ventas del ERP que no entraron solas. Va ARRIBA de la lista porque
+                es lo único de esta pantalla que caduca: un cliente que ya está sigue
+                estando mañana; una venta de la semana pasada que nadie confirmó, se
+                pierde. Se esconde sola cuando no hay ninguna. */}
+            <VentasSinCargar />
 
             <div data-tour="clientes" className="flex justify-between items-center">
                 <h2 className="text-xl font-medium text-slate-600">Base de Datos de Flota y Clientes</h2>

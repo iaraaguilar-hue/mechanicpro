@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { Campanas } from '@/components/Campanas';
 import { Link } from "react-router-dom";
 import { useDataStore } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
@@ -273,6 +274,11 @@ export default function RetentionEngine() {
             {/* Lo que contestaron va antes que lo que falta mandar: hay una
                 ventana de 24hs para responder y después se cierra. */}
             <BandejaRespuestas />
+
+            {/* Las campañas van acá y no en una pantalla aparte: una campaña ES
+                retención, y una pantalla nueva en el menú es una que nadie abre.
+                Se esconde sola cuando no hay ninguna. */}
+            <Campanas />
 
             {/* Idea 6: pocos nombres con razón de estar, no doscientos. */}
             {fuga && fuga.enRiesgo.length > 0 && <SeccionFuga fuga={fuga} />}

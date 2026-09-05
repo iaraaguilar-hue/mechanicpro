@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { AvisoDeVuelta } from '@/components/AvisoDeVuelta';
 import { useSearchParams } from "react-router-dom";
 import { useDataStore } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
@@ -756,6 +757,9 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
     }, [registrarMecanico, isOpen, taller_id]);
 
     const [notes, setNotes] = useState(service?.notas_mecanico || "");
+    // El día en que hay que escribirle para que vuelva, elegido al finalizar.
+    const [avisarEl, setAvisarEl] = useState<string | null>(service?.avisar_el ?? null);
+    const [avisarMotivo, setAvisarMotivo] = useState<string | null>(service?.avisar_motivo ?? null);
     const [notasInternas, setNotasInternas] = useState(service?.notas_internas || "");
     const [healthCheckData, setHealthCheckData] = useState<HealthCheckData[]>([]);
     const [isSaving, setIsSaving] = useState(false);
@@ -764,6 +768,36 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
     const [precioCeroConfirm, setPrecioCeroConfirm] = useState(false);
     const [avisosERP, setAvisosERP] = useState<AvisoOrdenERP[] | null>(null);
     const productos = useDataStore(s => s.productos);
+
+    // ── Con qué se calcula la sugerencia del aviso.
+    //
+    // Las visitas del cliente salen del store que ya está cargado: no hay una
+    // consulta nueva al finalizar, que es el momento en que menos se puede
+    // esperar. Se juntan por CLIENTE y no por bici a propósito — el ritmo con que
+    // alguien pasa por el taller es de la persona, y el que tiene tres bicis
+    // aparece tres veces más seguido.
+    const todasLasBicis = useDataStore(s => s.bicicletas);
+    const todosLosServicios = useDataStore(s => s.servicios);
+    const visitasDelCliente = useMemo(() => {
+        const miBici = todasLasBicis.find(b => b.id === service?.bicicleta_id);
+        if (!miBici?.cliente_id) return [];
+        const suyas = new Set(todasLasBicis.filter(b => b.cliente_id === miBici.cliente_id).map(b => b.id));
+        return todosLosServicios
+            .filter(x => suyas.has(x.bicicleta_id) && !x.eliminado_en)
+            .map(x => x.fecha_ingreso);
+    }, [todasLasBicis, todosLosServicios, service?.bicicleta_id]);
+
+    // Y el plazo de la regla general del taller, si tiene una prendida: es la
+    // segunda mejor respuesta cuando al cliente todavía no se le puede leer el ritmo.
+    const [plazoDelTaller, setPlazoDelTaller] = useState<number | null>(null);
+    useEffect(() => {
+        if (!isOpen || !taller_id) return;
+        void (async () => {
+            const { data } = await supabase.from('automatizaciones_wa')
+                .select('dias_despues').eq('evento', 'dias_despues').eq('activa', true).limit(1);
+            setPlazoDelTaller(data?.[0]?.dias_despues ?? null);
+        })();
+    }, [isOpen, taller_id]);
 
 
     const handleFinalize = async () => {
@@ -911,6 +945,11 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                 notas_mecanico: notes,
                 notas_internas: notasInternas,
                 checklist_data: {},
+                // El aviso por esta orden. Va acá y no en un paso aparte: es un
+                // campo al lado de las notas, y si el mecánico no lo toca queda
+                // como vino. Lo dispara el cron, mirando este día.
+                avisar_el: avisarEl,
+                avisar_motivo: avisarMotivo,
             });
 
             // Create reminders from health check
@@ -1144,6 +1183,18 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                             <Label htmlFor="notes">{ETIQUETAS_NOTAS.cliente}</Label>
                             <Textarea id="notes" className="h-32" placeholder={ETIQUETAS_NOTAS.clientePlaceholder} value={notes} onChange={(e) => setNotes(e.target.value)} />
                             <p className="text-xs text-muted-foreground">{ETIQUETAS_NOTAS.clienteAyuda}</p>
+
+                            {/* Debajo de las notas del cliente y no en un diálogo
+                                nuevo: la cadena de finalizar ya tiene cuatro pasos y
+                                un quinto es el que se aprieta sin leer. */}
+                            <div className="pt-3 mt-3 border-t border-slate-100">
+                                <AvisoDeVuelta
+                                    visitas={visitasDelCliente}
+                                    plazoDelTaller={plazoDelTaller}
+                                    valor={avisarEl}
+                                    onCambio={(dia, motivo) => { setAvisarEl(dia); setAvisarMotivo(motivo); }}
+                                />
+                            </div>
                         </div>
                     </div>
 

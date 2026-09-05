@@ -157,6 +157,17 @@ export interface SupabaseService {
     notas_mecanico?: string;
     /** Notas que NO salen del taller: nunca en el PDF ni en mensajes al cliente. */
     notas_internas?: string | null;
+    /**
+     * El DÍA (de calendario, hora de Argentina) en que hay que escribirle al
+     * cliente para que vuelva. Lo elige el mecánico al finalizar el service y lo
+     * dispara el cron. NULL = no se avisa por esta orden.
+     *
+     * 🔴 Es un día y no un instante: se compara con "hoy en Argentina" y se
+     * muestra tal cual, sin convertir de zona. Convertirlo lo corre un día entero.
+     */
+    avisar_el?: string | null;
+    /** Por qué ese plazo, en una línea ("viene cada 5 semanas"). */
+    avisar_motivo?: string | null;
     fecha_entrega?: string | null;
     fecha_finalizacion?: string | null;
     fecha_entregado?: string | null;

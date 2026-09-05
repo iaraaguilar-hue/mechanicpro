@@ -26,6 +26,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Loader2, Plus, Trash2, Save, MessageSquare, AlertCircle, FileText, X } from 'lucide-react';
+import { PlantillasDelTaller, type PlantillaDelTaller } from '@/components/PlantillasDelTaller';
+import { vistaPreviaDeCuerpo } from '@/lib/plantillasTaller';
 
 // ── El catálogo, espejo de supabase/functions/_shared/plantillas.ts.
 // Vive duplicado a propósito y con esta nota: el frontend no puede importar de
@@ -76,16 +78,52 @@ type Regla = {
     activa: boolean;
 };
 
-/** El mensaje tal cual lo va a leer la persona. Es lo que evita las sorpresas. */
-function vistaPrevia(regla: Partial<Regla>, taller: TallerData): string {
+/**
+ * El mensaje tal cual lo va a leer la persona. Es lo que evita las sorpresas.
+ *
+ * Resuelve los dos orígenes: las plantillas del sistema (texto fijo, parámetros
+ * en un orden que conocemos) y las que pidió el propio taller, que guardan los
+ * campos por nombre ({{cliente}}, {{bici}}) porque es lo que el taller escribió.
+ */
+function vistaPrevia(
+    regla: Partial<Regla>,
+    taller: TallerData,
+    propias: PlantillaDelTaller[] = [],
+): string {
+    const firma = (regla.firma ?? '').trim() || (taller.firma_nombre ?? '').trim() || (taller.nombre ?? '');
+    const nota = (regla.nota ?? '').trim() || NOTA_POR_DEFECTO;
+
+    const propia = propias.find((x) => x.nombre_meta === regla.plantilla);
+    if (propia) {
+        return vistaPreviaDeCuerpo(propia.cuerpo, {
+            taller: taller.nombre, firma, nota,
+        });
+    }
+
     const p = PLANTILLAS[regla.plantilla ?? ''];
     if (!p) return '';
-    const firma = (regla.firma ?? '').trim() || (taller.firma_nombre ?? '').trim() || taller.nombre;
-    const nota = (regla.nota ?? '').trim() || NOTA_POR_DEFECTO;
     const valores = regla.plantilla === 'aviso_tienda_entrega'
         ? ['Tarmac SL7', 'Martín Gómez']
-        : ['Martín', firma, taller.nombre, 'Tarmac SL7', nota];
+        : ['Martín', firma, taller.nombre ?? '', 'Tarmac SL7', nota];
     return valores.reduce((t, v, i) => t.replaceAll(`{{${i + 1}}}`, v), p.cuerpo);
+}
+
+/**
+ * Qué se puede elegir en "¿Qué se manda?" para este momento: las del sistema más
+ * las que el taller pidió y Meta ya aprobó.
+ *
+ * Solo las aprobadas: una pendiente existe en Meta pero el envío rebotaría con
+ * "(#132001) Template name does not exist in the translation", que dice "no
+ * existe" y significa "todavía no la aprobaron". Ofrecerla sería armar un aviso
+ * que falla el día que se dispara.
+ */
+function opcionesDePlantilla(evento: string, propias: PlantillaDelTaller[]) {
+    const delSistema = (EVENTOS[evento]?.plantillas ?? [])
+        .map((n) => ({ valor: n, titulo: PLANTILLAS[n]?.titulo ?? n, conPdf: PLANTILLAS[n]?.conPdf ?? false }));
+    const delTaller = propias
+        .filter((p) => p.estado === 'aprobada' && (p.evento === evento || p.evento === 'cualquiera'))
+        .map((p) => ({ valor: p.nombre_meta, titulo: `${p.titulo} (tuya)`, conPdf: p.lleva_pdf }));
+    return [...delSistema, ...delTaller];
 }
 
 export function MensajesAutomaticos({ taller, avisar }: {
@@ -93,9 +131,18 @@ export function MensajesAutomaticos({ taller, avisar }: {
     avisar: (tipo: 'ok' | 'error', msg: string) => void;
 }) {
     const [reglas, setReglas] = useState<Regla[]>([]);
+    const [propias, setPropias] = useState<PlantillaDelTaller[]>([]);
     const [cargando, setCargando] = useState(true);
     const [guardando, setGuardando] = useState<string | null>(null);
     const [nueva, setNueva] = useState<Partial<Regla> | null>(null);
+
+    const cargarPropias = useCallback(async () => {
+        const { data } = await supabase
+            .from('plantillas_taller')
+            .select('*')
+            .order('creada_at', { ascending: true });
+        setPropias((data as PlantillaDelTaller[]) ?? []);
+    }, []);
 
     const cargar = useCallback(async () => {
         setCargando(true);
@@ -105,10 +152,33 @@ export function MensajesAutomaticos({ taller, avisar }: {
             .order('creada_at', { ascending: true });
         if (error) avisar('error', 'No pudimos traer tus mensajes automáticos.');
         setReglas((data as Regla[]) ?? []);
+        await cargarPropias();
         setCargando(false);
-    }, [avisar]);
+    }, [avisar, cargarPropias]);
 
     useEffect(() => { void cargar(); }, [cargar]);
+
+    // ── Al abrir la pantalla se le pregunta a Meta en qué quedaron las plantillas.
+    //
+    // 🔴 POR QUÉ SE PREGUNTA Y NO SE ESPERA EL AVISO: Meta manda un webhook cuando
+    // resuelve, y lo procesamos — pero un webhook que se cae, o cuyo campo no quedó
+    // suscripto, se ve EXACTAMENTE igual que "todavía no contestaron". Nos pasó el
+    // 3-sep con la carga del historial: el registro lo anotó como "carga bien" y
+    // faltaba la mitad. Preguntar al abrir es lo que hace que el estado que ve el
+    // mecánico sea de ahora y no de la última vez que algo funcionó.
+    //
+    // Va después de pintar y no bloquea: si Meta no contesta, se ve el último estado
+    // conocido en vez de una pantalla colgada.
+    useEffect(() => {
+        let vivo = true;
+        void (async () => {
+            const { error } = await supabase.functions.invoke('plantillas-taller', {
+                body: { accion: 'refrescar' },
+            });
+            if (vivo && !error) void cargarPropias();
+        })();
+        return () => { vivo = false; };
+    }, [cargarPropias]);
 
     const guardar = async (regla: Partial<Regla>) => {
         if (!regla.nombre?.trim()) return avisar('error', 'Ponele un nombre para reconocerlo en la lista.');
@@ -194,13 +264,17 @@ export function MensajesAutomaticos({ taller, avisar }: {
                                 Eso no pasa por Meta: lo cambiás y ya sale así.
                             </span>
                         </p>
+                        {/* 🔴 Acá decía "escribinos y lo mandamos a aprobar". Se borró el
+                            5-sep-2026: ahora el taller lo manda solo desde «Tus plantillas»,
+                            acá abajo. Un cartel que manda a escribirle a alguien cuando ya hay
+                            un botón es peor que no tener el botón. */}
                         <p className="flex gap-2">
                             <span className="text-amber-700 font-semibold flex-shrink-0">Hasta 24 hs:</span>
                             <span>
-                                cambiar el <strong>texto fijo</strong> o pedir un mensaje nuevo que no esté en la
-                                lista. Eso lo tiene que aprobar Meta y suele tardar un día, así que
-                                <strong> escribinos y lo mandamos a aprobar</strong>. Mientras revisan, ese aviso
-                                puntual no se puede mandar.
+                                cambiar el <strong>texto fijo</strong> o pedir un mensaje que no esté en la lista.
+                                Eso lo tiene que aprobar Meta: escribilo abajo en <strong>Tus plantillas</strong> y
+                                se lo mandamos en el momento. Suele contestar en menos de un día, y mientras
+                                revisan ese aviso puntual no se puede mandar.
                             </span>
                         </p>
                         <p className="text-muted-foreground">
@@ -234,6 +308,7 @@ export function MensajesAutomaticos({ taller, avisar }: {
                                         key={regla.id}
                                         regla={regla}
                                         taller={taller}
+                                        propias={propias}
                                         guardando={guardando === regla.id}
                                         onGuardar={guardar}
                                         onBorrar={() => borrar(regla.id)}
@@ -245,6 +320,7 @@ export function MensajesAutomaticos({ taller, avisar }: {
                                     <Editor
                                         regla={nueva}
                                         taller={taller}
+                                        propias={propias}
                                         guardando={guardando === 'nueva'}
                                         onCambio={setNueva}
                                         onGuardar={() => guardar(nueva)}
@@ -266,12 +342,26 @@ export function MensajesAutomaticos({ taller, avisar }: {
                     );
                 })
             )}
+
+            {/* Va DEBAJO de los avisos y no arriba a propósito: primero se ve para qué
+                sirven las plantillas (los avisos que ya se mandan), y recién después la
+                opción de pedir una nueva. Al revés, la primera pantalla de un taller
+                sería un formulario en blanco. */}
+            {!cargando && (
+                <PlantillasDelTaller
+                    taller={taller}
+                    plantillas={propias}
+                    recargar={cargarPropias}
+                    avisar={avisar}
+                    waListo={waListo}
+                />
+            )}
         </div>
     );
 }
 
-function FilaRegla({ regla, taller, guardando, onGuardar, onBorrar, onAlternar }: {
-    regla: Regla; taller: TallerData; guardando: boolean;
+function FilaRegla({ regla, taller, propias, guardando, onGuardar, onBorrar, onAlternar }: {
+    regla: Regla; taller: TallerData; propias: PlantillaDelTaller[]; guardando: boolean;
     onGuardar: (r: Partial<Regla>) => void; onBorrar: () => void; onAlternar: (a: boolean) => void;
 }) {
     const [editando, setEditando] = useState(false);
@@ -280,7 +370,7 @@ function FilaRegla({ regla, taller, guardando, onGuardar, onBorrar, onAlternar }
     if (editando) {
         return (
             <Editor
-                regla={borrador} taller={taller} guardando={guardando}
+                regla={borrador} taller={taller} propias={propias} guardando={guardando}
                 onCambio={setBorrador}
                 onGuardar={() => { onGuardar(borrador); setEditando(false); }}
                 onCancelar={() => { setBorrador(regla); setEditando(false); }}
@@ -303,7 +393,7 @@ function FilaRegla({ regla, taller, guardando, onGuardar, onBorrar, onAlternar }
                     </span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                    {vistaPrevia(regla, taller)}
+                    {vistaPrevia(regla, taller, propias)}
                 </p>
             </div>
             <div className="flex items-center gap-1 flex-shrink-0">
@@ -317,12 +407,25 @@ function FilaRegla({ regla, taller, guardando, onGuardar, onBorrar, onAlternar }
     );
 }
 
-function Editor({ regla, taller, guardando, onCambio, onGuardar, onCancelar }: {
-    regla: Partial<Regla>; taller: TallerData; guardando: boolean;
+function Editor({ regla, taller, propias, guardando, onCambio, onGuardar, onCancelar }: {
+    regla: Partial<Regla>; taller: TallerData; propias: PlantillaDelTaller[]; guardando: boolean;
     onCambio: (r: Partial<Regla>) => void; onGuardar: () => void; onCancelar: () => void;
 }) {
-    const cfg = EVENTOS[regla.evento ?? ''];
-    const previa = vistaPrevia(regla, taller);
+    const previa = vistaPrevia(regla, taller, propias);
+    const opciones = opcionesDePlantilla(regla.evento ?? '', propias);
+    const elegida = opciones.find((o) => o.valor === regla.plantilla);
+    const propia = propias.find((x) => x.nombre_meta === regla.plantilla);
+
+    /**
+     * Si el mensaje elegido usa este campo.
+     *
+     * En las del sistema depende del destinatario (el aviso interno a la tienda no
+     * lleva firma ni nota). En las que escribió el taller depende de si puso el
+     * campo o no: pedirle "quién firma" para un mensaje donde no aparece la firma es
+     * hacerle completar un dato que no va a ninguna parte.
+     */
+    const usaCampo = (c: 'firma' | 'nota') =>
+        propia ? (propia.variables ?? []).includes(c) : regla.destino === 'cliente';
 
     return (
         <div className="p-4 rounded-lg border-2 border-slate-300 bg-slate-50 space-y-4">
@@ -341,12 +444,34 @@ function Editor({ regla, taller, guardando, onCambio, onGuardar, onCancelar }: {
                 <select
                     className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
                     value={regla.plantilla ?? ''}
-                    onChange={(e) => onCambio({ ...regla, plantilla: e.target.value })}
+                    onChange={(e) => {
+                        const nueva = opciones.find((o) => o.valor === e.target.value);
+                        // Si el mensaje nuevo no puede llevar el comprobante, se apaga el
+                        // switch en el mismo movimiento: dejarlo prendido guardaría una
+                        // regla que pide un PDF que la plantilla no tiene lugar para
+                        // recibir, y eso falla recién el día que se dispara.
+                        onCambio({
+                            ...regla,
+                            plantilla: e.target.value,
+                            adjunta_pdf: nueva?.conPdf ? (regla.adjunta_pdf ?? true) : false,
+                        });
+                    }}
                 >
-                    {(cfg?.plantillas ?? []).map((p) => (
-                        <option key={p} value={p}>{PLANTILLAS[p]?.titulo ?? p}</option>
+                    {opciones.map((o) => (
+                        <option key={o.valor} value={o.valor}>{o.titulo}</option>
                     ))}
+                    {/* La que está guardada pero ya no está en la lista (la sacaste, o
+                        Meta la dio de baja). Se muestra igual: si desapareciera del
+                        select, el aviso se guardaría con otra plantilla sin avisar. */}
+                    {regla.plantilla && !elegida && (
+                        <option value={regla.plantilla}>{regla.plantilla} (ya no está disponible)</option>
+                    )}
                 </select>
+                {regla.plantilla && !elegida && (
+                    <p className="text-xs text-red-700">
+                        Este mensaje ya no está disponible: elegí otro o este aviso no va a salir.
+                    </p>
+                )}
             </div>
 
             <div className="space-y-2">
@@ -374,8 +499,7 @@ function Editor({ regla, taller, guardando, onCambio, onGuardar, onCancelar }: {
                 )}
             </div>
 
-            {regla.destino === 'cliente' && (
-                <>
+            {usaCampo('firma') && (
                     <div className="space-y-2">
                         <Label>¿Quién lo firma?</Label>
                         <Input
@@ -389,7 +513,9 @@ function Editor({ regla, taller, guardando, onCambio, onGuardar, onCancelar }: {
                             Configuración{taller.firma_nombre ? ` (${taller.firma_nombre})` : ''}.
                         </p>
                     </div>
+            )}
 
+            {usaCampo('nota') && (
                     <div className="space-y-2">
                         <Label>Tu línea, la que quieras agregar</Label>
                         <textarea
@@ -403,16 +529,26 @@ function Editor({ regla, taller, guardando, onCambio, onGuardar, onCancelar }: {
                             dejás vacío se pone «{NOTA_POR_DEFECTO}».
                         </p>
                     </div>
-                </>
             )}
 
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <label className={`flex items-center gap-2 text-sm ${elegida?.conPdf ? 'cursor-pointer' : 'opacity-60'}`}>
                 <Switch
-                    checked={regla.adjunta_pdf ?? true}
+                    checked={(regla.adjunta_pdf ?? true) && !!elegida?.conPdf}
+                    disabled={!elegida?.conPdf}
                     onCheckedChange={(v) => onCambio({ ...regla, adjunta_pdf: v })}
                 />
                 Adjuntar el comprobante en PDF
             </label>
+            {/* 🔴 El encabezado de documento se declara al CREAR la plantilla o no
+                existe nunca: una aprobada sin él no puede llevar el PDF y no hay forma
+                de agregárselo. Por eso el switch se apaga solo y se explica, en vez de
+                dejar prender algo que después rebota con un error de Meta. */}
+            {!elegida?.conPdf && (
+                <p className="text-xs text-muted-foreground -mt-2">
+                    Este mensaje no se creó con el comprobante adjunto, así que no lo puede llevar.
+                    Si lo necesitás, pedí una plantilla nueva marcando esa opción.
+                </p>
+            )}
 
             {previa && (
                 <div className="space-y-1.5">

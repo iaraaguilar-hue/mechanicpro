@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { AvisoTelefono } from '@/components/AvisoTelefono';
 import { useNavigate } from "react-router-dom";
 import { useDataStore, type SupabaseClient } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
@@ -116,6 +117,7 @@ export function AddClientDialog({ onClientCreated, variant = "default", trigger,
                     <div className="space-y-2">
                         <Label>Teléfono / WhatsApp</Label>
                         <Input value={formData.telefono} onChange={e => setFormData({ ...formData, telefono: e.target.value })} placeholder="Ej: 11 1234 5678" />
+                        <AvisoTelefono valor={formData.telefono} />
                     </div>
                     <div className="space-y-2">
                         <Label>Tipo de Ciclista (Tier)</Label>

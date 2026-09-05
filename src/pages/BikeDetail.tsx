@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { AvisoTelefono } from '@/components/AvisoTelefono';
 import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
 import { useDataStore, type SupabaseBike } from "@/store/dataStore";
 import { printServiceReport } from "@/lib/printServiceBtn";
@@ -574,6 +575,7 @@ export default function BikeDetail() {
                             <div className="space-y-1">
                                 <Label htmlFor="phone">Teléfono</Label>
                                 <Input id="phone" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} />
+                                <AvisoTelefono valor={editPhone} />
                             </div>
                             <div className="space-y-1">
                                 <Label htmlFor="email">Email</Label>

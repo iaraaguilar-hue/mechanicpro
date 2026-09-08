@@ -58,6 +58,26 @@ eq('componente desconocido', prediccionComponente([
     eq('service horquilla por tipo', !!p, true);
 }
 
+// ── El Brain (8-sep-2026, pedido de Leira) ──────────────────────────────────
+// La suspensión trasera de las Specialized entró al diagnóstico, y en las
+// órdenes aparece escrita de tres formas distintas según quién la cargó. Si el
+// motor solo reconociera "brain", el componente nuevo no encontraría su propio
+// historial y no podría predecirle el vencimiento a nadie: se vería igual que
+// un componente que todavía no tiene datos.
+{
+    const p = prediccionComponente([
+        svc('2025-09-01', ['Service Brain']),
+        svc('2026-03-01', ['Service de amortiguador trasero']),
+    ], 'Service Brain');
+    eq('brain: lo encuentra con sus tres nombres', !!p, true);
+    eq('brain: cada ~181 dias', p!.cadaDias, 181);
+}
+// Y no se lo come el service de horquilla: son dos trabajos y dos plazos.
+eq('brain no confunde con horquilla', prediccionComponente([
+    svc('2025-10-01', [], 'Service Horquilla'),
+    svc('2026-04-01', [], 'Service Horquilla'),
+], 'Service Brain'), null);
+
 // ── Idea 6: el que se está yendo ────────────────────────────────────────────
 const HOY = Date.now();
 const hace = (dias: number) => new Date(HOY - dias * 86400000).toISOString();

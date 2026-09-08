@@ -21,6 +21,7 @@ import { EditBikeDialog } from "@/components/EditBikeDialog";
 import { TareasServiceEditor } from "@/components/TareasServiceEditor";
 import { BuscadorProducto } from "@/components/BuscadorProducto";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
+import AvisoAlCliente from "@/components/AvisoAlCliente";
 import { NuevoBadge } from "@/components/NuevoBadge";
 import { type TareaService } from "@/lib/planFeatures";
 import { tourBloqueaCierreDialog } from "@/components/OnboardingTour";
@@ -913,6 +914,16 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                         />
                     </div>
                 </div>
+
+                {/* ── Avisarle al cliente (8-sep-2026, pedido de Leira) ──
+                    Solo en una orden que YA existe: mientras se está cargando el
+                    ingreso todavía no hay a qué colgarle el mensaje ni el
+                    registro, y el cliente está enfrente. */}
+                {serviceId && (
+                    <div className="pt-2 border-t">
+                        <AvisoAlCliente serviceId={serviceId} />
+                    </div>
+                )}
 
                 {/* Diagnóstico durante el service (preferencia del taller, Tarea G-pref) */}
                 {verDiagnostico && (

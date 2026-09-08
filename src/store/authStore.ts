@@ -15,6 +15,14 @@ export interface TallerData {
     config_mecanicos?: { habilitado: boolean } | null;
     // Filtros del alta automática de bicis vendidas (3-sep-2026).
     config_altas_erp?: { provincias?: string[]; max_bicis_por_venta?: number } | null;
+    // Cuántas horas se espera una respuesta del cliente antes de que la orden
+    // avise "llamalo" (8-sep-2026). Columna suelta y no dentro de un jsonb: la
+    // lee la mesa de trabajo en cada renglón.
+    horas_para_llamar?: number;
+    /** El WhatsApp del taller está conectado por la API oficial de Meta. */
+    wa_activo?: boolean;
+    /** Quién firma los mensajes cuando no hay un mecánico con nombre. */
+    firma_nombre?: string | null;
     config_notificaciones?: { tareas_habilitado?: boolean; bloquear_finalizacion?: boolean; momento_diagnostico?: 'final' | 'durante' | 'ambos';
         // Avisos suaves (Alejo, 3-sep-2026): primer service y el que no volvió.
         avisos_suaves?: { habilitado?: boolean; primerServiceDias?: number; noVolvioDias?: number; limite?: number };

@@ -15,7 +15,7 @@ import { NuevoBadge } from '@/components/NuevoBadge';
 import {
     Settings, Loader2, Save, UploadCloud, Plus, Edit2, Check, X, Users,
     AlertCircle, Sparkles, ListChecks, CheckCircle, Lock, Bell, HeartPulse,
-    GraduationCap, PlayCircle
+    GraduationCap, PlayCircle, PhoneCall
 } from 'lucide-react';
 import { useTourStore } from '@/components/OnboardingTour';
 import { resetTours } from '@/lib/tourSeen';
@@ -875,6 +875,33 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     // prendido sin haber guardado es peor que el botón que sacamos, porque el taller
     // cree que la preferencia está aplicada.
 
+    // A las cuántas horas sin respuesta la orden avisa "llamalo" (8-sep-2026).
+    // No es lo mismo un taller que entrega en el día que uno con dos semanas de
+    // cola, así que lo elige el taller. Vive en su propia columna y no en el
+    // jsonb porque el tablero lo lee en cada renglón de la mesa de trabajo.
+    const [horasLlamar, setHorasLlamar] = useState<number>(Number((taller as any).horas_para_llamar ?? 3));
+    const [savingHoras, setSavingHoras] = useState(false);
+
+    const guardarHoras = async (valor: number) => {
+        const anterior = horasLlamar;
+        setHorasLlamar(valor);
+        try {
+            setSavingHoras(true);
+            const { error } = await supabase
+                .from('talleres')
+                .update({ horas_para_llamar: valor })
+                .eq('id', taller.id);
+            if (error) throw error;
+            setTaller({ ...taller, horas_para_llamar: valor } as any);
+            avisar('ok', 'Listo, ese es el plazo.');
+        } catch (error: any) {
+            setHorasLlamar(anterior);
+            avisar('error', 'No se pudo guardar: ' + error.message);
+        } finally {
+            setSavingHoras(false);
+        }
+    };
+
     const guardarDiag = async (valor: 'final' | 'durante' | 'ambos') => {
         const anterior = momentoDiag;
         setMomentoDiag(valor);
@@ -1227,6 +1254,39 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                         </span>
                     </button>
                 ))}
+            </CardContent>
+        </Card>
+
+        {/* ── Cuánto se espera al cliente antes de llamarlo (8-sep-2026) ── */}
+        <Card className="flex flex-col">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <PhoneCall className="h-4 w-4 text-primary" />
+                    Cuánto esperar al cliente
+                </CardTitle>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                    Cuando le preguntás algo desde una orden, la bici queda esperando la respuesta.
+                    Pasado este plazo la orden avisa que conviene levantar el teléfono.
+                </p>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col gap-2">
+                <div className="flex flex-wrap gap-2">
+                    {[1, 2, 3, 6, 24].map(h => (
+                        <button
+                            key={h}
+                            type="button"
+                            onClick={() => guardarHoras(h)}
+                            disabled={savingHoras}
+                            className={`px-3 py-2 rounded-lg border text-sm font-semibold transition-colors ${horasLlamar === h ? 'border-primary bg-primary/5 text-primary' : 'bg-muted/20 hover:border-primary/40'}`}
+                        >
+                            {h === 24 ? '1 día' : `${h} h`}
+                        </button>
+                    ))}
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
+                    Nadie contesta un WhatsApp en cero minutos: el plazo corto sirve para la bici que
+                    está en el banco ahora, el largo para la que puede esperar.
+                </p>
             </CardContent>
         </Card>
 

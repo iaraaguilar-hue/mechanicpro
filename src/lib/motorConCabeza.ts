@@ -29,6 +29,12 @@ const COMPONENTE_KEYWORDS: [RegExp, RegExp][] = [
     [/tubeless|sellador/i, /tubeless|sellador/i],
     [/pastilla/i, /pastilla/i],
     [/horquilla/i, /horquilla|fork/i],
+    // El Brain (la suspensión trasera de las Specialized) se busca por sus tres
+    // nombres reales: en las órdenes aparece como "Brain", como "amortiguador" y
+    // como "shock" según quién la haya cargado. Sin los tres, el componente que
+    // el mecánico acaba de poder diagnosticar no encontraría su propio historial
+    // y el motor no podría predecirle el vencimiento a nadie.
+    [/brain/i, /brain|amortiguador|shock/i],
     [/cubierta/i, /cubierta/i],
 ];
 

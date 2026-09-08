@@ -4,12 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
+// ⚠️ Este componente hoy NO está montado en ninguna pantalla (el diagnóstico vivo
+// es HealthCheckWidget). Se mantiene la lista igual a la de allá: dos listas que
+// dicen cosas distintas es una trampa esperando al que lo vuelva a usar.
 const COMPONENTS = [
     "Cadena",
     "Piñón/Cassette",
     "Líquido Tubeless",
     "Pastillas de Freno",
-    "Service Horquilla"
+    "Service Horquilla",
+    "Service Brain"
 ];
 
 const TIMEFRAMES = [

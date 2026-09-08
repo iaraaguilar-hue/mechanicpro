@@ -112,7 +112,8 @@ export interface OrdenDictada {
 }
 
 export interface EnvioWhatsAppInput {
-    proposito: 'retencion' | 'comprobante' | 'evento';
+    /** 'consulta' y 'avance' son los dos avisos que salen desde adentro de la orden (8-sep-2026). */
+    proposito: 'retencion' | 'comprobante' | 'evento' | 'consulta' | 'avance';
     /**
      * 'texto' = mensaje libre, SOLO válido dentro de las 24hs desde que el
      * cliente escribió. Fuera de esa ventana Meta únicamente acepta
@@ -139,6 +140,23 @@ export interface EnvioWhatsAppResultado {
     /** Código corto para decidir qué hacer. 'whatsapp_no_conectado' = este taller todavía no lo activó. */
     error?: string;
     detalle?: string;
+}
+
+/**
+ * Un contacto con el cliente de una orden que NO pasó por WhatsApp: la llamada,
+ * el mostrador, la nota. Lo de WhatsApp ya vive en `mensajes_whatsapp` /
+ * `mensajes_entrantes` / `mensajes_coexistencia` y no se duplica: la línea de
+ * tiempo de la orden se arma uniendo las cuatro.
+ */
+export interface ContactoOrden {
+    id: string;
+    servicio_id: string;
+    cliente_id?: string | null;
+    canal: 'llamada' | 'presencial' | 'nota' | 'whatsapp_manual';
+    resultado?: 'atendio' | 'no_atendio' | 'buzon' | 'quedo_en_avisar' | null;
+    texto?: string | null;
+    usuario_nombre?: string | null;
+    ocurrido_at: string;
 }
 
 export interface SupabaseService {
@@ -168,6 +186,16 @@ export interface SupabaseService {
     avisar_el?: string | null;
     /** Por qué ese plazo, en una línea ("viene cada 5 semanas"). */
     avisar_motivo?: string | null;
+    /**
+     * La orden quedó FRENADA esperando una respuesta del cliente (8-sep-2026).
+     * NULL = no espera a nadie. No es un estado de `estado`: el trabajo sigue en
+     * curso, lo que falta es un sí. Ver lib/avisoDeLaOrden.ts.
+     */
+    esperando_desde?: string | null;
+    /** Qué se le preguntó, en una línea y en las palabras del mecánico. */
+    esperando_que?: string | null;
+    /** Cuándo se destrabó: contestó por WhatsApp, o el mecánico lo llamó. */
+    respondio_at?: string | null;
     fecha_entrega?: string | null;
     fecha_finalizacion?: string | null;
     fecha_entregado?: string | null;
@@ -243,6 +271,19 @@ interface DataState {
     deleteServicio: (id: string) => Promise<void>;
     dismissAlert: (servicioId: string, alertId: string) => Promise<void>;
     registrarContactoRetencion: (data: ContactoRetencionInput) => Promise<void>;
+    /** Deja constancia de una llamada / charla en el mostrador de UNA orden. */
+    registrarContactoOrden: (data: {
+        taller_id: string;
+        usuario_id: string;
+        usuario_nombre?: string | null;
+        servicio_id: string;
+        cliente_id?: string | null;
+        canal: ContactoOrden['canal'];
+        resultado?: ContactoOrden['resultado'];
+        texto?: string | null;
+    }) => Promise<boolean>;
+    /** Todo lo anotado a mano en una orden, lo más nuevo primero. */
+    contactosDeLaOrden: (servicioId: string) => Promise<ContactoOrden[]>;
     enviarWhatsAppPlantilla: (input: EnvioWhatsAppInput) => Promise<EnvioWhatsAppResultado>;
     redactarMensajePersonal: (input: RedaccionInput) => Promise<RedaccionResultado>;
     sugerirPresupuesto: (servicioId: string) => Promise<SugerenciasResultado>;
@@ -948,6 +989,54 @@ export const useDataStore = create<DataState>((set, get) => ({
             return false;
         }
         return true;
+    },
+
+    // ─────────────────────────────────────────────────────────
+    // EL REGISTRO DE LO QUE NO PASÓ POR WHATSAPP.
+    //
+    // POR QUÉ (Leira, 8-sep-2026): *"no queda registro de lo que se dijo"*. La
+    // llamada es justamente el contacto que hoy se pierde: se resuelve por
+    // teléfono, el que atendió se acuerda, y el que agarra la bici a la tarde no
+    // se entera. Un textarea no alcanza — un contacto tiene fecha, canal,
+    // resultado y autor, y sin esas cuatro cosas no se puede contestar la única
+    // pregunta que importa: quién lo llamó, cuándo, y qué dijo.
+    //
+    // Devuelve false y no rompe: perder la constancia no puede frenar al taller.
+    // ─────────────────────────────────────────────────────────
+    registrarContactoOrden: async (data) => {
+        // La policy de insert exige `usuario_id = auth.uid()`: sin sesión el
+        // insert rebota igual, así que se dice acá y no se gasta el viaje.
+        // El taller y el usuario llegan del llamador, como en
+        // `registrarContactoRetencion`: este store no lee el de sesión.
+        if (!data.taller_id || !data.usuario_id) return false;
+        const { error } = await supabase.from('contactos_orden').insert({
+            taller_id: data.taller_id,
+            servicio_id: data.servicio_id,
+            cliente_id: data.cliente_id || null,
+            canal: data.canal,
+            resultado: data.resultado ?? null,
+            texto: (data.texto ?? '').trim() || null,
+            usuario_id: data.usuario_id,
+            usuario_nombre: data.usuario_nombre || null,
+        });
+        if (error) {
+            console.warn('No se pudo registrar el contacto:', error.message);
+            return false;
+        }
+        return true;
+    },
+
+    contactosDeLaOrden: async (servicioId) => {
+        const { data, error } = await supabase
+            .from('contactos_orden')
+            .select('id, servicio_id, cliente_id, canal, resultado, texto, usuario_nombre, ocurrido_at')
+            .eq('servicio_id', servicioId)
+            .order('ocurrido_at', { ascending: false });
+        if (error) {
+            console.warn('No se pudieron leer los contactos de la orden:', error.message);
+            return [];
+        }
+        return (data ?? []) as ContactoOrden[];
     },
 
     registrarContactoRetencion: async (data) => {

@@ -11,7 +11,7 @@ import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign, PackageSearch } from "lucide-react";
+import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign, PackageSearch, Phone } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { servicioRevenue } from "@/lib/servicioRevenue";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
+import { estadoDeEspera } from "@/lib/avisoDeLaOrden";
 import { resolveOrdenWebhookUrl, resolveEntregadoWebhookUrl } from "@/lib/ordenWebhook";
 import { claveProducto, buscarProductos } from "@/lib/buscadorProductos";
 import { instanteAR, diaCalendario } from "@/lib/fechaAR";
@@ -383,6 +384,37 @@ export default function Workshop() {
     );
 }
 
+// ─────────────────────────────────────────────────────────────
+// «ESPERANDO AL CLIENTE» — el chip de la mesa de trabajo (8-sep-2026).
+//
+// POR QUÉ: hasta hoy una bici frenada porque el cliente no contesta se veía
+// EXACTAMENTE igual que una en la que alguien está trabajando. El dueño del
+// taller miraba la mesa y no podía distinguir "va lento" de "está parada hace
+// dos días esperando un sí" — que es la queja con la que arrancó todo esto.
+//
+// Cuando pasa el plazo que fijó el taller el chip cambia de color y dice el
+// número de horas: es lo que dispara la llamada, que es el segundo recurso y no
+// el primero.
+// ─────────────────────────────────────────────────────────────
+function ChipDeEspera({ serviceId }: { serviceId: string }) {
+    const taller = useAuthStore(s => s.taller);
+    const servicio = useDataStore(s => s.servicios.find(sv => sv.id === serviceId));
+    const espera = estadoDeEspera(servicio, Number((taller as any)?.horas_para_llamar ?? 3));
+    if (!espera.esperando) return null;
+    return (
+        <span
+            title={espera.que ? `Se le preguntó: ${espera.que}` : undefined}
+            className={`mt-1 inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full w-fit whitespace-nowrap ${espera.hayQueLlamar
+                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                : 'bg-slate-100 text-slate-600 border border-slate-200'}`}
+        >
+            {espera.hayQueLlamar
+                ? <><Phone size={10} /> No contesta hace {espera.horas} h</>
+                : <><Clock size={10} /> {espera.etiqueta}</>}
+        </span>
+    );
+}
+
 function MobileJobCard({ job, onClick, onDeliver, onReopen }: { job: DashboardJob; onClick: () => void; onDeliver: () => void; onReopen: () => void }) {
     const taller = useAuthStore(s => s.taller);
     const mostrarEtapas = avancesActivos(taller);
@@ -405,6 +437,7 @@ function MobileJobCard({ job, onClick, onDeliver, onReopen }: { job: DashboardJo
                         <Wrench size={12} className="flex-shrink-0" />
                         <span className="truncate">{job.bike_brand} {job.bike_model}</span>
                     </div>
+                    <ChipDeEspera serviceId={job.service_id} />
                     {(mostrarEtapas || mostrarTareas) && <EtapasChecklist serviceId={job.service_id} />}
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
@@ -594,6 +627,7 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                             <PackageSearch className="h-3 w-3" /> LA ORDEN DE VENTA NO SALIÓ
                         </div>
                     )}
+                    <ChipDeEspera serviceId={job.service_id} />
                     {(mostrarEtapas || mostrarTareas) && <EtapasChecklist serviceId={job.service_id} />}
                 </TableCell>
                 <TableCell className="font-medium text-muted-foreground w-28">

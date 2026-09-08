@@ -5,12 +5,19 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { HeartPulse, Check, CalendarDays } from "lucide-react";
 
+// 🔴 «Service Brain» se sumó el 8-sep-2026 a pedido de Ariel Leira (Leira Bikes).
+// La horquilla ya estaba; lo que faltaba era la suspensión trasera, que en las
+// Specialized es el Brain y tiene su propio service (y su propio vencimiento en
+// horas de uso, distinto al de la horquilla). Sin la fila, el mecánico que hoy
+// hace ese trabajo no lo puede dejar anotado y el Motor de Retención nunca lo
+// vuelve a traer: la reventa más cara del taller quedaba fuera del sistema.
 const COMPONENTS = [
     "Cadena",
     "Piñón/Cassette",
     "Líquido Tubeless",
     "Pastillas de Freno",
     "Service Horquilla",
+    "Service Brain",
     "Cubiertas"
 ];
 

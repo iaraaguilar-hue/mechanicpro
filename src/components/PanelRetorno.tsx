@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/authStore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, TrendingUp, MessageSquare, ThumbsUp, Coins, Info } from "lucide-react";
+import { Loader2, TrendingUp, MessageSquare, ThumbsUp, Coins, Info, Smartphone } from "lucide-react";
 
 // ─────────────────────────────────────────────────────────────
 // EL PANEL DE RETORNO — qué pasó con los mensajes que mandaste.
@@ -21,6 +21,18 @@ import { Loader2, TrendingUp, MessageSquare, ThumbsUp, Coins, Info } from "lucid
 // dueño de taller que huele una exageración deja de creerle a TODOS los
 // números de la pantalla, incluidos los verdaderos.
 // ─────────────────────────────────────────────────────────────
+
+// El segundo carril: lo que el taller escribió A MANO desde su celular.
+// Va aparte y no sumado por decisión de Iara (8-sep-2026), y porque no miden lo
+// mismo: el automático atribuye por bici, éste por cliente.
+interface FilaManual {
+    cliente_id: string;
+    fecha_contacto: string;
+    /** true = salió a buscarlo. false = estaba contestando (demanda entrante). */
+    escribio_primero: boolean;
+    servicio_retorno_id: string | null;
+    monto_recuperado: number | null;
+}
 
 interface FilaRetorno {
     contacto_id: string;
@@ -66,6 +78,7 @@ function Numero({ icono, valor, etiqueta, detalle, tono = "slate" }: {
 export default function PanelRetorno() {
     const taller_id = useAuthStore(s => s.taller_id);
     const [filas, setFilas] = useState<FilaRetorno[] | null>(null);
+    const [manual, setManual] = useState<FilaManual[]>([]);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -84,8 +97,18 @@ export default function PanelRetorno() {
                 .order("fecha_contacto", { ascending: false });
 
             if (!vivo) return;
-            if (error) { setError(error.message); setFilas([]); return; }
-            setFilas((data ?? []) as FilaRetorno[]);
+            if (error) { setError(error.message); setFilas([]); }
+            else setFilas((data ?? []) as FilaRetorno[]);
+
+            // El carril manual, misma ventana. Va en su propia consulta y no
+            // bloquea a la otra: si la vista fallara, el panel de siempre se
+            // sigue viendo.
+            const { data: m } = await supabase
+                .from("retorno_manual")
+                .select("cliente_id, fecha_contacto, escribio_primero, servicio_retorno_id, monto_recuperado")
+                .gte("fecha_contacto", desde)
+                .order("fecha_contacto", { ascending: false });
+            if (vivo) setManual((m ?? []) as FilaManual[]);
         })();
 
         return () => { vivo = false; };
@@ -101,9 +124,66 @@ export default function PanelRetorno() {
         );
     }
 
+    // ── EL CARRIL MANUAL ────────────────────────────────────────
+    // 🔴 Solo cuentan las salidas en las que el taller ESCRIBIÓ PRIMERO. Cuando
+    // estaba contestando un mensaje del cliente, esa vuelta la trajo el cliente
+    // solo: en Probikes la diferencia es $753.320 contra $2.659.507. Acreditarse
+    // esa plata es lo que hace que el dueño del taller deje de creerle a TODA la
+    // pantalla, incluidos los números que sí son verdad.
+    const salidas = manual.filter(m => m.escribio_primero);
+    const salidasVolvieron = salidas.filter(m => m.servicio_retorno_id);
+    const manualPlata = salidasVolvieron.reduce((a, m) => a + (m.monto_recuperado || 0), 0);
+    const manualClientes = new Set(salidas.map(m => m.cliente_id)).size;
+    // La demanda entrante: real, del taller, y NO es retención.
+    const entrante = manual.filter(m => !m.escribio_primero && m.servicio_retorno_id);
+    const entrantePlata = entrante.reduce((a, m) => a + (m.monto_recuperado || 0), 0);
+
+    const bloqueManual = salidas.length === 0 ? null : (
+        <div className="pt-3 border-t border-emerald-100">
+            <h4 className="text-xs font-bold uppercase tracking-wide text-slate-600 mb-2 flex items-center gap-1.5">
+                <Smartphone className="w-3.5 h-3.5" />
+                Y los que escribiste a mano, desde tu celular
+            </h4>
+            <div className="flex flex-wrap gap-4">
+                <Numero
+                    icono={<MessageSquare className="w-3 h-3" />}
+                    etiqueta="Saliste a buscar"
+                    valor={String(manualClientes)}
+                    detalle={`clientes · ${salidas.length} veces`}
+                />
+                <Numero
+                    icono={<TrendingUp className="w-3 h-3" />}
+                    etiqueta="Volvieron"
+                    valor={String(salidasVolvieron.length)}
+                    detalle={`${Math.round((salidasVolvieron.length / salidas.length) * 100)}% de las veces`}
+                />
+                <Numero
+                    icono={<Coins className="w-3 h-3" />}
+                    etiqueta="Facturaste"
+                    valor={plata(manualPlata)}
+                    tono="green"
+                    detalle="en esas vueltas"
+                />
+            </div>
+            {entrante.length > 0 && (
+                <p className="text-[11px] text-muted-foreground mt-2 flex items-start gap-1">
+                    <Info className="w-3 h-3 mt-0.5 shrink-0" />
+                    Aparte, {entrante.length} {entrante.length === 1 ? "vuelta" : "vueltas"} por{" "}
+                    {plata(entrantePlata)} las trajo gente que te escribió primero. Es plata tuya, pero
+                    no la fuiste a buscar vos: por eso no se cuenta acá.
+                </p>
+            )}
+        </div>
+    );
+
     // Sin recontactos todavía no hay nada que contar. Un panel de ceros no
     // motiva, desmoraliza.
-    if (filas.length === 0) {
+    //
+    // 🔴 PERO SOLO SI TAMPOCO HAY NADA A MANO. Este cartel era el bug que sentía
+    // Iara: Probikes mandó 0 mensajes por el sistema y 791 desde el celular, así
+    // que veía "todavía no recontactaste a nadie" con seis meses de recontactos
+    // encima.
+    if (filas.length === 0 && salidas.length === 0) {
         return (
             <Card className="border-dashed bg-slate-50">
                 <CardContent className="p-5 text-sm text-muted-foreground">
@@ -111,6 +191,31 @@ export default function PanelRetorno() {
                     Cuando le escribas al primer cliente desde acá, en esta franja vas a ver cuántos volvieron
                     y cuánto facturaste con eso.
                     {error && <div className="mt-2 text-xs text-red-600">No se pudo leer el retorno: {error}</div>}
+                </CardContent>
+            </Card>
+        );
+    }
+
+    if (filas.length === 0) {
+        return (
+            <Card className="border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white">
+                <CardContent className="p-4 space-y-1">
+                    <div className="flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-emerald-600" />
+                        <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">
+                            Lo que trajeron tus mensajes · últimos 90 días
+                        </h3>
+                    </div>
+                    <p className="text-xs text-muted-foreground pb-1">
+                        Todavía no mandaste ninguno desde el sistema. Esto es lo que trajeron los que
+                        escribiste a mano.
+                    </p>
+                    {bloqueManual}
+                    <p className="text-[11px] text-muted-foreground border-t pt-2 mt-2">
+                        Son los clientes que volvieron <span className="font-medium">después</span> del
+                        mensaje, dentro de los 45 días. Algunos habrían vuelto igual: el número no dice
+                        que volvieron <span className="font-medium">por</span> el mensaje.
+                    </p>
                 </CardContent>
             </Card>
         );
@@ -153,9 +258,9 @@ export default function PanelRetorno() {
                 <div className="flex flex-wrap gap-4">
                     <Numero
                         icono={<MessageSquare className="w-3 h-3" />}
-                        etiqueta="Recontactaste"
+                        etiqueta="Mandaste desde el sistema"
                         valor={String(recontactados)}
-                        detalle="clientes"
+                        detalle="mensajes"
                     />
                     <Numero
                         icono={<MessageSquare className="w-3 h-3" />}
@@ -217,6 +322,21 @@ export default function PanelRetorno() {
                         )}
                     </div>
                 )}
+
+                {/* 🔴 El caso de Probikes, y el que más importa: arriba una fila de
+                    ceros y abajo plata de verdad. El cero es cierto —no mandaron
+                    ninguno desde el sistema— pero leído solo dice "esto no sirve".
+                    Dicho así dice lo que realmente pasa, que es otra cosa. */}
+                {volvieron === 0 && salidasVolvieron.length > 0 && (
+                    <p className="text-[11px] text-muted-foreground -mt-2 flex items-start gap-1">
+                        <Info className="w-3 h-3 mt-0.5 shrink-0" />
+                        Los de arriba están en cero porque casi no mandás mensajes desde el sistema.
+                        Los que mandás a mano sí traen gente: mandándolos desde acá, además sabés
+                        quién lo leyó y quién no te contestó.
+                    </p>
+                )}
+
+                {bloqueManual}
 
                 <p className="text-[11px] text-muted-foreground border-t pt-2">
                     Son los clientes que volvieron <span className="font-medium">después</span> del contacto,

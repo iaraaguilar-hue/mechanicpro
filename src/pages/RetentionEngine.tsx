@@ -269,16 +269,16 @@ export default function RetentionEngine() {
             {/* El resultado va arriba del trabajo: si el taller entra y lo
                 primero que ve es una lista de pendientes, el sistema le pide.
                 Si ve lo que le trajo, el sistema le da. */}
-            <PanelRetorno />
+            <div data-tour="retencion-retorno"><PanelRetorno /></div>
 
             {/* Lo que contestaron va antes que lo que falta mandar: hay una
                 ventana de 24hs para responder y después se cierra. */}
-            <BandejaRespuestas />
+            <div data-tour="retencion-bandeja"><BandejaRespuestas /></div>
 
             {/* Las campañas van acá y no en una pantalla aparte: una campaña ES
                 retención, y una pantalla nueva en el menú es una que nadie abre.
                 Se esconde sola cuando no hay ninguna. */}
-            <Campanas />
+            <div data-tour="retencion-campanas"><Campanas /></div>
 
             {/* Idea 6: pocos nombres con razón de estar, no doscientos. */}
             {fuga && fuga.enRiesgo.length > 0 && <SeccionFuga fuga={fuga} />}

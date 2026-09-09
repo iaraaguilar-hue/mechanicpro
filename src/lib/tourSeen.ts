@@ -3,19 +3,25 @@
 // criterio que las novedades (novedadesSeen.ts) — la cuenta del taller
 // la comparten varios mecánicos, así el recorrido le aparece una vez a
 // cada uno desde SU dispositivo.
-// v2 en la llave: el rediseño interactivo de ago-2026 unificó todo en
-// UN tour → todos lo ven una vez más. Si el guion vuelve a cambiar
-// fuerte, subir a v3.
+// v3 en la llave (9-sep-2026): el recorrido pasó de 36 a 46 pasos y ninguno de
+// los nuevos existía en v2 — avisarle al cliente desde la orden, lo que trajeron
+// los mensajes, la bandeja, las campañas, los mensajes automáticos, el WhatsApp
+// propio, y tres pantallas enteras del menú (Bicis paradas, Preguntale,
+// Auditoría) que el tour nunca abría. Sin subir la llave, los talleres que ya lo
+// vieron NO verían nada de eso nunca: el trabajo de completarlo no llegaría a
+// una sola persona. La regla la dejó escrita la v2 acá mismo ("si el guion
+// vuelve a cambiar fuerte, subir a v3") y esta vez sí cambió fuerte.
 // ─────────────────────────────────────────────────────────────
 
 import type { ContextoTour } from '@/lib/tourSteps';
 
-const KEY = 'mechanicpro_tour_v2';
+const KEY = 'mechanicpro_tour_v3';
 
 // Llaves de versiones anteriores (bienvenida v1 + tutoriales contextuales
 // que hoy viven dentro del tour único): se limpian en el reset.
 const KEYS_LEGADO = [
     'mechanicpro_tour_v1',
+    'mechanicpro_tour_v2',
     'mechanicpro_tour_garage_v1',
     'mechanicpro_tour_service-cliente_v1',
     'mechanicpro_tour_service-bici_v1',

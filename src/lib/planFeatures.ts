@@ -100,11 +100,27 @@ export function trabajosDe(servicio?: {
     if (servicio.tipo_servicio && servicio.tipo_servicio.trim().toUpperCase() !== 'OTRO') {
         trabajos.push({ clave: 'base', etiqueta: servicio.tipo_servicio.trim(), tipo: 'base' });
     }
+    // 🔴 DOS ÍTEMS QUE SE LLAMAN IGUAL COMPARTÍAN UNA SOLA TILDE (9-sep-2026).
+    // La clave era `${tipo}:${descripcion}`, así que una orden con dos renglones
+    // «Cadena» generaba dos veces `part:cadena`: tildar uno tildaba los dos, el
+    // contador decía 2 de 2 con un trabajo sin hacer, y si el taller tiene el
+    // candado de finalización prendido lo dejaba cerrar antes de tiempo. React
+    // además tiraba «two children with the same key» en la consola, que es como
+    // apareció: en el QA del recorrido, sobre una orden real del Taller Demo.
+    //
+    // El desempate va SOLO a partir de la segunda aparición (`#2`, `#3`) y no en
+    // todas: si le pusiera el índice a todas, cambiarían TODAS las claves y las
+    // órdenes en curso perderían las tildes que ya tenían. Así, el caso normal
+    // conserva su clave de siempre y solo se toca el que estaba roto.
+    const vistas = new Map<string, number>();
     for (const item of servicio.items_extra || []) {
         const desc = item.descripcion?.trim();
         if (!desc) continue;
         const tipo = item.categoria === 'labor' ? 'labor' : 'part';
-        trabajos.push({ clave: `${tipo}:${desc.toLowerCase()}`, etiqueta: desc, tipo });
+        const base = `${tipo}:${desc.toLowerCase()}`;
+        const n = (vistas.get(base) ?? 0) + 1;
+        vistas.set(base, n);
+        trabajos.push({ clave: n === 1 ? base : `${base}#${n}`, etiqueta: desc, tipo });
     }
     return trabajos;
 }

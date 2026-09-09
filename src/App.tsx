@@ -321,16 +321,16 @@ function AppContent() {
           <Link to="/reminders" data-tour="nav-retencion"><NavButton icon={<Repeat />} label="Retención" /></Link>
           <Link to="/metrics" data-tour="nav-metricas"><NavButton icon={<BarChart3 />} label="Métricas" /></Link>
           {tieneFeature(taller, 'bicis_paradas') && (rol?.toLowerCase()?.trim() === 'admin' || (rol?.toLowerCase()?.trim() === 'mecanico' && taller?.bicis_paradas_ve_mecanico === true)) && (
-            <Link to="/bicis-paradas"><NavButton icon={<Bike />} label="Bicis paradas" /></Link>
+            <Link to="/bicis-paradas" data-tour="nav-paradas"><NavButton icon={<Bike />} label="Bicis paradas" /></Link>
           )}
           {tieneFeature(taller, 'preguntale') && rol?.toLowerCase()?.trim() !== 'super_admin' && (
-            <Link to="/preguntale"><NavButton icon={<MessageCircleQuestion />} label="Preguntale" /></Link>
+            <Link to="/preguntale" data-tour="nav-preguntale"><NavButton icon={<MessageCircleQuestion />} label="Preguntale" /></Link>
           )}
           {rol?.toLowerCase()?.trim() !== 'super_admin' && (
             <Link to="/configuracion" data-tour="nav-config"><NavButton icon={<Settings />} label="Configuración" /></Link>
           )}
           {rol?.toLowerCase()?.trim() === 'admin' && tieneFeature(taller, 'auditoria') && (
-            <Link to="/auditoria"><NavButton icon={<Trash2 />} label="Auditoría" /></Link>
+            <Link to="/auditoria" data-tour="nav-auditoria"><NavButton icon={<Trash2 />} label="Auditoría" /></Link>
           )}
           {rol?.toLowerCase()?.trim() === 'super_admin' && (
             <Link to="/superadmin"><NavButton icon={<Settings />} label="Super Admin" /></Link>

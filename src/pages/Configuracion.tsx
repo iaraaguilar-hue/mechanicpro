@@ -122,8 +122,8 @@ export default function Configuracion() {
                 <TabsList className="flex w-full justify-start overflow-x-auto sm:grid sm:grid-cols-5">
                     <TabsTrigger value="taller" className="flex-shrink-0">Mi Taller</TabsTrigger>
                     <TabsTrigger value="servicios" className="flex-shrink-0">Menú de Services</TabsTrigger>
-                    <TabsTrigger value="whatsapp" className="flex-shrink-0">WhatsApp</TabsTrigger>
-                    <TabsTrigger value="automaticos" className="flex-shrink-0">Mensajes automáticos</TabsTrigger>
+                    <TabsTrigger value="whatsapp" data-tour="config-whatsapp" className="flex-shrink-0">WhatsApp</TabsTrigger>
+                    <TabsTrigger value="automaticos" data-tour="config-automaticos" className="flex-shrink-0">Mensajes automáticos</TabsTrigger>
                     <TabsTrigger value="preferencias" className="flex-shrink-0">Preferencias</TabsTrigger>
                 </TabsList>
 

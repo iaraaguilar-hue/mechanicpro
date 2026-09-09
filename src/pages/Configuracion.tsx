@@ -95,6 +95,9 @@ export default function Configuracion() {
     }
 
     const puedeEditar = tieneFeature(taller, 'config_taller');
+    // El número propio del taller y todo lo que sale solo son del Pro para
+    // arriba (reparto de Iara, 9-sep-2026). En Sport la pestaña no aparece.
+    const verWhatsApp = tieneFeature(taller, 'whatsapp_propio');
 
     const avisar = (tipo: 'ok' | 'error', msg: string) => {
         setToast({ tipo, msg });
@@ -122,8 +125,12 @@ export default function Configuracion() {
                 <TabsList className="flex w-full justify-start overflow-x-auto sm:grid sm:grid-cols-5">
                     <TabsTrigger value="taller" className="flex-shrink-0">Mi Taller</TabsTrigger>
                     <TabsTrigger value="servicios" className="flex-shrink-0">Menú de Services</TabsTrigger>
-                    <TabsTrigger value="whatsapp" data-tour="config-whatsapp" className="flex-shrink-0">WhatsApp</TabsTrigger>
-                    <TabsTrigger value="automaticos" data-tour="config-automaticos" className="flex-shrink-0">Mensajes automáticos</TabsTrigger>
+                    {/* El WhatsApp propio y todo lo que cuelga de él son del Pro
+                        para arriba (reparto de Iara, 9-sep-2026). La pestaña no se
+                        muestra en Sport: un botón que lleva a un cartel de "tu plan
+                        no incluye esto" es peor que no tenerlo. */}
+                    {verWhatsApp && <TabsTrigger value="whatsapp" data-tour="config-whatsapp" className="flex-shrink-0">WhatsApp</TabsTrigger>}
+                    {verWhatsApp && <TabsTrigger value="automaticos" data-tour="config-automaticos" className="flex-shrink-0">Mensajes automáticos</TabsTrigger>}
                     <TabsTrigger value="preferencias" className="flex-shrink-0">Preferencias</TabsTrigger>
                 </TabsList>
 
@@ -133,12 +140,12 @@ export default function Configuracion() {
                 <TabsContent value="servicios" className="mt-6">
                     <TabMenuServices taller={taller} taller_id={taller_id} puedeEditar={puedeEditar} avisar={avisar} />
                 </TabsContent>
-                <TabsContent value="whatsapp" className="mt-6">
+                {verWhatsApp && <TabsContent value="whatsapp" className="mt-6">
                     <ConectarWhatsApp taller={taller} avisar={avisar} />
-                </TabsContent>
-                <TabsContent value="automaticos" className="mt-6">
+                </TabsContent>}
+                {verWhatsApp && <TabsContent value="automaticos" className="mt-6">
                     <MensajesAutomaticos taller={taller} avisar={avisar} />
-                </TabsContent>
+                </TabsContent>}
 
                 <TabsContent value="preferencias" className="mt-6">
                     <TabPreferencias taller={taller} setTaller={setTaller} avisar={avisar} />

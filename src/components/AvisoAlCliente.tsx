@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
+import { tieneFeature } from '@/lib/planFeatures';
 import { useDataStore, type ContactoOrden } from '@/store/dataStore';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -108,7 +109,11 @@ export default function AvisoAlCliente({ serviceId }: Props) {
     const nombreTaller = taller?.nombre || 'el taller';
 
     const espera = estadoDeEspera(servicio, Number((taller as any)?.horas_para_llamar ?? 3));
-    const modoAuto = (taller as any)?.wa_activo === true;
+    // El envío por la API es del Pro para arriba (reparto de Iara, 9-sep-2026).
+    // En Sport la función existe igual: se abre WhatsApp con el mensaje escrito
+    // y el contacto queda anotado en la orden — lo que cambia es el canal, no la
+    // función. Ver planFeatures: `whatsapp_propio`.
+    const modoAuto = (taller as any)?.wa_activo === true && tieneFeature(taller, 'whatsapp_propio');
 
     const sugerencias = clase === 'consulta' ? HALLAZGOS : AVANCES;
 
@@ -466,8 +471,10 @@ export default function AvisoAlCliente({ serviceId }: Props) {
                 </Button>
                 {!modoAuto && (
                     <p className="text-xs text-muted-foreground">
-                        Se abre WhatsApp con el mensaje escrito y queda anotado acá. Si conectás el
-                        número del taller en Configuración, sale solo y sabés si lo leyó.
+                        Se abre WhatsApp con el mensaje escrito y queda anotado acá.{' '}
+                        {tieneFeature(taller, 'whatsapp_propio')
+                            ? 'Si conectás el número del taller en Configuración, sale solo y sabés si lo leyó.'
+                            : 'Con el plan Pro podés conectar el número de tu taller: el mensaje sale solo y sabés si lo leyó.'}
                     </p>
                 )}
             </div>

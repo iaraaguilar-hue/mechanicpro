@@ -57,6 +57,44 @@ const FEATURES: Record<string, Plan[]> = {
      *  (costo marginal 0), pero se vende como el diferencial Pro: "el Sport
      *  te dice a quién llamar; el Pro te dice a quién llamar con cabeza". */
     motor_predictivo: ['Pro', 'Expert'],
+
+    // ═══ Lo de septiembre-2026, repartido por Iara el 9-sep ═══
+    // Hasta hoy NADA de esto estaba gateado: un Sport de USD 29 se llevaba el
+    // WhatsApp conectado, los avisos automáticos y las campañas. La decisión
+    // sigue la regla de la escalera —lo que nos cuesta soporte y plata va
+    // arriba— y de paso da el argumento del salto: «en el Sport lo mandás vos,
+    // en el Pro sale solo y sabés si lo leyeron».
+    //
+    // 🟢 Verificado antes de aplicarlo: NO le saca nada a nadie. El único Sport
+    // (ProCycling) y el único Pro (Crono) no tienen el WhatsApp conectado; los
+    // dos que sí lo tienen son Expert.
+
+    /** Conectar el número propio del taller por Coexistencia. Es la feature más
+     *  cara de sostener que tenemos: el alta se hace con el taller delante, hay
+     *  24hs en las que WhatsApp Web no vuelve, y cada conversación con Meta
+     *  cuesta. Todo lo que cuelga de acá va al mismo escalón. */
+    whatsapp_propio: ['Pro', 'Expert'],
+    /** Los avisos que salen solos (al terminar, al entregar, a los N días) y las
+     *  plantillas que el taller pide para él. Sin número conectado no existen,
+     *  así que van con `whatsapp_propio`. */
+    mensajes_automaticos: ['Pro', 'Expert'],
+    /** Campañas: escribirle a un grupo entero con una sola aprobación. */
+    campanas: ['Pro', 'Expert'],
+    /** El panel de la plata que volvió y la bandeja de respuestas: lo que mide
+     *  el resultado. Es el número que le prueba al taller que el sistema sirve,
+     *  y es lo que se vende en el escalón de arriba. */
+    panel_retorno: ['Pro', 'Expert'],
+    /**
+     * 🔴 EL AVISO AL CLIENTE DESDE LA ORDEN VA EN TODOS LOS PLANES, A PROPÓSITO.
+     * Es el dolor con el que Ariel Leira nos vino a buscar —la bici parada
+     * esperando un sí y la conversación que no queda escrita— y dejarlo afuera
+     * del plan de entrada sería vender un taller a medias.
+     * Lo que cambia por plan NO es la función, es el CANAL: en Sport se abre
+     * WhatsApp con el mensaje escrito y queda anotado igual; en Pro sale solo
+     * por el número del taller y vuelven los estados (entregado, leído). Eso lo
+     * decide `whatsapp_propio`, no este gate.
+     */
+    aviso_al_cliente: ['Sport', 'Pro', 'Expert'],
 };
 
 export type Feature = keyof typeof FEATURES;

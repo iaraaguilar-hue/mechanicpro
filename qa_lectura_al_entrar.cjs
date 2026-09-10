@@ -32,7 +32,11 @@ const TECHO = {
     'Clientes': 150,
     'Historial': 150,
     'Retención': 700,      // las tarjetas dicen «venía cada 4 semanas…»: es dato
-    'Métricas': 250,
+    // 300 y no 250: Métricas suma el formulario de 3 campos del punto de
+    // equilibrio, y sus ayudas van PEGADAS a cada input («si te cuesta $100 y lo
+    // vendés a $135, poné 35»). No son explicación: son la diferencia entre
+    // cargar bien o mal el markup, y todo el cálculo cuelga de eso.
+    'Métricas': 300,
     'Bicis paradas': 250,
     'Configuración': 350,
     'Config › Mi Taller': 350,

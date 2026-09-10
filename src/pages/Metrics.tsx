@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase';
 import { useDataStore } from '@/store/dataStore';
 import ExpertMetrics from '@/components/ExpertMetrics';
+import { PuntoDeEquilibrio } from '@/components/PuntoDeEquilibrio';
 import PanelSugerencias from '@/components/PanelSugerencias';
 import { normalizeBikeData, normalizeServiceType } from '@/lib/bikeDataNormalizer';
 import { rankProducts } from '@/lib/productMatcher';
@@ -606,6 +607,11 @@ export default function Metrics() {
         <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
             {header}
             {kpiCards}
+            {/* Lo primero del Expert: cuánto tiene que vender para no perder
+                plata. Va arriba de todo porque es LA pregunta del dueño, no una
+                métrica más (pedido de Iara, 10-sep-2026). Solo Expert: es lo que
+                la web vende como «BI avanzado». */}
+            <PuntoDeEquilibrio stats={stats} dateStart={dateStart} dateEnd={dateEnd} />
             <PanelSugerencias />
             {taller?.config_mecanicos?.habilitado && (
                 <PorMecanico servicios={filteredServicios} tallerId={tallerId} />

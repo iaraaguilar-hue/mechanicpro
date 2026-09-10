@@ -151,13 +151,13 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
                     <div className="flex border-b border-slate-100">
                         <button
                             onClick={() => setTab('pendientes')}
-                            className={`flex-1 px-3 py-2.5 text-xs font-bold uppercase tracking-wide transition-colors ${tab === 'pendientes' ? 'text-primary border-b-2 border-primary' : 'text-slate-400 hover:text-slate-600'}`}
+                            className={`flex-1 px-3 py-2.5 text-xs font-bold uppercase tracking-wide transition-colors ${tab === 'pendientes' ? 'text-primary border-b-2 border-primary' : 'text-slate-500 hover:text-slate-600'}`}
                         >
                             Pendientes {totalPendientes > 0 && <span className="ml-1 text-[10px] bg-[#f25a30] text-white rounded-full px-1.5">{totalPendientes}</span>}
                         </button>
                         <button
                             onClick={verNovedades}
-                            className={`flex-1 px-3 py-2.5 text-xs font-bold uppercase tracking-wide transition-colors ${tab === 'novedades' ? 'text-primary border-b-2 border-primary' : 'text-slate-400 hover:text-slate-600'}`}
+                            className={`flex-1 px-3 py-2.5 text-xs font-bold uppercase tracking-wide transition-colors ${tab === 'novedades' ? 'text-primary border-b-2 border-primary' : 'text-slate-500 hover:text-slate-600'}`}
                         >
                             Novedades {noLeidas > 0 && <span className="ml-1 text-[10px] bg-[#f25a30] text-white rounded-full px-1.5">{noLeidas}</span>}
                         </button>
@@ -166,7 +166,7 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
                     <div className="max-h-96 overflow-y-auto p-2">
                         {tab === 'pendientes' ? (
                             totalPendientes === 0 ? (
-                                <div className="flex flex-col items-center py-8 text-slate-400 gap-1">
+                                <div className="flex flex-col items-center py-8 text-slate-500 gap-1">
                                     <Bell size={22} className="opacity-30" />
                                     <p className="text-xs">Todo al día 🎉</p>
                                 </div>
@@ -234,7 +234,7 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
                             )
                         ) : (
                             novedades.length === 0 ? (
-                                <div className="flex flex-col items-center py-8 text-slate-400 gap-1">
+                                <div className="flex flex-col items-center py-8 text-slate-500 gap-1">
                                     <Megaphone size={22} className="opacity-30" />
                                     <p className="text-xs">No hay novedades por ahora</p>
                                 </div>
@@ -247,7 +247,7 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
                                                 <span className="text-sm font-bold text-slate-800">{n.titulo}</span>
                                             </div>
                                             <p className="text-xs text-slate-600 whitespace-pre-wrap">{n.cuerpo}</p>
-                                            <p className="text-[10px] text-slate-400 mt-1.5">{new Date(n.fecha).toLocaleDateString('es-AR')}</p>
+                                            <p className="text-[10px] text-slate-500 mt-1.5">{new Date(n.fecha).toLocaleDateString('es-AR')}</p>
                                         </div>
                                     ))}
                                 </div>

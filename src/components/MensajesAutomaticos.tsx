@@ -25,9 +25,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Plus, Trash2, Save, MessageSquare, AlertCircle, FileText, X } from 'lucide-react';
+import { Loader2, Plus, Trash2, Save, AlertCircle, FileText, X } from 'lucide-react';
 import { PlantillasDelTaller, type PlantillaDelTaller } from '@/components/PlantillasDelTaller';
 import { vistaPreviaDeCuerpo } from '@/lib/plantillasTaller';
+import { ComoFunciona } from '@/components/ComoFunciona';
 
 // ── El catálogo, espejo de supabase/functions/_shared/plantillas.ts.
 // Vive duplicado a propósito y con esta nota: el frontend no puede importar de
@@ -263,52 +264,43 @@ export function MensajesAutomaticos({ taller, avisar }: {
                 </div>
             )}
 
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                        <MessageSquare className="h-5 w-5" /> Mensajes que salen solos
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm text-muted-foreground">
-                    <p>
-                        Cuando terminás o entregás un service, Mechanic Pro le puede escribir al cliente
-                        desde tu WhatsApp, con el comprobante en PDF adjunto. Vos elegís qué se manda,
-                        a quién y quién lo firma.
-                    </p>
-                    <div className="text-xs bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-2">
-                        <p>
-                            <strong>Una aclaración para que no te sorprenda:</strong> WhatsApp solo deja mandar
-                            avisos con textos que Meta aprueba antes. Por eso el mensaje tiene una parte fija
-                            y vos completás la tuya.
-                        </p>
-                        <p className="flex gap-2">
-                            <span className="text-green-700 font-semibold flex-shrink-0">Al instante:</span>
-                            <span>
-                                cambiar <strong>quién firma</strong>, <strong>tu línea</strong> (cómo se paga, el
-                                horario), a quién le llega, si adjunta el PDF, y prender o apagar cualquier aviso.
-                                Eso no pasa por Meta: lo cambiás y ya sale así.
-                            </span>
-                        </p>
-                        {/* 🔴 Acá decía "escribinos y lo mandamos a aprobar". Se borró el
-                            5-sep-2026: ahora el taller lo manda solo desde «Tus plantillas»,
-                            acá abajo. Un cartel que manda a escribirle a alguien cuando ya hay
-                            un botón es peor que no tener el botón. */}
-                        <p className="flex gap-2">
-                            <span className="text-amber-700 font-semibold flex-shrink-0">Hasta 24 hs:</span>
-                            <span>
-                                cambiar el <strong>texto fijo</strong> o pedir un mensaje que no esté en la lista.
-                                Eso lo tiene que aprobar Meta: escribilo abajo en <strong>Tus plantillas</strong> y
-                                se lo mandamos en el momento. Suele contestar en menos de un día, y mientras
-                                revisan ese aviso puntual no se puede mandar.
-                            </span>
-                        </p>
-                        <p className="text-muted-foreground">
-                            Y si el cliente te escribió hace menos de 24 horas, ahí le contestás lo que quieras
-                            desde el celular, como siempre. Eso no necesita aprobación de nadie.
-                        </p>
-                    </div>
-                </CardContent>
-            </Card>
+            {/* Antes esto era una tarjeta entera de texto arriba de todo: lo primero
+                que veías al entrar eran cuatro párrafos. Ahora está plegado (Iara,
+                9-sep-2026: «no quiero que haya lectura en el instante en el que el
+                mecánico entra a las pestañas»). El texto es el mismo. */}
+            <ComoFunciona titulo="Cómo funcionan estos mensajes">
+                <p>
+                    Cuando terminás o entregás un service, Mechanic Pro le puede escribir al cliente
+                    desde tu WhatsApp, con el comprobante en PDF adjunto. Vos elegís qué se manda,
+                    a quién y quién lo firma.
+                </p>
+                <p>
+                    <strong>Una aclaración para que no te sorprenda:</strong> WhatsApp solo deja mandar
+                    avisos con textos que Meta aprueba antes. Por eso el mensaje tiene una parte fija
+                    y vos completás la tuya.
+                </p>
+                <p className="flex gap-2">
+                    <span className="text-green-700 font-semibold flex-shrink-0">Al instante:</span>
+                    <span>
+                        cambiar <strong>quién firma</strong>, <strong>tu línea</strong> (cómo se paga, el
+                        horario), a quién le llega, si adjunta el PDF, y prender o apagar cualquier aviso.
+                        Eso no pasa por Meta: lo cambiás y ya sale así.
+                    </span>
+                </p>
+                <p className="flex gap-2">
+                    <span className="text-amber-700 font-semibold flex-shrink-0">Hasta 24 hs:</span>
+                    <span>
+                        cambiar el <strong>texto fijo</strong> o pedir un mensaje que no esté en la lista.
+                        Eso lo tiene que aprobar Meta: escribilo abajo en <strong>Tus plantillas</strong> y
+                        se lo mandamos en el momento. Suele contestar en menos de un día, y mientras
+                        revisan ese aviso puntual no se puede mandar.
+                    </span>
+                </p>
+                <p>
+                    Y si el cliente te escribió hace menos de 24 horas, ahí le contestás lo que quieras
+                    desde el celular, como siempre. Eso no necesita aprobación de nadie.
+                </p>
+            </ComoFunciona>
 
             {cargando ? (
                 <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin" /></div>

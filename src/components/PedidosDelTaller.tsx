@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, Inbox, Check, X, Clock } from 'lucide-react';
+import { ComoFunciona } from '@/components/ComoFunciona';
 
 type Pedido = {
     id: string;
@@ -85,10 +86,12 @@ export function PedidosDelTaller() {
                         </Button>
                     )}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                    Sale de la pantalla de plantillas de WhatsApp: cuando un mecánico describe un
-                    momento que no sabemos disparar, o pide un dato que no está en la lista.
-                </p>
+                <ComoFunciona titulo="De dónde sale esto">
+                    <p>
+                        Sale de la pantalla de plantillas de WhatsApp: cuando un mecánico describe un
+                        momento que no sabemos disparar, o pide un dato que no está en la lista.
+                    </p>
+                </ComoFunciona>
             </CardHeader>
 
             <CardContent className="space-y-2">
@@ -124,7 +127,7 @@ export function PedidosDelTaller() {
                                     <Check className="h-4 w-4 text-green-600" />
                                 </Button>
                                 <Button variant="ghost" size="sm" title="No lo vamos a hacer" onClick={() => marcar(p, 'descartado')}>
-                                    <X className="h-4 w-4 text-slate-400" />
+                                    <X className="h-4 w-4 text-slate-500" />
                                 </Button>
                             </div>
                         )}

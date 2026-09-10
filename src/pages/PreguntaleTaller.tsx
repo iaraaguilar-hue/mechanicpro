@@ -125,7 +125,7 @@ export default function PreguntaleTaller() {
     if (!habilitado) {
         return (
             <Card><CardContent className="p-8 text-center">
-                <Lock className="mx-auto mb-3 text-slate-400" size={28} />
+                <Lock className="mx-auto mb-3 text-slate-500" size={28} />
                 <h2 className="text-lg font-bold">Preguntale a tu taller</h2>
                 <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
                     En los planes Pro y Expert escribís en criollo ("¿cuánto facturé este mes?",
@@ -186,9 +186,9 @@ export default function PreguntaleTaller() {
                                             ) : !p.id.startsWith('tmp-') && (
                                                 <>
                                                     <button onClick={() => votar(p, 'util')} title="Me sirvió"
-                                                        className="p-1 text-slate-400 hover:text-emerald-600"><ThumbsUp size={14} /></button>
+                                                        className="p-1 text-slate-500 hover:text-emerald-600"><ThumbsUp size={14} /></button>
                                                     <button onClick={() => votar(p, 'no_util')} title="No me sirvió"
-                                                        className="p-1 text-slate-400 hover:text-red-500"><ThumbsDown size={14} /></button>
+                                                        className="p-1 text-slate-500 hover:text-red-500"><ThumbsDown size={14} /></button>
                                                 </>
                                             )}
                                         </span>

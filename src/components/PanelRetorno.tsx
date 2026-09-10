@@ -4,6 +4,7 @@ import { useAuthStore } from "@/store/authStore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, TrendingUp, MessageSquare, ThumbsUp, Coins, Info, Smartphone } from "lucide-react";
+import { ComoFunciona } from '@/components/ComoFunciona';
 
 // ─────────────────────────────────────────────────────────────
 // EL PANEL DE RETORNO — qué pasó con los mensajes que mandaste.
@@ -211,11 +212,13 @@ export default function PanelRetorno() {
                         escribiste a mano.
                     </p>
                     {bloqueManual}
-                    <p className="text-[11px] text-muted-foreground border-t pt-2 mt-2">
-                        Son los clientes que volvieron <span className="font-medium">después</span> del
-                        mensaje, dentro de los 45 días. Algunos habrían vuelto igual: el número no dice
-                        que volvieron <span className="font-medium">por</span> el mensaje.
-                    </p>
+                    <ComoFunciona titulo="Cómo se cuenta" className="border-t pt-2 mt-2">
+                        <p>
+                            Son los clientes que volvieron <span className="font-medium">después</span> del
+                            mensaje, dentro de los 45 días. Algunos habrían vuelto igual: el número no dice
+                            que volvieron <span className="font-medium">por</span> el mensaje.
+                        </p>
+                    </ComoFunciona>
                 </CardContent>
             </Card>
         );
@@ -314,11 +317,12 @@ export default function PanelRetorno() {
                             ))}
                         </div>
                         {muestraChica && (
-                            <p className="text-[11px] text-muted-foreground mt-2 flex items-start gap-1">
-                                <Info className="w-3 h-3 mt-0.5 shrink-0" />
-                                Todavía son pocos mensajes por versión: la diferencia puede ser casualidad.
-                                Con unos 20 de cada una el número empieza a decir algo.
-                            </p>
+                            <ComoFunciona titulo="Ojo con este número" className="mt-2">
+                                <p>
+                                    Todavía son pocos mensajes por versión: la diferencia puede ser casualidad.
+                                    Con unos 20 de cada una el número empieza a decir algo.
+                                </p>
+                            </ComoFunciona>
                         )}
                     </div>
                 )}
@@ -338,11 +342,13 @@ export default function PanelRetorno() {
 
                 {bloqueManual}
 
-                <p className="text-[11px] text-muted-foreground border-t pt-2">
-                    Son los clientes que volvieron <span className="font-medium">después</span> del contacto,
-                    dentro de los 45 días. Algunos habrían vuelto igual: el número no dice que volvieron
-                    <span className="font-medium"> por</span> el mensaje.
-                </p>
+                <ComoFunciona titulo="Cómo se cuenta" className="border-t pt-2">
+                    <p>
+                        Son los clientes que volvieron <span className="font-medium">después</span> del contacto,
+                        dentro de los 45 días. Algunos habrían vuelto igual: el número no dice que volvieron
+                        <span className="font-medium"> por</span> el mensaje.
+                    </p>
+                </ComoFunciona>
             </CardContent>
         </Card>
     );

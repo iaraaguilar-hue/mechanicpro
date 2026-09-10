@@ -78,7 +78,7 @@ export function NovedadesPopup() {
                         <div key={n.id}>
                             <h3 className="text-base font-bold text-slate-800 mb-1">{n.titulo}</h3>
                             <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">{n.cuerpo}</p>
-                            <p className="text-[11px] text-slate-400 mt-2">{new Date(n.fecha).toLocaleDateString('es-AR')}</p>
+                            <p className="text-[11px] text-slate-500 mt-2">{new Date(n.fecha).toLocaleDateString('es-AR')}</p>
                         </div>
                     ))}
                 </div>

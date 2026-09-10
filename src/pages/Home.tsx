@@ -116,7 +116,7 @@ export default function Home() {
 
                 <div className="flex items-center gap-4 flex-1 justify-end w-full md:w-auto">
                     <div data-tour="buscador-clientes" className="relative w-full md:w-96">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
                         <Input
                             placeholder="Buscar por cliente o modelo..."
                             className="pl-10 h-11 bg-white border-slate-200 focus-visible:ring-primary"
@@ -150,7 +150,7 @@ export default function Home() {
             {!isHydrating && (
                 <div data-tour="clientes-grilla" className="block md:hidden">
                     {clientList.length === 0 ? (
-                        <p className="text-center py-12 text-slate-400">No se encontraron resultados</p>
+                        <p className="text-center py-12 text-slate-500">No se encontraron resultados</p>
                     ) : (
                         clientList.map((client) => {
                             const rawClient = clientes.find(c => c.id === client.clientId);
@@ -180,7 +180,7 @@ export default function Home() {
                     ))}
                 </div>
             ) : clientList.length === 0 ? (
-                <div className="hidden md:flex text-center py-20 text-slate-400 justify-center">
+                <div className="hidden md:flex text-center py-20 text-slate-500 justify-center">
                     <p className="text-lg">No se encontraron resultados</p>
                 </div>
             ) : (
@@ -223,7 +223,7 @@ export default function Home() {
                                                 <div className="flex justify-between items-start mb-0.5">
                                                     <div>
                                                         <p className="font-semibold text-slate-700 text-sm">{bike.modelo}</p>
-                                                        <p className="text-xs text-slate-400">{bike.transmission_display}</p>
+                                                        <p className="text-xs text-slate-500">{bike.transmission_display}</p>
                                                     </div>
                                                 </div>
 
@@ -247,7 +247,7 @@ export default function Home() {
                                             </div>
                                         ))
                                     ) : (
-                                        <p className="text-slate-400 italic text-sm">Sin bicicletas registradas</p>
+                                        <p className="text-slate-500 italic text-sm">Sin bicicletas registradas</p>
                                     )}
                                 </div>
                             </Link>
@@ -308,7 +308,7 @@ function MobileClientAccordion({ clientName, bikeModelo, bikeGrupo, dni, telefon
                 </div>
 
                 {/* Chevron */}
-                <span className="flex-shrink-0 p-1.5 rounded-lg bg-slate-100 text-slate-400">
+                <span className="flex-shrink-0 p-1.5 rounded-lg bg-slate-100 text-slate-500">
                     {isExpanded
                         ? <ChevronUp size={15} />
                         : <ChevronDown size={15} />

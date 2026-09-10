@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuthStore } from "@/store/authStore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Eye, ThumbsUp, Coins } from "lucide-react";
+import { ComoFunciona } from '@/components/ComoFunciona';
 
 // ─────────────────────────────────────────────────────────────
 // EL PANEL DEL SEGUNDO PAR DE OJOS — la línea que no admite discusión:
@@ -108,10 +109,12 @@ export default function PanelSugerencias() {
                     />
                 </div>
 
-                <p className="text-[11px] text-muted-foreground border-t pt-2">
-                    La plata sale de los ítems que siguen cargados en esas órdenes, a su precio real.
-                    Si después sacaste un ítem o le cambiaste el precio, este número lo refleja.
-                </p>
+                <ComoFunciona titulo="Cómo se cuenta" className="border-t pt-2">
+                    <p>
+                        La plata sale de los ítems que siguen cargados en esas órdenes, a su precio real.
+                        Si después sacaste un ítem o le cambiaste el precio, este número lo refleja.
+                    </p>
+                </ComoFunciona>
 
                 {/* Historial pedido por Iara (19-ago): qué sugirió, cuándo y en
                     qué terminó — no solo el total. */}
@@ -129,7 +132,7 @@ export default function PanelSugerencias() {
                                     <span>{new Date(f.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', timeZone: 'America/Argentina/Buenos_Aires' })}</span>
                                     <span className={
                                         f.estado === 'aceptada' ? 'text-emerald-600 font-semibold'
-                                        : f.estado === 'no_aplica' ? 'text-slate-400'
+                                        : f.estado === 'no_aplica' ? 'text-slate-500'
                                         : 'text-amber-600'
                                     }>
                                         {f.estado === 'aceptada'

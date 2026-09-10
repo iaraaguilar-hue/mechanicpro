@@ -6,6 +6,13 @@
   :root {
     --theme-primary: 13 89% 57%;
     --theme-secondary: 197 97% 47%;
+    /* La tinta que va ENCIMA de esos colores y la versión legible para usarlos
+       COMO texto. Las pisa App.tsx con el color real del taller (contraste.ts).
+       Antes --primary-foreground / --secondary-foreground estaban fijas en
+       casi blanco: elegir un secundario blanco dejaba texto blanco sobre
+       blanco. */
+    --primary-ink: 13 89% 57%;
+    --secondary-ink: 197 97% 37%;
 
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
@@ -17,10 +24,10 @@
     --popover-foreground: 222.2 84% 4.9%;
 
     --primary: var(--theme-primary);
-    --primary-foreground: 210 40% 98%;
+    --primary-foreground: 210 40% 98%;   /* la pisa App.tsx según el color del taller */
 
     --secondary: var(--theme-secondary);
-    --secondary-foreground: 210 40% 98%;
+    --secondary-foreground: 210 40% 98%; /* idem */
 
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
@@ -81,3 +88,37 @@
     @apply bg-background text-foreground;
   }
 }
+/* ── Que el color de marca se lea cuando se usa COMO TEXTO ──────────────────
+   Los FONDOS (`bg-primary`, `bg-sky-50`, `bg-orange-500`…) siguen usando el
+   color crudo, que es la marca; lo único que cambia es la tinta.
+
+   El caso que lo obligó (Leira, 10-sep-2026): eligió BLANCO de secundario.
+   Y el que casi se me escapa: en tailwind.config.cjs las paletas `sky` y
+   `orange` NO son las de Tailwind — están redefinidas como el color del taller
+   con transparencia. O sea que `text-sky-700` es «el secundario al 95%», y el
+   badge «En curso» quedaba blanco 95% sobre blanco 10%: 1,00:1.
+
+   🔴 La clase va DUPLICADA a propósito (`.text-primary.text-primary`). Con el
+   selector simple, el CSS compilado dejaba MI regla ANTES que la de Tailwind
+   en las variantes con :hover, así que ganaba la de Tailwind y el ítem del menú
+   seguía en 2,04:1 con el verde de ProCycling. Duplicar la clase sube la
+   especificidad y el orden deja de importar. */
+.text-primary.text-primary { color: hsl(var(--primary-ink)); }
+.text-secondary.text-secondary { color: hsl(var(--secondary-ink)); }
+
+.text-orange-500.text-orange-500 { color: hsl(var(--primary-ink)); }
+.text-orange-600.text-orange-600 { color: hsl(var(--primary-ink) / 0.9); }
+.text-orange-700.text-orange-700 { color: hsl(var(--primary-ink) / 0.95); }
+.text-orange-800.text-orange-800 { color: hsl(var(--primary-ink) / 0.98); }
+.text-orange-900.text-orange-900 { color: hsl(var(--primary-ink)); }
+
+.text-sky-500.text-sky-500 { color: hsl(var(--secondary-ink)); }
+.text-sky-600.text-sky-600 { color: hsl(var(--secondary-ink) / 0.9); }
+.text-sky-700.text-sky-700 { color: hsl(var(--secondary-ink) / 0.95); }
+.text-sky-800.text-sky-800 { color: hsl(var(--secondary-ink) / 0.98); }
+.text-sky-900.text-sky-900 { color: hsl(var(--secondary-ink)); }
+
+.hover\:text-primary.hover\:text-primary:hover { color: hsl(var(--primary-ink)); }
+.hover\:text-secondary.hover\:text-secondary:hover { color: hsl(var(--secondary-ink)); }
+.focus\:text-primary.focus\:text-primary:focus { color: hsl(var(--primary-ink)); }
+.group:hover .group-hover\:text-primary.group-hover\:text-primary { color: hsl(var(--primary-ink)); }

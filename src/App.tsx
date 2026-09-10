@@ -25,6 +25,7 @@ import { useAuthStore } from "@/store/authStore";
 import { useDataStore } from "@/store/dataStore";
 import { supabase } from "@/lib/supabase";
 import { hexToHslSpaceSeparated } from "@/lib/utils";
+import { tintaSobre, tintaLegible, hexAHslCss, hexARgb, PISO_TEXTO_GRANDE } from '@/lib/contraste';
 import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { useIdleTimeout } from "@/hooks/useIdleTimeout";
 import { UpdateBanner } from "@/components/UpdateBanner";
@@ -50,19 +51,27 @@ function AppContent() {
 
   // (localStorage migrations removed — data now comes from Supabase)
 
-  // Inyección de Theme de Marca Blanca
+  // Inyección de Theme de Marca Blanca.
+  //
+  // 🔴 Además del color, se calcula LA TINTA QUE VA ENCIMA y la versión legible
+  // del color para usarlo como texto. Antes esas dos estaban fijas en casi
+  // blanco en index.css: Ariel Leira eligió BLANCO de secundario y quedaron
+  // invisibles el botón «Entregar Bici», el contador de bicis listas y los
+  // íconos de Métricas (10-sep-2026). Ver src/lib/contraste.ts.
   useEffect(() => {
-    if (taller) {
-      if (taller.color_primario) {
-        document.documentElement.style.setProperty('--theme-primary', hexToHslSpaceSeparated(taller.color_primario));
-      }
-      if (taller.color_secundario) {
-        document.documentElement.style.setProperty('--theme-secondary', hexToHslSpaceSeparated(taller.color_secundario));
-      }
-    } else {
-      document.documentElement.style.removeProperty('--theme-primary');
-      document.documentElement.style.removeProperty('--theme-secondary');
-    }
+    const raiz = document.documentElement;
+    const vars = ['--theme-primary', '--theme-secondary', '--primary-foreground',
+                  '--secondary-foreground', '--primary-ink', '--secondary-ink'];
+    if (!taller) { vars.forEach(v => raiz.style.removeProperty(v)); return; }
+
+    const aplicar = (color: string | undefined, tema: string, tinta: string, ink: string) => {
+      if (!color || !hexARgb(color)) return;
+      raiz.style.setProperty(tema, hexToHslSpaceSeparated(color));
+      raiz.style.setProperty(tinta, hexAHslCss(tintaSobre(color)));
+      raiz.style.setProperty(ink, hexAHslCss(tintaLegible(color, '#FFFFFF', PISO_TEXTO_GRANDE)));
+    };
+    aplicar(taller.color_primario, '--theme-primary', '--primary-foreground', '--primary-ink');
+    aplicar(taller.color_secundario, '--theme-secondary', '--secondary-foreground', '--secondary-ink');
   }, [taller]);
 
   // Global Auth Listener and Session Restoration (Hydration)
@@ -191,21 +200,21 @@ function AppContent() {
               <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-slate-100 z-[60] py-2 animate-in fade-in slide-in-from-top-1 duration-150">
                 <div className="px-4 py-2 border-b border-slate-100">
                   <p className="text-xs font-bold text-slate-800 truncate">{displayName}</p>
-                  <p className="text-[10px] text-slate-400 truncate">{session?.user?.email}</p>
+                  <p className="text-[10px] text-slate-500 truncate">{session?.user?.email}</p>
                 </div>
                 <Link
                   to="/configuracion"
                   onClick={() => setUserMenuOpen(false)}
                   className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                 >
-                  <User size={15} className="text-slate-400" /> Mi Perfil
+                  <User size={15} className="text-slate-500" /> Mi Perfil
                 </Link>
                 <Link
                   to="/configuracion"
                   onClick={() => setUserMenuOpen(false)}
                   className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                 >
-                  <Settings size={15} className="text-slate-400" /> Ajustes del Taller
+                  <Settings size={15} className="text-slate-500" /> Ajustes del Taller
                 </Link>
                 <div className="border-t border-slate-100 mt-1 pt-1">
                   <button
@@ -247,7 +256,7 @@ function AppContent() {
               </div>
               <button
                 onClick={closeDrawer}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                className="p-2 text-slate-500 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
                 aria-label="Cerrar menú"
               >
                 <X size={20} />

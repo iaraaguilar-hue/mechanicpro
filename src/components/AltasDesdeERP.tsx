@@ -25,6 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Loader2, MapPin, X, Plus } from 'lucide-react';
+import { ComoFunciona } from '@/components/ComoFunciona';
 
 // Tal cual las escribe Contabilium, que es contra lo que se compara.
 const PROVINCIAS_AR = [
@@ -72,24 +73,39 @@ export function AltasDesdeERP({ taller, setTaller, avisar }: {
                 <CardTitle className="text-lg flex items-center gap-2">
                     <MapPin className="h-5 w-5" /> La bici vendida entra sola
                 </CardTitle>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                    Cuando vendés una bicicleta, esa bici y su dueño se cargan solos acá, leídos de tu
-                    sistema de facturación. Y como la bici entra sin service, el aviso de primer
-                    service la levanta cuando cumple el plazo.
-                </p>
+                <ComoFunciona>
+                    <p>
+                        Cuando vendés una bicicleta, esa bici y su dueño se cargan solos acá, leídos de tu
+                        sistema de facturación. Y como la bici entra sin service, el aviso de primer
+                        service la levanta cuando cumple el plazo.
+                    </p>
+                    <p>
+                        <strong>Las provincias:</strong> el que compra de otra provincia no va a traerte
+                        la bici, así que no se carga como cliente.
+                    </p>
+                    <p>
+                        <strong>Cuántas bicis:</strong> una factura con más de {maxBicis === 1 ? 'una bici' : `${maxBicis} bicis`} es
+                        venta a un negocio y no se carga. Con una sola, aunque esté facturada a una
+                        empresa, se anota para que preguntes de quién es la bici:
+                        {' '}<strong>mucha gente factura su bicicleta a su empresa</strong> y esos sí son
+                        clientes tuyos.
+                    </p>
+                </ComoFunciona>
             </CardHeader>
 
             <CardContent className="flex-1 flex flex-col gap-4">
                 <div className="space-y-2">
                     <Label>¿En qué provincias atendés?</Label>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        El que compra de otra provincia no va a traerte la bici, así que no se carga
-                        como cliente. {provincias.length === 0 && (
+                    {/* El aviso de que entran TODAS queda a la vista: es el estado
+                        actual, no una explicación. El porqué se pliega. */}
+                    {provincias.length === 0 && (
+                        <p className="text-[11px] leading-relaxed">
                             <strong className="text-amber-700">
                                 Ahora mismo no hay ninguna elegida, así que entran todas.
                             </strong>
-                        )}
-                    </p>
+                        </p>
+                    )}
+
 
                     {provincias.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 pt-1">
@@ -147,14 +163,7 @@ export function AltasDesdeERP({ taller, setTaller, avisar }: {
                             {maxBicis === 1 ? 'bici en una misma factura' : 'bicis en una misma factura'}
                         </span>
                     </div>
-                    {/* El matiz que hace falta explicar, porque es contraintuitivo. */}
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        Una factura con más de {maxBicis === 1 ? 'una bici' : `${maxBicis} bicis`} es
-                        venta a un negocio y no se carga.
-                        Con una sola, aunque esté facturada a una empresa, se anota para que preguntes
-                        de quién es la bici: <strong>mucha gente factura su bicicleta a su empresa</strong> y
-                        esos sí son clientes tuyos.
-                    </p>
+
                 </div>
 
                 {guardando && (

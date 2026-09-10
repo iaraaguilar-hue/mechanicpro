@@ -102,7 +102,7 @@ export function IntakeWizard({
                 {step !== "SEARCH_CLIENT" && (
                     <button
                         onClick={() => setStep(step === "SELECT_BIKE" ? "SEARCH_CLIENT" : "SELECT_BIKE")}
-                        className="absolute left-4 top-4 p-2 text-slate-400 hover:text-slate-600 transition-colors z-10"
+                        className="absolute left-4 top-4 p-2 text-slate-500 hover:text-slate-600 transition-colors z-10"
                         aria-label="Volver al paso anterior"
                     >
                         <ArrowLeft className="w-5 h-5" />

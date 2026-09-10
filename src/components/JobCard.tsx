@@ -1,10 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, ChevronUp, Download, CheckCircle, Clock } from 'lucide-react';
 import { useState } from 'react';
 import { printServiceReport } from '@/lib/printServiceBtn';
 import { formatInternalServiceName } from '@/lib/utils';
+import { EtiquetaService } from '@/components/EtiquetaService';
 
 interface JobCardProps {
     job: any;
@@ -46,10 +46,12 @@ export default function JobCard({ job, client, bikeModel = 'Bicicleta' }: JobCar
                                 {new Date(job.createdAt || Date.now()).toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                             </CardTitle>
                             <div className="flex gap-2 mt-1">
-                                <Badge variant="outline" className="text-xs font-normal text-slate-500 border-slate-300 bg-slate-900 border-slate-900 text-slate-50 whitespace-nowrap w-fit px-3 py-1">
-                                    {formatInternalServiceName(job.serviceType)}
-                                </Badge>
-                                <span className="text-xs text-slate-400">ID: #{job.id.slice(-4)}</span>
+                                <EtiquetaService
+                                    nombre={job.serviceType}
+                                    variant="outline"
+                                    className="text-xs font-normal border-slate-900 bg-slate-900 text-slate-50 w-fit px-3"
+                                />
+                                <span className="text-xs text-slate-500">ID: #{job.id.slice(-4)}</span>
                             </div>
                         </div>
                     </div>
@@ -58,7 +60,7 @@ export default function JobCard({ job, client, bikeModel = 'Bicicleta' }: JobCar
                         <Button variant="ghost" size="icon" onClick={handleDownload} title="Descargar PDF">
                             <Download className="w-4 h-4 text-primary" />
                         </Button>
-                        {expanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+                        {expanded ? <ChevronUp className="w-4 h-4 text-slate-500" /> : <ChevronDown className="w-4 h-4 text-slate-500" />}
                     </div>
                 </div>
             </CardHeader>

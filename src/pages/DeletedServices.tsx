@@ -289,7 +289,7 @@ export default function DeletedServices() {
                                             <TableCell className="py-4">
                                                 <div className="flex flex-col">
                                                     <span className="font-bold text-slate-500 text-sm line-through decoration-slate-300" title={job.id}>{formatOrdenNumber(job.numero_orden, job.id)}</span>
-                                                    <span className="text-xs text-slate-400 flex items-center gap-1">
+                                                    <span className="text-xs text-slate-500 flex items-center gap-1">
                                                         <CalendarIcon className="w-3 h-3" />
                                                         {inDate ? format(inDate, "dd/MM/yy") : '-'}
                                                     </span>
@@ -300,19 +300,19 @@ export default function DeletedServices() {
                                                     <UserX className="w-3 h-3 text-slate-300" />
                                                     {job.clientName}
                                                 </div>
-                                                <div className="text-xs text-slate-400">{job.clientDni}</div>
+                                                <div className="text-xs text-slate-500">{job.clientDni}</div>
                                             </TableCell>
                                             <TableCell className="py-4">
                                                 <div className="font-semibold text-slate-600 capitalize opacity-80">{job.bikeBrand}</div>
-                                                <div className="text-sm text-slate-400">{job.bikeModel}</div>
+                                                <div className="text-sm text-slate-500">{job.bikeModel}</div>
                                             </TableCell>
                                             <TableCell className="py-4">
-                                                <span className="font-mono text-slate-400 bg-slate-50 px-2 py-1 rounded">
+                                                <span className="font-mono text-slate-500 bg-slate-50 px-2 py-1 rounded">
                                                     $ {job.totalPrice?.toLocaleString("es-AR")}
                                                 </span>
                                             </TableCell>
                                             <TableCell className="text-right pr-6 py-4 flex justify-end items-center gap-2">
-                                                <Badge variant="outline" className="text-slate-400 bg-transparent border-red-200 uppercase font-normal text-[10px] tracking-wider hidden md:inline-flex">
+                                                <Badge variant="outline" className="text-slate-500 bg-transparent border-red-200 uppercase font-normal text-[10px] tracking-wider hidden md:inline-flex">
                                                     Anulado
                                                 </Badge>
                                                 <Button
@@ -344,7 +344,7 @@ export default function DeletedServices() {
                                             <TableCell className="py-4">
                                                 <div className="flex flex-col">
                                                     <span className="font-bold text-slate-500 text-sm line-through decoration-slate-300">{client.nombre}</span>
-                                                    <span className="text-xs text-slate-400">ID: {client.numero_cliente || '-'}</span>
+                                                    <span className="text-xs text-slate-500">ID: {client.numero_cliente || '-'}</span>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="py-4">
@@ -392,7 +392,7 @@ export default function DeletedServices() {
                                             <TableCell className="py-4">
                                                 <div className="flex flex-col">
                                                     <span className="font-bold text-slate-700 text-sm">{entry.usuario_nombre || 'Desconocido'}</span>
-                                                    <span className="text-xs text-slate-400 font-mono">{entry.usuario_id?.slice(0, 8)}...</span>
+                                                    <span className="text-xs text-slate-500 font-mono">{entry.usuario_id?.slice(0, 8)}...</span>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="py-4">
@@ -404,7 +404,7 @@ export default function DeletedServices() {
                                             <TableCell className="py-4">
                                                 <div className="flex flex-col">
                                                     <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{entry.entidad_tipo}</span>
-                                                    <span className="text-xs text-slate-400 font-mono">{entry.entidad_id?.slice(0, 8)}...</span>
+                                                    <span className="text-xs text-slate-500 font-mono">{entry.entidad_id?.slice(0, 8)}...</span>
                                                 </div>
                                             </TableCell>
                                             <TableCell className="py-4 pr-6">
@@ -413,11 +413,11 @@ export default function DeletedServices() {
                                                         <div key={k} className="flex items-start gap-1">
                                                             <span className="font-semibold text-slate-500 capitalize min-w-[70px]">{k}:</span>
                                                             <span className="text-red-400 line-through">{String(antes[k] ?? '-')}</span>
-                                                            <span className="text-slate-400 mx-0.5">→</span>
+                                                            <span className="text-slate-500 mx-0.5">→</span>
                                                             <span className="text-emerald-600 font-medium">{String(despues[k] ?? '-')}</span>
                                                         </div>
                                                     )) : (
-                                                        <span className="text-slate-400 italic">Sin cambios detectables</span>
+                                                        <span className="text-slate-500 italic">Sin cambios detectables</span>
                                                     )}
                                                 </div>
                                             </TableCell>

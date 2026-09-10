@@ -776,7 +776,7 @@ export default function SuperAdmin() {
                                                                         <Check size={16} />
                                                                     </Button>
                                                                     <Button
-                                                                        variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:bg-slate-50"
+                                                                        variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:bg-slate-50"
                                                                         onClick={() => setEditingServiceId(null)}
                                                                         disabled={loadingServicios}
                                                                     >
@@ -796,7 +796,7 @@ export default function SuperAdmin() {
                                                                 <TableCell className="text-right font-mono">${Number(servicio.precio).toFixed(2)}</TableCell>
                                                                 <TableCell className="whitespace-nowrap flex items-center justify-end gap-1">
                                                                     <Button
-                                                                        variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/10"
+                                                                        variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-primary hover:bg-primary/10"
                                                                         onClick={() => {
                                                                             setEditingServiceId(servicio.id);
                                                                             setEditForm({ nombre: servicio.nombre, descripcion: servicio.descripcion || '', precio: servicio.precio.toString() });

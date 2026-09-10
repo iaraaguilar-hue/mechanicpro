@@ -28,6 +28,7 @@ import {
     Layers,
     Bike
 } from 'lucide-react';
+import { ComoFunciona } from '@/components/ComoFunciona';
 
 // --- SEMANTIC ENGINE HELPERS ---
 export function parseItemQuantityAndName(rawDesc: string) {
@@ -392,7 +393,7 @@ export default function Metrics() {
                         <Package className="w-6 h-6 text-primary" />
                         <h3 className="text-lg font-bold text-gray-900">Ranking de Stock</h3>
                     </div>
-                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 5</span>
+                    <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-md">Top 5</span>
                 </div>
                 <div className="flex-1">
                     {stats.topProducts.length === 0 ? (
@@ -421,7 +422,7 @@ export default function Metrics() {
                         <PieChart className="w-6 h-6 text-primary" />
                         <h3 className="text-lg font-bold text-gray-900">Tendencias de Taller</h3>
                     </div>
-                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Categorías</span>
+                    <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-md">Categorías</span>
                 </div>
                 <div className="flex-1 flex flex-col justify-between">
                     {stats.trends.length === 0 ? (
@@ -452,7 +453,7 @@ export default function Metrics() {
                         <Brain className="w-6 h-6 text-primary" />
                         <h3 className="text-lg font-bold text-gray-900">Distribución de Services</h3>
                     </div>
-                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Tipos</span>
+                    <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-md">Tipos</span>
                 </div>
                 <div className="flex-1">
                     {stats.serviceDist.length === 0 ? (
@@ -485,7 +486,7 @@ export default function Metrics() {
                         <Tag className="w-6 h-6 text-primary" />
                         <h3 className="text-lg font-bold text-gray-900">Flota por Marcas</h3>
                     </div>
-                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 6</span>
+                    <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-md">Top 6</span>
                 </div>
                 <div className="flex-1">
                     {stats.brandDist.length === 0 ? (
@@ -515,7 +516,7 @@ export default function Metrics() {
                         <Layers className="w-6 h-6 text-fuchsia-600" />
                         <h3 className="text-lg font-bold text-gray-900">Distribución por Modelo</h3>
                     </div>
-                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 6</span>
+                    <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-md">Top 6</span>
                 </div>
                 <div className="flex-1">
                     {stats.modelDist.length === 0 ? (
@@ -545,7 +546,7 @@ export default function Metrics() {
                         <Bike className="w-6 h-6 text-sky-600" />
                         <h3 className="text-lg font-bold text-gray-900">Segmento de Bicicletas</h3>
                     </div>
-                    <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Top 6</span>
+                    <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-md">Top 6</span>
                 </div>
                 <div className="flex-1">
                     {stats.categoryDist.length === 0 ? (
@@ -723,12 +724,14 @@ export function PorMecanico({ servicios, tallerId }: { servicios: any[]; tallerI
                 <CardTitle className="text-base flex items-center gap-2">
                     <Users className="h-4 w-4" /> Lo que generó cada mecánico
                 </CardTitle>
-                <p className="text-xs text-muted-foreground">
-                    Del período elegido arriba. La mano de obra y los repuestos van separados para que
-                    saques la cuenta como la hagas vos.
-                </p>
             </CardHeader>
             <CardContent>
+                <ComoFunciona className="mb-2">
+                    <p>
+                        Del período elegido arriba. La mano de obra y los repuestos van separados
+                        para que saques la cuenta como la hagas vos.
+                    </p>
+                </ComoFunciona>
                 {filas.length === 0 ? (
                     // El vacío explicado: si no, el primer día parece que está roto.
                     <p className="text-sm text-muted-foreground py-4">

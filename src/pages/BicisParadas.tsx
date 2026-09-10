@@ -7,6 +7,7 @@ import { tieneFeature } from '@/lib/planFeatures';
 import {
     Bike, Phone, Ban, Sparkles, Lock, AlertTriangle, Loader2, Coins, RefreshCw,
 } from 'lucide-react';
+import { ComoFunciona } from '@/components/ComoFunciona';
 
 // ─────────────────────────────────────────────────────────────
 // BICIS PARADAS (idea 15, paso 2): la bici que duerme en el local y los
@@ -171,7 +172,7 @@ export default function BicisParadas() {
     if (!habilitado) {
         return (
             <Card><CardContent className="p-8 text-center">
-                <Lock className="mx-auto mb-3 text-slate-400" size={28} />
+                <Lock className="mx-auto mb-3 text-slate-500" size={28} />
                 <h2 className="text-lg font-bold">Bicis paradas</h2>
                 <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
                     El cruce de tu stock parado contra tu base de clientes es de los planes Pro y Expert:
@@ -184,7 +185,7 @@ export default function BicisParadas() {
     if (!puedeVer) {
         return (
             <Card><CardContent className="p-8 text-center">
-                <Lock className="mx-auto mb-3 text-slate-400" size={28} />
+                <Lock className="mx-auto mb-3 text-slate-500" size={28} />
                 <p className="text-sm text-muted-foreground">
                     El administrador no habilitó esta vista para tu usuario.
                 </p>
@@ -210,21 +211,28 @@ export default function BicisParadas() {
                 </Button>
             </div>
 
-            {/* La letra chica que NO es chica: de cuándo es el dato y qué no es. */}
-            <div className="text-xs text-muted-foreground bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 space-y-0.5">
+            {/* La fecha del stock queda a la vista (es un dato, y decide si llamar
+                hoy sirve). El método del cruce y la salvedad del talle se pliegan. */}
+            <div className="text-xs text-muted-foreground bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
                 <div>
                     {stockFecha
-                        ? <>Stock del ERP actualizado el <b>{fechaCorta(stockFecha)}</b>. El ERP puede sobre-reportar: <b>confirmá la percha antes de llamar</b> — esta lista es para decidir a quién llamar, no para prometer un talle.</>
+                        ? <>Stock del ERP actualizado el <b>{fechaCorta(stockFecha)}</b>.</>
                         : <>Todavía no hay stock cargado desde el ERP.</>}
                 </div>
-                {resumen && resumen.clientes_total !== null && (
-                    <div>
-                        Cruce: {resumen.bicis_paradas} bicis sin ventas hace {resumen.dias_parada}+ días ·
-                        de tus {resumen.clientes_total} clientes, {resumen.clientes_con_disciplina} entran al cruce por la bici que ya tienen;
-                        <b> {resumen.clientes_sin_disciplina} quedaron afuera</b> (no se les puede inferir disciplina) y
-                        solo {resumen.clientes_con_talle} tienen talle cargado, así que el talle filtra poco todavía.
-                    </div>
-                )}
+                <ComoFunciona titulo="Cómo se arma esta lista">
+                    <p>
+                        El ERP puede sobre-reportar: <b>confirmá la percha antes de llamar</b> — esta
+                        lista es para decidir a quién llamar, no para prometer un talle.
+                    </p>
+                    {resumen && resumen.clientes_total !== null && (
+                        <p>
+                            Cruce: {resumen.bicis_paradas} bicis sin ventas hace {resumen.dias_parada}+ días ·
+                            de tus {resumen.clientes_total} clientes, {resumen.clientes_con_disciplina} entran al cruce por la bici que ya tienen;
+                            <b> {resumen.clientes_sin_disciplina} quedaron afuera</b> (no se les puede inferir disciplina) y
+                            solo {resumen.clientes_con_talle} tienen talle cargado, así que el talle filtra poco todavía.
+                        </p>
+                    )}
+                </ComoFunciona>
             </div>
 
             {aviso && (
@@ -242,16 +250,22 @@ export default function BicisParadas() {
                     <div>
                         <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1"><Coins size={12} /> Se vendieron después de llamar</div>
                         <div className="text-2xl font-bold text-emerald-600">{retorno.vendidas}{retorno.monto > 0 && <span className="text-base font-semibold ml-2">{plata(retorno.monto)}</span>}</div>
-                        <div className="text-xs text-muted-foreground">Según la última venta que reporta el ERP. No sabemos si fue a ese cliente: sabemos que la bici parada se vendió después de la llamada.</div>
+                        <ComoFunciona titulo="Cómo se cuenta">
+                            <p>Según la última venta que reporta el ERP. No sabemos si fue a ese cliente: sabemos que la bici parada se vendió después de la llamada.</p>
+                        </ComoFunciona>
                     </div>
                 </CardContent></Card>
             )}
 
             {matches !== null && matches.length === 0 && (
                 <Card><CardContent className="p-8 text-center text-sm text-muted-foreground">
-                    Todavía no hay matches. Tocá <b>Buscar candidatos</b>: el sistema mira qué bicis
-                    llevan {90}+ días sin venderse y busca en tu base a quién le calzan por disciplina,
-                    talle (cuando está cargado) y gasto real.
+                    Todavía no hay matches. Tocá <b>Buscar candidatos</b>.
+                    <ComoFunciona titulo="Qué hace ese botón" className="mx-auto w-fit text-left">
+                        <p>
+                            Mira qué bicis llevan {90}+ días sin venderse y busca en tu base a quién le
+                            calzan por disciplina, talle (cuando está cargado) y gasto real.
+                        </p>
+                    </ComoFunciona>
                 </CardContent></Card>
             )}
 

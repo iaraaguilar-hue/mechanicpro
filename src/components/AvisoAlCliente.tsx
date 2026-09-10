@@ -457,7 +457,7 @@ export default function AvisoAlCliente({ serviceId }: Props) {
                     mecánico lo vea antes de mandarlo es lo único que evita
                     mandar algo que no se diría hablando. */}
                 <div className="rounded-md bg-slate-50 border border-slate-200 p-2.5">
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1">Le va a llegar así</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Le va a llegar así</p>
                     <p className="text-sm text-slate-700 leading-snug">{preview}</p>
                 </div>
 
@@ -481,7 +481,7 @@ export default function AvisoAlCliente({ serviceId }: Props) {
 
             {/* ── El registro ── */}
             <div>
-                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 mb-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">
                     Lo que se habló por esta orden {mensajes.length > 0 && `(${mensajes.length})`}
                 </p>
                 {mensajes.length === 0 ? (

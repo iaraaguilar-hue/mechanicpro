@@ -192,7 +192,7 @@ export function ServiceModal({
                             {step === "SELECT_BIKE" && (
                                 <button
                                     onClick={() => setStep("SEARCH_CLIENT")}
-                                    className="p-1 text-slate-400 hover:text-slate-800 transition-colors"
+                                    className="p-1 text-slate-500 hover:text-slate-800 transition-colors"
                                     aria-label="Volver al paso anterior"
                                 >
                                     <ArrowLeft className="w-5 h-5" />
@@ -705,7 +705,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                         {!serviceId && (
                             <button
                                 onClick={onBack}
-                                className="p-1 text-slate-400 hover:text-slate-800 transition-colors"
+                                className="p-1 text-slate-500 hover:text-slate-800 transition-colors"
                                 aria-label="Volver al paso anterior"
                             >
                                 <ArrowLeft className="w-5 h-5" />
@@ -895,7 +895,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
 
                     <div className="space-y-2">
                         <Label className="flex items-center gap-2">
-                            <Lock className="h-3.5 w-3.5 text-slate-400" /> {ETIQUETAS_NOTAS.interna}
+                            <Lock className="h-3.5 w-3.5 text-slate-500" /> {ETIQUETAS_NOTAS.interna}
                         </Label>
                         <p className="text-sm text-muted-foreground -mt-1">{ETIQUETAS_NOTAS.internaAyuda}</p>
                         <Textarea

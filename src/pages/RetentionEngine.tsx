@@ -15,6 +15,7 @@ import { carreraEnFrase, nombreBiciAmigable, nombresBicisAmigables, primerNombre
 import { tieneFeature } from "@/lib/planFeatures";
 import PanelRetorno from "@/components/PanelRetorno";
 import BandejaRespuestas from "@/components/BandejaRespuestas";
+import { ComoFunciona } from '@/components/ComoFunciona';
 
 // Acceso rápido al perfil del cliente desde la alerta: si tenemos la bici,
 // abrimos esa bici (el perfil muestra igual al cliente con TODAS sus bicis en
@@ -442,11 +443,13 @@ function SeccionAvisosSuaves({ resultado }: { resultado: ResultadoSuaves }) {
                 <User className="h-6 w-6" />
                 <h2 className="text-xl font-bold">Vale una llamada</h2>
             </div>
-            <p className="text-xs text-muted-foreground -mt-1">
-                No son vencimientos: son clientes que se están enfriando. Nadie se va a quedar sin
-                bici por esto, pero una pregunta a tiempo los trae de vuelta. Ordenados por lo que
-                dejaron en el taller.
-            </p>
+            <ComoFunciona className="-mt-1">
+                <p>
+                    No son vencimientos: son clientes que se están enfriando. Nadie se va a quedar sin
+                    bici por esto, pero una pregunta a tiempo los trae de vuelta. Ordenados por lo que
+                    dejaron en el taller.
+                </p>
+            </ComoFunciona>
             {/* Decir que está trabajando aunque no haya nada que mostrar: si no,
                 el que lo prende un lunes ve una sección vacía y lo apaga. */}
             {enCamino.cuantas > 0 && (
@@ -695,7 +698,7 @@ function AlertCard({ alert }: { alert: RetentionAlert }) {
                         size="sm"
                         disabled={!alert.servicioId}
                         title={!alert.servicioId ? "No hay servicio asociado para guardar descarte." : ""}
-                        className="w-full text-slate-400 hover:text-slate-600 hover:bg-slate-100/50 mt-1"
+                        className="w-full text-slate-500 hover:text-slate-600 hover:bg-slate-100/50 mt-1"
                         onClick={handleDismiss}
                     >
                         <CheckCircle2 className="w-4 h-4 mr-2 opacity-70" />

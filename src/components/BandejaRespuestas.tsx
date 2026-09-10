@@ -212,7 +212,7 @@ export default function BandejaRespuestas() {
                                                 </Link>
                                             ) : (
                                                 <span className="font-semibold text-slate-900 flex items-center gap-1">
-                                                    <User className="w-3.5 h-3.5 text-slate-400" /> {m.telefono}
+                                                    <User className="w-3.5 h-3.5 text-slate-500" /> {m.telefono}
                                                 </span>
                                             )}
                                             {m.interes === "si" && (

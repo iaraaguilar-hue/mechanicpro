@@ -85,9 +85,9 @@ export function NovedadesAdmin() {
                     ) : novedades.map(n => (
                         <div key={n.id} className="flex items-start gap-3 p-3 rounded-lg border">
                             <div className="flex-1 min-w-0">
-                                <p className={`text-sm font-semibold ${n.activa ? 'text-slate-800' : 'text-slate-400 line-through'}`}>{n.titulo}</p>
+                                <p className={`text-sm font-semibold ${n.activa ? 'text-slate-800' : 'text-slate-500 line-through'}`}>{n.titulo}</p>
                                 {n.cuerpo && <p className="text-xs text-slate-500 mt-0.5 whitespace-pre-wrap">{n.cuerpo}</p>}
-                                <p className="text-[10px] text-slate-400 mt-1">{new Date(n.fecha).toLocaleDateString('es-AR')} · {n.activa ? 'Visible' : 'Oculta'}</p>
+                                <p className="text-[10px] text-slate-500 mt-1">{new Date(n.fecha).toLocaleDateString('es-AR')} · {n.activa ? 'Visible' : 'Oculta'}</p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                                 <Switch checked={n.activa} onCheckedChange={() => toggleActiva(n)} title="Mostrar / ocultar" />

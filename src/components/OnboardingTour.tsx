@@ -417,7 +417,7 @@ export function OnboardingTour() {
                         </p>
                         <button
                             onClick={terminar}
-                            className="text-[11px] font-medium text-slate-400 hover:text-slate-600 transition-colors shrink-0"
+                            className="text-[11px] font-medium text-slate-500 hover:text-slate-600 transition-colors shrink-0"
                         >
                             Omitir recorrido
                         </button>
@@ -454,7 +454,7 @@ export function OnboardingTour() {
                                 variant="ghost"
                                 size="sm"
                                 onClick={avanzar}
-                                className="text-slate-400 hover:text-slate-600"
+                                className="text-slate-500 hover:text-slate-600"
                             >
                                 Saltear paso
                             </Button>

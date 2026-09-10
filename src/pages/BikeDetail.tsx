@@ -23,6 +23,7 @@ import { AddBikeDialog } from "@/components/AddBikeDialog";
 import { ServiceModal } from "@/components/ServiceModal";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import FichaCliente from "@/components/FichaCliente";
+import { ComoFunciona } from '@/components/ComoFunciona';
 
 export default function BikeDetail() {
     const { id, clientId } = useParams<{ id: string, clientId: string }>();
@@ -209,7 +210,7 @@ export default function BikeDetail() {
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    className="h-auto w-auto p-1.5 rounded-md text-slate-400 hover:text-primary hover:bg-primary/10 transition-colors self-center"
+                                    className="h-auto w-auto p-1.5 rounded-md text-slate-500 hover:text-primary hover:bg-primary/10 transition-colors self-center"
                                     onClick={handleEditClick}
                                     title="Editar perfil del cliente"
                                 >
@@ -264,7 +265,7 @@ export default function BikeDetail() {
                             </div>
                             {activeBike.notas && (
                                 <div className="flex items-start gap-1.5 text-sm italic text-slate-500">
-                                    <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-slate-400" />
+                                    <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-slate-500" />
                                     <span>{activeBike.notas}</span>
                                 </div>
                             )}
@@ -444,7 +445,7 @@ export default function BikeDetail() {
                                                                                 </div>
                                                                             </div>
                                                                         ) : (
-                                                                            <div className="mb-2 italic text-slate-400 text-xs text-center">- Sin Repuestos -</div>
+                                                                            <div className="mb-2 italic text-slate-500 text-xs text-center">- Sin Repuestos -</div>
                                                                         )}
 
                                                                         <div>
@@ -639,7 +640,9 @@ export default function BikeDetail() {
                                         <div className="space-y-1">
                                             <Label htmlFor="talle">Talle</Label>
                                             <Input id="talle" value={editTalle} onChange={(e) => setEditTalle(e.target.value)} placeholder="Ej: 54, M, XL" />
-                                            <p className="text-[11px] text-muted-foreground">Con el talle cargado, el cruce de bicis paradas puede afinar a quién le calza cada bici.</p>
+                                            <ComoFunciona titulo="Para qué sirve el talle">
+                                                <p>Con el talle cargado, el cruce de bicis paradas puede afinar a quién le calza cada bici.</p>
+                                            </ComoFunciona>
                                         </div>
                                         <div className="space-y-1">
                                             <Label htmlFor="notes">Notas Generales</Label>

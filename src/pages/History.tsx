@@ -5,7 +5,6 @@ import { useDataStore } from '@/store/dataStore';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatOrdenNumber } from '@/lib/formatId';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -46,6 +45,7 @@ type DateRange = {
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { getBikeCategory } from '@/utils/bikeRecognition';
+import { EtiquetaService } from '@/components/EtiquetaService';
 
 
 const datePickerRescueStyles = `
@@ -519,7 +519,7 @@ export default function History() {
 
                 {/* Search - Expanded */}
                 <div className="relative flex-1 w-full lg:w-auto min-w-[200px]">
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
                     <Input
                         type="search"
                         placeholder="Buscar cliente, modelo, ID o trabajo (ej: horquilla)..."
@@ -533,8 +533,8 @@ export default function History() {
             {/* ── MOBILE: History Cards (hidden on md+) ── */}
             <div className="block md:hidden space-y-0">
                 {filteredJobs.length === 0 ? (
-                    <div className="flex flex-col items-center gap-3 py-16 text-slate-400">
-                        <div className="bg-slate-100 p-4 rounded-full"><Search className="h-7 w-7 text-slate-400" /></div>
+                    <div className="flex flex-col items-center gap-3 py-16 text-slate-500">
+                        <div className="bg-slate-100 p-4 rounded-full"><Search className="h-7 w-7 text-slate-500" /></div>
                         <p className="font-medium text-slate-600">No se encontraron resultados</p>
                         <button onClick={clearFilters} className="text-sm text-primary underline">Limpiar filtros</button>
                     </div>
@@ -544,7 +544,7 @@ export default function History() {
                             mira esto, así que la separación tiene que estar en los dos
                             lados: arreglarla solo en la tabla sería arreglar la mitad. */}
                         {job.grupo !== 'en_curso' && i > 0 && filteredJobs[i - 1].grupo === 'en_curso' && (
-                            <p className="px-1 pt-4 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                            <p className="px-1 pt-4 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                                 Ya salieron del taller
                             </p>
                         )}
@@ -589,7 +589,7 @@ export default function History() {
                                     <Fragment key={job.uniqueId}>
                                         {abreCerradas && (
                                             <TableRow className="hover:bg-transparent">
-                                                <TableCell colSpan={8} className="py-2 pl-6 bg-slate-50/60 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                                                <TableCell colSpan={8} className="py-2 pl-6 bg-slate-50/60 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                                                     Ya salieron del taller
                                                 </TableCell>
                                             </TableRow>
@@ -615,17 +615,17 @@ export default function History() {
                                                         <span className={job.entrega.real ? "font-semibold text-slate-700" : "font-semibold text-slate-500"}>{job.entrega.texto}</span>
                                                         {/* Una fecha sola no dice si la bici ya se retiró o si es la
                                                             prometida. El rótulo es la diferencia entre un dato y una promesa. */}
-                                                        <span className="text-[10px] text-slate-400 leading-tight">{job.entrega.real ? 'entregada' : 'estimada'}</span>
+                                                        <span className="text-[10px] text-slate-500 leading-tight">{job.entrega.real ? 'entregada' : 'estimada'}</span>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-slate-400 italic text-sm">-</span>
+                                                    <span className="text-slate-500 italic text-sm">-</span>
                                                 )}
                                             </TableCell>
                                             <TableCell className="py-4 w-28">
                                                 {job.rawFechaFinalizacion ? (
                                                     <span className="font-semibold text-slate-700" title={job.displayFinalizacionHora}>{job.displayFinalizacion}</span>
                                                 ) : (
-                                                    <span className="text-slate-400 italic text-sm">-</span>
+                                                    <span className="text-slate-500 italic text-sm">-</span>
                                                 )}
                                             </TableCell>
                                             <TableCell className="py-4">
@@ -637,9 +637,11 @@ export default function History() {
                                                 <div className="text-sm text-slate-500">{job.bikeModel.replace(job.bikeBrand, "").trim()}</div>
                                             </TableCell>
                                             <TableCell className="py-4">
-                                                <Badge variant="outline" className="text-slate-600 bg-white border-slate-200 font-bold whitespace-nowrap">
-                                                    {formatInternalServiceName(job.serviceType).toUpperCase()}
-                                                </Badge>
+                                                <EtiquetaService
+                                                    nombre={job.serviceType}
+                                                    variant="outline"
+                                                    className="text-slate-600 bg-white border-slate-200 font-bold"
+                                                />
                                             </TableCell>
                                             <TableCell className="text-right pr-6 py-4">
                                                 <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
@@ -647,7 +649,7 @@ export default function History() {
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
-                                                            className="h-8 w-8 text-slate-400 hover:text-green-600 hover:bg-green-50"
+                                                            className="h-8 w-8 text-slate-500 hover:text-green-600 hover:bg-green-50"
                                                             title="WhatsApp"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
@@ -662,16 +664,16 @@ export default function History() {
                                                             <MessageCircle className="w-4 h-4" />
                                                         </Button>
                                                     )}
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/10" title="Imprimir" onClick={() => printServiceReport(job.rawJob, job.clientName, job.bikeModel, job.clientDni, job.clientPhone)}>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-primary hover:bg-primary/10" title="Imprimir" onClick={() => printServiceReport(job.rawJob, job.clientName, job.bikeModel, job.clientDni, job.clientPhone)}>
                                                         <FileText className="w-4 h-4" />
                                                     </Button>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/10" title="Ver Detalles" onClick={() => toggleExpand(job.id)}>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-primary hover:bg-primary/10" title="Ver Detalles" onClick={() => toggleExpand(job.id)}>
                                                         {isExpanded ? <ChevronUp className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                                                     </Button>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50" title="Editar" onClick={() => setEditingServiceId(job.id)}>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50" title="Editar" onClick={() => setEditingServiceId(job.id)}>
                                                         <Pencil className="w-4 h-4" />
                                                     </Button>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50" title="Eliminar" onClick={() => handleDelete(job.id)}>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-red-600 hover:bg-red-50" title="Eliminar" onClick={() => handleDelete(job.id)}>
                                                         <Trash2 className="w-4 h-4" />
                                                     </Button>
                                                 </div>
@@ -697,7 +699,7 @@ export default function History() {
                                     <TableCell colSpan={8} className="text-center py-20 text-muted-foreground">
                                         <div className="flex flex-col items-center gap-3">
                                             <div className="bg-slate-100 p-4 rounded-full">
-                                                <Search className="h-8 w-8 text-slate-400" />
+                                                <Search className="h-8 w-8 text-slate-500" />
                                             </div>
                                             <div className="text-center">
                                                 <p className="font-medium text-slate-900">No se encontraron resultados</p>
@@ -767,7 +769,7 @@ function MobileHistoryCard({ job, isExpanded, onToggle, onEdit, onDelete, onPrin
             <div className="flex items-center justify-between mb-2.5">
                 <StatusBadge status={job.status} />
                 <div className="flex flex-col items-end leading-tight">
-                    <span className="text-[10px] text-slate-400 font-medium">Ing. {job.displayDateIn}</span>
+                    <span className="text-[10px] text-slate-500 font-medium">Ing. {job.displayDateIn}</span>
                     {job.rawFechaFinalizacion && (
                         <span className="text-xs text-slate-600 font-semibold" title={job.displayFinalizacionHora}>Fin. {job.displayFinalizacion}</span>
                     )}
@@ -790,7 +792,7 @@ function MobileHistoryCard({ job, isExpanded, onToggle, onEdit, onDelete, onPrin
                 {/* Expand toggle */}
                 <button
                     onClick={onToggle}
-                    className="p-1.5 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                    className="p-1.5 text-slate-500 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
                     aria-label={isExpanded ? 'Contraer' : 'Expandir'}
                 >
                     {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -805,7 +807,7 @@ function MobileHistoryCard({ job, isExpanded, onToggle, onEdit, onDelete, onPrin
                 <button onClick={onEdit} className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
                     <Pencil size={13} /> Editar
                 </button>
-                <button onClick={onDelete} className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                <button onClick={onDelete} className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                     <Trash2 size={13} /> Borrar
                 </button>
             </div>
@@ -833,7 +835,7 @@ function ExpandedServiceDetail({ job }: { job: any }) {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 pb-4 border-b border-gray-100 gap-4">
                 <h2 className="text-xl font-bold text-primary flex items-center gap-2">
                     <ClipboardList className="w-5 h-5" />
-                    Detalle del Service {formatOrdenNumber(job.numero_orden, job.id)} <span className="text-gray-400 font-normal text-sm ml-2">| {job.bikeModel}</span>
+                    Detalle del Service {formatOrdenNumber(job.numero_orden, job.id)} <span className="text-gray-500 font-normal text-sm ml-2">| {job.bikeModel}</span>
                 </h2>
                 <Button onClick={() => printServiceReport(job.rawJob, job.clientName, job.bikeModel, job.clientDni, job.clientPhone)} className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
                     <FileText className="w-4 h-4 mr-2" />
@@ -954,7 +956,7 @@ function ExpandedServiceDetail({ job }: { job: any }) {
                     <p className="text-sm text-slate-700 italic bg-amber-50 p-4 rounded-lg border border-amber-200">
                         "{notasDelTaller(service)}"
                     </p>
-                    <p className="text-[11px] text-slate-400 mt-1.5">Esto no salió en el comprobante del cliente.</p>
+                    <p className="text-[11px] text-slate-500 mt-1.5">Esto no salió en el comprobante del cliente.</p>
                 </div>
             )}
         </div>

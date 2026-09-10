@@ -9,7 +9,6 @@ import { printServiceReport } from "@/lib/printServiceBtn";
 import { dispararMensajesAutomaticos } from "@/lib/comprobanteALaNube";
 import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign, PackageSearch, Phone } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -38,6 +37,7 @@ import { EtapasChecklist } from "@/components/EtapasChecklist";
 import { avancesActivos, trabajosPendientes, tareasActivas, bloqueoFinalizacionActivo, tareasLibresPendientes } from "@/lib/planFeatures";
 import { tourBloqueaCierreDialog } from "@/components/OnboardingTour";
 import SegundoParDeOjos from "@/components/SegundoParDeOjos";
+import { EtiquetaService } from '@/components/EtiquetaService';
 
 // 🚩 Las fechas se formatean en UN SOLO lugar: `lib/fechaAR.ts`. Ahí está
 // explicado por qué los INSTANTES (fecha_ingreso, fecha_finalizacion,
@@ -263,7 +263,7 @@ export default function Workshop() {
             <div data-tour="contadores" className="grid grid-cols-2 gap-4 w-full">
                 <Card className="bg-primary border-none shadow-md text-primary-foreground">
                     <CardContent className="p-6 flex flex-col gap-1">
-                        <p className="text-xs font-bold text-white/90 uppercase tracking-widest">En Proceso</p>
+                        <p className="text-xs font-bold text-primary-foreground/90 uppercase tracking-widest">En Proceso</p>
                         <div className="flex items-baseline gap-2">
                             <p className="text-4xl font-black">{enProceso}</p>
                         </div>
@@ -271,7 +271,7 @@ export default function Workshop() {
                 </Card>
                 <Card className="bg-secondary border-none shadow-md text-secondary-foreground">
                     <CardContent className="p-6 flex flex-col gap-1">
-                        <p className="text-xs font-bold text-white/90 uppercase tracking-widest">Listas para Entregar</p>
+                        <p className="text-xs font-bold text-secondary-foreground/90 uppercase tracking-widest">Listas para Entregar</p>
                         <div className="flex items-baseline gap-2">
                             <p className="text-4xl font-black">{paraEntregar.length}</p>
                         </div>
@@ -443,7 +443,7 @@ function MobileJobCard({ job, onClick, onDeliver, onReopen }: { job: DashboardJo
                 <div className="flex items-center gap-3 flex-shrink-0">
                     <div className="flex flex-col items-end gap-1">
                         <StatusBadge status={job.status} />
-                        <span className="text-xs text-slate-400 flex items-center gap-1">
+                        <span className="text-xs text-slate-500 flex items-center gap-1">
                             <Clock size={10} />
                             {job.date_out ? `Entrega ${diaCalendario(job.date_out)}` : instanteAR(job.date_in)}
                         </span>
@@ -608,10 +608,14 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
         }
     };
 
+    const esOtro = (job.service_type || "OTRO").toUpperCase() === "OTRO";
     const serviceBadge = (
-        <Badge variant={(job.service_type || "OTRO").toUpperCase() === "OTRO" ? "secondary" : "default"} className={`whitespace-nowrap ${(job.service_type || "OTRO").toUpperCase() !== "OTRO" ? "bg-primary hover:bg-primary/90 text-primary-foreground border-none" : "text-muted-foreground"}`}>
-            {(job.service_type || "OTRO").toUpperCase()}
-        </Badge>
+        <EtiquetaService
+            nombre={job.service_type || "OTRO"}
+            crudo
+            variant={esOtro ? "secondary" : "default"}
+            className={esOtro ? "text-muted-foreground" : "bg-primary hover:bg-primary/90 text-primary-foreground border-none"}
+        />
     );
 
     return (
@@ -643,10 +647,10 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                                 eligió (ver lib/fechaAR.ts). El rótulo evita que se lea como
                                 "ya se entregó": la bici sigue en el taller. */}
                             <span className="text-slate-600 font-semibold text-sm whitespace-nowrap">{diaCalendario(job.date_out)}</span>
-                            <span className="text-[10px] text-slate-400 leading-tight">estimada</span>
+                            <span className="text-[10px] text-slate-500 leading-tight">estimada</span>
                         </div>
                     ) : (
-                        <span className="text-slate-400 italic text-sm">-</span>
+                        <span className="text-slate-500 italic text-sm">-</span>
                     )}
                 </TableCell>
                 <TableCell>
@@ -1237,7 +1241,7 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                         vive en lib/notasServicio.ts, con tests). */}
                     <div className="space-y-2">
                         <Label htmlFor="notas-internas" className="flex items-center gap-2">
-                            <Lock className="h-3.5 w-3.5 text-slate-400" /> {ETIQUETAS_NOTAS.interna}
+                            <Lock className="h-3.5 w-3.5 text-slate-500" /> {ETIQUETAS_NOTAS.interna}
                         </Label>
                         <Textarea
                             id="notas-internas"
@@ -1315,7 +1319,7 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                         <div className="text-left bg-slate-50 border border-slate-200 rounded-lg p-3 max-h-40 overflow-y-auto">
                             {pendientesConfirm.map((etiqueta, i) => (
                                 <div key={i} className="flex items-start gap-2 py-0.5">
-                                    <span className="text-slate-400 mt-0.5">•</span>
+                                    <span className="text-slate-500 mt-0.5">•</span>
                                     <span className="text-slate-700">{etiqueta}</span>
                                 </div>
                             ))}

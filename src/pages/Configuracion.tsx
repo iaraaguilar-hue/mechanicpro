@@ -23,6 +23,8 @@ import { ProductosOcultos } from '@/components/ProductosOcultos';
 import ConectarWhatsApp from '@/pages/ConectarWhatsApp';
 import { MensajesAutomaticos } from '@/components/MensajesAutomaticos';
 import { AltasDesdeERP } from '@/components/AltasDesdeERP';
+import { ComoFunciona } from '@/components/ComoFunciona';
+import { tintaSobre, tintaLegible, PISO_TEXTO_GRANDE } from '@/lib/contraste';
 
 // ─────────────────────────────────────────────────────────────
 // Guardrails del logo: la calidad del branding ya no pasa por Iara,
@@ -55,18 +57,6 @@ async function validarLogo(file: File): Promise<string | null> {
     });
 }
 
-/** Luminancia relativa 0..1 de un hex — para avisar si el texto blanco no se va a leer. */
-function luminancia(hex?: string): number | null {
-    if (!hex) return null;
-    const m = hex.trim().match(/^#?([0-9a-f]{6})$/i);
-    if (!m) return null;
-    const n = parseInt(m[1], 16);
-    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(v => {
-        const s = v / 255;
-        return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-    });
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
 
 interface ServicioCatalogo {
     id: string;
@@ -192,8 +182,15 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
     const [saving, setSaving] = useState(false);
     const [logoError, setLogoError] = useState<string | null>(null);
 
-    const lum = luminancia(form.color_primario);
-    const contrasteBajo = lum !== null && lum > 0.6;
+    // Ya no es un aviso de «puede quedar difícil de leer»: la app calcula sola
+    // la tinta que va encima de cada color (contraste.ts). Esto solo le anticipa
+    // al taller qué va a pasar, para que no le parezca un error.
+    // Origen: Ariel Leira eligió blanco de secundario y el aviso viejo ni lo
+    // miraba — solo miraba el primario (10-sep-2026).
+    const clarosDeMas = ([
+        ['primario', form.color_primario],
+        ['secundario', form.color_secundario],
+    ] as const).filter(([, c]) => tintaSobre(c) !== '#FFFFFF').map(([q]) => q);
 
     const handleFileUpload = async (file: File) => {
         if (!puedeEditar) return;
@@ -356,10 +353,14 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                                 </div>
                             </div>
                         </div>
-                        {contrasteBajo && (
-                            <div className="flex items-start gap-1.5 text-amber-700 text-xs font-medium bg-amber-50 border border-amber-200 rounded-md p-2">
+                        {clarosDeMas.length > 0 && (
+                            <div className="flex items-start gap-1.5 text-slate-600 text-xs bg-slate-50 border border-slate-200 rounded-md p-2">
                                 <AlertCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
-                                Ese color primario es muy claro: el texto blanco de los botones puede quedar difícil de leer. Probá un tono más oscuro.
+                                <span>
+                                    Elegiste un {clarosDeMas.join(' y un ')} claro, así que
+                                    el texto que va encima sale <strong>oscuro</strong> en vez de blanco.
+                                    Se ajusta solo para que se lea: mirá la vista previa.
+                                </span>
                             </div>
                         )}
                     </CardContent>
@@ -413,11 +414,13 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                                 placeholder="Luis"
                                 disabled={!puedeEditar}
                             />
-                            <p className="text-xs text-muted-foreground">
-                                El nombre de pila del que atiende. Los mensajes van a empezar con
-                                “Hola Marcos, acá {form.firma_nombre.trim() || '…'} de {taller.nombre || 'tu taller'}”.
-                                Si lo dejás vacío, se firma con el nombre del taller.
-                            </p>
+                            <ComoFunciona>
+                                <p className="text-xs text-muted-foreground">
+                                    El nombre de pila del que atiende. Los mensajes van a empezar con
+                                    “Hola Marcos, acá {form.firma_nombre.trim() || '…'} de {taller.nombre || 'tu taller'}”.
+                                    Si lo dejás vacío, se firma con el nombre del taller.
+                                </p>
+                            </ComoFunciona>
                         </div>
 
                         <div className="space-y-2">
@@ -429,10 +432,12 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                                 placeholder="Tuteamos, somos directos y cortos. No decimos 'estimado' ni 'aguardamos su respuesta'. Al cliente le hablamos como a un compañero de salida."
                                 disabled={!puedeEditar}
                             />
-                            <p className="text-xs text-muted-foreground">
-                                Escribilo en tus palabras: si tuteás, qué muletillas usás, y sobre todo qué NO decís nunca.
-                                Es lo que hace que tus mensajes suenen a vos y no a todos los talleres iguales.
-                            </p>
+                            <ComoFunciona>
+                                <p className="text-xs text-muted-foreground">
+                                    Escribilo en tus palabras: si tuteás, qué muletillas usás, y sobre todo qué NO decís nunca.
+                                    Es lo que hace que tus mensajes suenen a vos y no a todos los talleres iguales.
+                                </p>
+                            </ComoFunciona>
                         </div>
 
                         {/* Los dos interruptores de abajo son de Pro/Expert (la IA es lo
@@ -443,11 +448,13 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                         <div className="flex items-start justify-between gap-4 rounded-lg border p-3 bg-slate-50">
                             <div className="space-y-0.5">
                                 <Label className="text-sm">Mensajes personalizados uno por uno</Label>
-                                <p className="text-xs text-muted-foreground">
-                                    Cada recordatorio se escribe mirando el historial de ese cliente: su bici,
-                                    la carrera que corrió, lo que le hicimos la última vez. Apagado, sale el
-                                    texto de siempre igual para todos.
-                                </p>
+                                <ComoFunciona>
+                                    <p className="text-xs text-muted-foreground">
+                                        Cada recordatorio se escribe mirando el historial de ese cliente: su bici,
+                                        la carrera que corrió, lo que le hicimos la última vez. Apagado, sale el
+                                        texto de siempre igual para todos.
+                                    </p>
+                                </ComoFunciona>
                             </div>
                             <Switch
                                 checked={form.ia_mensajes_activa}
@@ -461,11 +468,13 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                         <div className="flex items-start justify-between gap-4 rounded-lg border p-3 bg-slate-50">
                             <div className="space-y-0.5">
                                 <Label className="text-sm">Segundo par de ojos sobre el presupuesto</Label>
-                                <p className="text-xs text-muted-foreground">
-                                    Al finalizar una orden, el sistema mira el historial de esa bici y avisa
-                                    lo que se está escapando ("la cadena es de hace 14 meses, preguntale").
-                                    Sugiere, nunca agrega solo: el mecánico decide.
-                                </p>
+                                <ComoFunciona>
+                                    <p className="text-xs text-muted-foreground">
+                                        Al finalizar una orden, el sistema mira el historial de esa bici y avisa
+                                        lo que se está escapando ("la cadena es de hace 14 meses, preguntale").
+                                        Sugiere, nunca agrega solo: el mecánico decide.
+                                    </p>
+                                </ComoFunciona>
                             </div>
                             <Switch
                                 checked={form.ia_presupuesto_activa}
@@ -483,11 +492,13 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                         <div className="flex items-start justify-between gap-4 rounded-lg border p-3 bg-slate-50">
                             <div className="space-y-0.5">
                                 <Label className="text-sm">El mecánico también ve Bicis paradas</Label>
-                                <p className="text-xs text-muted-foreground">
-                                    El panel de bicis paradas muestra clientes con lo que gastaron.
-                                    Apagado, lo ve solo el administrador; prendido, también los
-                                    usuarios mecánicos del taller.
-                                </p>
+                                <ComoFunciona>
+                                    <p className="text-xs text-muted-foreground">
+                                        El panel de bicis paradas muestra clientes con lo que gastaron.
+                                        Apagado, lo ve solo el administrador; prendido, también los
+                                        usuarios mecánicos del taller.
+                                    </p>
+                                </ComoFunciona>
                             </div>
                             <Switch
                                 checked={form.bicis_paradas_ve_mecanico}
@@ -513,11 +524,14 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="border rounded-lg overflow-hidden shadow-sm">
+                        {/* La vista previa usa la MISMA tinta calculada que la app: si acá
+                            saliera blanco fijo, un color claro se vería bien en la previa y
+                            mal en la pantalla real, que es peor que no tener previa. */}
                         <div className="px-4 py-3 flex items-center justify-between" style={{ backgroundColor: form.color_primario }}>
                             {taller.logo_url
                                 ? <img src={taller.logo_url} alt="Logo" className="h-8 object-contain" crossOrigin="anonymous" />
-                                : <span className="text-white font-bold">{taller.nombre || 'Tu Taller'}</span>}
-                            <span className="text-white/90 text-xs font-bold uppercase tracking-widest">Orden de trabajo</span>
+                                : <span className="font-bold" style={{ color: tintaSobre(form.color_primario) }}>{taller.nombre || 'Tu Taller'}</span>}
+                            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: tintaSobre(form.color_primario), opacity: 0.9 }}>Orden de trabajo</span>
                         </div>
                         <div className="p-4 bg-white space-y-3">
                             <div className="flex justify-between text-sm">
@@ -525,12 +539,12 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                                 <span className="font-mono font-bold">$ 45.000</span>
                             </div>
                             <div className="flex justify-between items-center border-t pt-3">
-                                <span className="text-xs text-slate-400">{form.mensaje_informe || 'Gracias por confiar en nosotros.'}</span>
-                                <button className="text-white text-sm font-semibold px-4 py-2 rounded-md" style={{ backgroundColor: form.color_primario }}>
+                                <span className="text-xs text-slate-500">{form.mensaje_informe || 'Gracias por confiar en nosotros.'}</span>
+                                <button className="text-sm font-semibold px-4 py-2 rounded-md" style={{ backgroundColor: form.color_primario, color: tintaSobre(form.color_primario) }}>
                                     Botón principal
                                 </button>
                             </div>
-                            <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: form.color_secundario }}>
+                            <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: tintaLegible(form.color_secundario, '#FFFFFF', PISO_TEXTO_GRANDE) }}>
                                 {form.politica_pago || 'Política de pago'}
                             </div>
                         </div>
@@ -540,9 +554,11 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                             ? <img src={taller.logo_url} alt="Logo sobre fondo oscuro" className="h-10 object-contain" crossOrigin="anonymous" />
                             : <span className="text-white/60 text-sm">Tu logo sobre fondo oscuro</span>}
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                        Si el logo no se ve bien sobre el fondo oscuro, subí una versión con fondo transparente o en blanco.
-                    </p>
+                    <ComoFunciona>
+                        <p className="text-xs text-muted-foreground">
+                            Si el logo no se ve bien sobre el fondo oscuro, subí una versión con fondo transparente o en blanco.
+                        </p>
+                    </ComoFunciona>
                 </CardContent>
             </Card>
         </div>
@@ -785,7 +801,7 @@ function TabMenuServices({ taller, taller_id, puedeEditar, avisar }: {
                                                         <Check size={16} />
                                                     </Button>
                                                     <Button
-                                                        variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:bg-slate-50"
+                                                        variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:bg-slate-50"
                                                         onClick={() => setEditandoId(null)}
                                                         disabled={working}
                                                     >
@@ -815,7 +831,7 @@ function TabMenuServices({ taller, taller_id, puedeEditar, avisar }: {
                                             <TableCell className="whitespace-nowrap">
                                                 <div className="flex items-center justify-end">
                                                     <Button
-                                                        variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/10"
+                                                        variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-primary hover:bg-primary/10"
                                                         onClick={() => {
                                                             setEditandoId(servicio.id);
                                                             setEditForm({
@@ -838,10 +854,12 @@ function TabMenuServices({ taller, taller_id, puedeEditar, avisar }: {
                     </TableBody>
                 </Table>
             </div>
-            <p className="text-xs text-muted-foreground">
-                Los services no se borran: se desactivan con el switch. Así el historial de órdenes viejas queda intacto.
-                La opción "OTRO" (precio libre) está siempre disponible al crear un service.
-            </p>
+            <ComoFunciona>
+                <p>
+                    Los services no se borran: se desactivan con el switch. Así el historial de órdenes viejas queda intacto.
+                    La opción "OTRO" (precio libre) está siempre disponible al crear un service.
+                </p>
+            </ComoFunciona>
         </div>
     );
 }
@@ -1060,10 +1078,6 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     <ListChecks className="h-4 w-4 text-primary" />
                     Checklist de trabajos del service
                 </CardTitle>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                    Los trabajos de cada orden aparecen como lista tildable en la Mesa de Trabajo;
-                    al finalizar, la app avisa si quedó algo sin marcar.
-                </p>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col gap-3">
                 {!tienePlanChecklist && (
@@ -1082,12 +1096,12 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     />
                 </div>
 
-                {/* Ejemplo concreto, plegado para no ocupar pantalla */}
-                <details className="rounded-lg border bg-slate-50">
-                    <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-bold text-slate-500 uppercase tracking-widest">
-                        Ver ejemplo
-                    </summary>
-                    <div className="px-3 pb-3">
+                <ComoFunciona>
+                    <p>
+                        Los trabajos de cada orden aparecen como lista tildable en la Mesa de
+                        Trabajo; al finalizar, la app avisa si quedó algo sin marcar.
+                    </p>
+                    <div>
                         <p className="text-slate-600 text-xs mb-1.5">Si la orden tiene cargado:</p>
                         <ul className="space-y-1 text-slate-700 text-xs">
                             <li className="flex items-center gap-2"><Check size={13} className="text-green-600" /> Service Completo <span className="text-[10px] font-semibold px-1.5 rounded-full bg-primary/10 text-primary">Service</span></li>
@@ -1098,7 +1112,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                             …ese es el checklist de esa orden. Se agrega un trabajo → aparece solo en la lista.
                         </p>
                     </div>
-                </details>
+                </ComoFunciona>
             </CardContent>
         </Card>
 
@@ -1109,10 +1123,6 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     <Bell className="h-4 w-4 text-primary" />
                     Tareas del service
                 </CardTitle>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                    El mecánico anota tareas libres en cada orden para no olvidarse
-                    (ej: "colocar plato 34"). Todos los planes.
-                </p>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col gap-3">
                 <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
@@ -1130,7 +1140,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                             <Lock className="h-4 w-4 text-amber-600" /> Candado de finalización
                         </p>
                         <p className="text-[11px] text-muted-foreground">
-                            "Finalizar service" se bloquea hasta tildar todas las tareas de la orden.
+                            No se finaliza hasta tildar todo.
                         </p>
                     </div>
                     <Switch
@@ -1148,11 +1158,6 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                 <CardTitle className="text-lg flex items-center gap-2">
                     <Bell className="h-5 w-5" /> Avisos de «vale una llamada»
                 </CardTitle>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                    Aparte de los vencimientos, Retención te puede avisar de dos cosas más blandas:
-                    la bici que se cargó y <strong>nunca vino al taller</strong> (le toca el primer
-                    service) y el cliente que <strong>vino una vez y no volvió</strong>.
-                </p>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col gap-3">
                 <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
@@ -1186,11 +1191,18 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     </div>
                 </div>
                 {/* Por qué el default no es 90: con 90 días Probikes daba 109 nombres. */}
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Se muestran <strong>los 12 que más gastaron</strong>, no todos: una lista de cien
-                    no la llama nadie. Van en su propia sección, abajo de los vencimientos, para que
-                    nunca tapen lo urgente.
-                </p>
+                <ComoFunciona>
+                    <p>
+                        Aparte de los vencimientos, Retención te avisa de dos cosas más blandas: la
+                        bici que se cargó y <strong>nunca vino al taller</strong> (le toca el primer
+                        service) y el cliente que <strong>vino una vez y no volvió</strong>.
+                    </p>
+                    <p>
+                        Se muestran <strong>los 12 que más gastaron</strong>, no todos: una lista de
+                        cien no la llama nadie. Van en su propia sección, abajo de los vencimientos,
+                        para que nunca tapen lo urgente.
+                    </p>
+                </ComoFunciona>
             </CardContent>
         </Card>
 
@@ -1203,11 +1215,6 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                 <CardTitle className="text-lg flex items-center gap-2">
                     <Users className="h-5 w-5" /> Quién hizo cada service
                 </CardTitle>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                    Si en el taller trabaja más de una persona, al finalizar cada service elegís quién
-                    lo hizo. Después, en Métricas, ves cuánto generó cada uno en mano de obra y en
-                    repuestos, por separado.
-                </p>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col gap-3">
                 <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
@@ -1220,11 +1227,18 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                 </div>
                 {/* Lo que sigue evita el reclamo del primer día: se prende, se abre
                     Métricas y está vacío. No es un bug, es que el dato empieza hoy. */}
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                    Se cuenta <strong>desde que lo prendés</strong>: los services que ya cerraste no
-                    tienen guardado quién los hizo y no se puede saber a esta altura.
-                    {' '}Si trabajás solo, dejalo apagado y te ahorrás un clic en cada orden.
-                </p>
+                <ComoFunciona>
+                    <p>
+                        Si en el taller trabaja más de una persona, al finalizar cada service elegís
+                        quién lo hizo. Después, en Métricas, ves cuánto generó cada uno en mano de
+                        obra y en repuestos, por separado.
+                    </p>
+                    <p>
+                        Se cuenta <strong>desde que lo prendés</strong>: los services que ya cerraste
+                        no tienen guardado quién los hizo y no se puede saber a esta altura.
+                        {' '}Si trabajás solo, dejalo apagado y te ahorrás un clic en cada orden.
+                    </p>
+                </ComoFunciona>
             </CardContent>
         </Card>
 
@@ -1236,10 +1250,6 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     Registro del diagnóstico
                     <NuevoBadge feature="registro-diagnostico" />
                 </CardTitle>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                    El diagnóstico genera los avisos de mantenimiento que aparecen en Retención.
-                    ¿En qué momento del service se registra?
-                </p>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col gap-2">
                 {([
@@ -1261,6 +1271,12 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                         </span>
                     </button>
                 ))}
+                <ComoFunciona>
+                    <p>
+                        El diagnóstico genera los avisos de mantenimiento que aparecen en Retención.
+                        Acá elegís en qué momento del service se registra.
+                    </p>
+                </ComoFunciona>
             </CardContent>
         </Card>
 
@@ -1271,10 +1287,6 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     <PhoneCall className="h-4 w-4 text-primary" />
                     Cuánto esperar al cliente
                 </CardTitle>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                    Cuando le preguntás algo desde una orden, la bici queda esperando la respuesta.
-                    Pasado este plazo la orden avisa que conviene levantar el teléfono.
-                </p>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col gap-2">
                 <div className="flex flex-wrap gap-2">
@@ -1290,10 +1302,16 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                         </button>
                     ))}
                 </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">
-                    Nadie contesta un WhatsApp en cero minutos: el plazo corto sirve para la bici que
-                    está en el banco ahora, el largo para la que puede esperar.
-                </p>
+                <ComoFunciona>
+                    <p>
+                        Cuando le preguntás algo desde una orden, la bici queda esperando la
+                        respuesta. Pasado este plazo la orden avisa que conviene levantar el teléfono.
+                    </p>
+                    <p>
+                        Nadie contesta un WhatsApp en cero minutos: el plazo corto sirve para la bici
+                        que está en el banco ahora, el largo para la que puede esperar.
+                    </p>
+                </ComoFunciona>
             </CardContent>
         </Card>
 
@@ -1304,12 +1322,6 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     <GraduationCap className="h-4 w-4 text-primary" />
                     Recorrido de bienvenida
                 </CardTitle>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                    El tutorial interactivo completo: recorre todas las secciones y, en los pasos
-                    clave, la persona opera el sistema con sus propias manos (recibe una bici,
-                    abre una finalización, explora una ficha). Ideal para capacitar a alguien
-                    nuevo del equipo sin explicarle nada a mano.
-                </p>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col">
                 <Button
@@ -1321,6 +1333,14 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     <PlayCircle className="h-4 w-4 mr-2" />
                     Ver el recorrido nuevamente
                 </Button>
+                <ComoFunciona>
+                    <p>
+                        Recorre todas las secciones y, en los pasos clave, la persona opera el
+                        sistema con sus propias manos (recibe una bici, abre una finalización,
+                        explora una ficha). Sirve para capacitar a alguien nuevo del equipo sin
+                        explicarle nada a mano.
+                    </p>
+                </ComoFunciona>
             </CardContent>
         </Card>
 

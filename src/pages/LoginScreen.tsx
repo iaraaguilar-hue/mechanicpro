@@ -193,7 +193,7 @@ export default function LoginScreen() {
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors bg-transparent border-none p-0 cursor-pointer focus:outline-none"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-600 transition-colors bg-transparent border-none p-0 cursor-pointer focus:outline-none"
                                     title={showPassword ? "Ocultar Contraseña" : "Mostrar Contraseña"}
                                 >
                                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
@@ -258,7 +258,7 @@ export default function LoginScreen() {
                             <button
                                 type="button"
                                 onClick={() => { setIsResetting(false); setError(""); setResetSuccess(false); }}
-                                className="text-sm text-gray-400 hover:text-gray-700 transition-colors bg-transparent border-none p-0 cursor-pointer"
+                                className="text-sm text-gray-500 hover:text-gray-700 transition-colors bg-transparent border-none p-0 cursor-pointer"
                             >
                                 Volver al inicio de sesión
                             </button>

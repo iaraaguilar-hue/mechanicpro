@@ -19,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { EyeOff, Eye, Search, Loader2 } from 'lucide-react';
+import { ComoFunciona } from '@/components/ComoFunciona';
 
 interface Oculto {
     id: string;
@@ -88,11 +89,13 @@ export function ProductosOcultos({ avisar }: { avisar: (tipo: 'ok' | 'error', ms
                     <EyeOff className="h-4 w-4 text-muted-foreground" />
                     Productos ocultos del buscador
                 </CardTitle>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                    Cuando en la carga de una orden marcás un producto como “no sugerir más”, deja de
-                    aparecer en el buscador de repuestos. No se borra: las órdenes que ya lo nombran
-                    quedan igual. Acá los ves todos y los volvés a mostrar cuando quieras.
-                </p>
+                <ComoFunciona>
+                    <p>
+                        Cuando en la carga de una orden marcás un producto como “no sugerir más”, deja de
+                        aparecer en el buscador de repuestos. No se borra: las órdenes que ya lo nombran
+                        quedan igual. Acá los ves todos y los volvés a mostrar cuando quieras.
+                    </p>
+                </ComoFunciona>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col gap-3">
                 {cargando ? (

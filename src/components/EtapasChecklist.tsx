@@ -132,7 +132,7 @@ export function EtapasChecklist({ serviceId }: { serviceId: string }) {
                                             className="mt-0.5"
                                         />
                                         <span className="flex-1 min-w-0">
-                                            <span className={`block text-sm leading-snug ${data[t.clave] ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                                            <span className={`block text-sm leading-snug ${data[t.clave] ? 'text-slate-500 line-through' : 'text-slate-700'}`}>
                                                 {t.etiqueta}
                                             </span>
                                             <span className={`inline-block mt-0.5 text-[10px] font-semibold px-1.5 py-px rounded-full ${TIPO_BADGE[t.tipo]}`}>
@@ -163,7 +163,7 @@ export function EtapasChecklist({ serviceId }: { serviceId: string }) {
                                             disabled={saving}
                                             className="mt-0.5"
                                         />
-                                        <span className={`flex-1 min-w-0 text-sm leading-snug ${t.hecha ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                                        <span className={`flex-1 min-w-0 text-sm leading-snug ${t.hecha ? 'text-slate-500 line-through' : 'text-slate-700'}`}>
                                             {t.texto}
                                         </span>
                                         <button
@@ -177,7 +177,7 @@ export function EtapasChecklist({ serviceId }: { serviceId: string }) {
                                     </div>
                                 ))}
                                 {tareas.length === 0 && (
-                                    <p className="text-xs text-slate-400 px-2 py-1">Todavía no hay tareas. Agregá una 👇</p>
+                                    <p className="text-xs text-slate-500 px-2 py-1">Todavía no hay tareas. Agregá una 👇</p>
                                 )}
                             </div>
                             <div className="flex items-center gap-1.5 mt-2">

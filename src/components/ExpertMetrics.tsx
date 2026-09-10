@@ -193,7 +193,7 @@ export default function ExpertMetrics({ servicios, isLoading }: Props) {
                             <PieIcon className="w-6 h-6 text-primary" />
                             <h3 className="text-lg font-bold text-gray-900">Rentabilidad por Sistema</h3>
                         </div>
-                        <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">Volumen en ARS</span>
+                        <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-md">Volumen en ARS</span>
                     </div>
 
                     <div className="flex-1 flex flex-col justify-center">
@@ -250,7 +250,7 @@ export default function ExpertMetrics({ servicios, isLoading }: Props) {
                             <TrendingUp className="w-6 h-6 text-primary" />
                             <h3 className="text-lg font-bold text-gray-900">Composición de Ingresos</h3>
                         </div>
-                        <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded-md">MO vs Repuestos</span>
+                        <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-md">MO vs Repuestos</span>
                     </div>
 
                     <div className="flex-1 flex flex-col justify-center">
@@ -324,7 +324,16 @@ export default function ExpertMetrics({ servicios, isLoading }: Props) {
                                         fill="url(#colorLabor)"
                                         name="Mano de Obra"
                                     />
-                                    <Legend verticalAlign="bottom" wrapperStyle={{ paddingTop: 10 }} iconType="circle" iconSize={8} />
+                                    {/* Sin formatter, el rótulo hereda el color de la serie: «Repuestos» en
+                                        ámbar sobre blanco daba 2,15:1 y «Mano de Obra» 2,54:1. El punto de
+                                        color ya dice cuál es cuál; el texto va en gris que se lee. */}
+                                    <Legend
+                                        verticalAlign="bottom"
+                                        wrapperStyle={{ paddingTop: 10 }}
+                                        iconType="circle"
+                                        iconSize={8}
+                                        formatter={(value) => <span className="text-xs text-gray-600 font-medium">{value}</span>}
+                                    />
                                 </AreaChart>
                             </ResponsiveContainer>
                         )}

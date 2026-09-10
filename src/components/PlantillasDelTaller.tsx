@@ -45,6 +45,7 @@ import {
     CAMPOS, CAMPOS_VALIDOS, LARGO_MAXIMO, validarCuerpo, vistaPreviaDeCuerpo,
     camposDelCuerpo, type Campo,
 } from '@/lib/plantillasTaller';
+import { ComoFunciona } from '@/components/ComoFunciona';
 
 export type PlantillaDelTaller = {
     id: string;
@@ -219,10 +220,12 @@ export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waLi
                 <div className="flex items-start justify-between gap-3">
                     <div>
                         <CardTitle className="text-base">Tus plantillas</CardTitle>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            Si te falta un aviso que no está en la lista de arriba, escribilo acá y se lo
-                            mandamos a Meta al toque. Cuando lo aprueben te aparece para usar.
-                        </p>
+                        <ComoFunciona className="mt-1">
+                            <p>
+                                Si te falta un aviso que no está en la lista de arriba, escribilo acá y se lo
+                                mandamos a Meta al toque. Cuando lo aprueben te aparece para usar.
+                            </p>
+                        </ComoFunciona>
                     </div>
                     {/* Se le pregunta a Meta a mano además de esperar su aviso.
                         Meta avisa solo cuando resuelve, pero un aviso que no llega se ve

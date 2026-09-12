@@ -289,6 +289,7 @@ export default function Workshop() {
                             key={job.service_id}
                             job={job}
                             onClick={() => setEditingJob(job)}
+                            onFinalize={() => setFinalizingJob(job)}
                             onDeliver={() => handleDeliver(job)}
                             onReopen={() => handleReopen(job)}
                         />
@@ -415,7 +416,7 @@ function ChipDeEspera({ serviceId }: { serviceId: string }) {
     );
 }
 
-function MobileJobCard({ job, onClick, onDeliver, onReopen }: { job: DashboardJob; onClick: () => void; onDeliver: () => void; onReopen: () => void }) {
+function MobileJobCard({ job, onClick, onFinalize, onDeliver, onReopen }: { job: DashboardJob; onClick: () => void; onFinalize: () => void; onDeliver: () => void; onReopen: () => void }) {
     const taller = useAuthStore(s => s.taller);
     const mostrarEtapas = avancesActivos(taller);
     const mostrarTareas = tareasActivas(taller);
@@ -451,6 +452,22 @@ function MobileJobCard({ job, onClick, onDeliver, onReopen }: { job: DashboardJo
                     <ChevronRight size={18} className="text-slate-300" />
                 </div>
             </div>
+            {/* 🔴 EN CURSO LA TARJETA NO TENÍA NINGUNA ACCIÓN (12-sep-2026). Con el
+                teléfono en la mano no había forma de cerrar una orden, y con eso se
+                perdían el diagnóstico (que alimenta la retención), el segundo par de
+                ojos y el aviso de vuelta: los tres viven en el modal de finalizar. Es
+                el mismo botón y el mismo modal que en escritorio. */}
+            {!isReady && (
+                <div className="mt-3">
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onFinalize(); }}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-white bg-green-600 hover:bg-green-700 active:bg-green-700 rounded-lg transition-colors"
+                        title="El mecánico terminó el trabajo"
+                    >
+                        <CheckCircle size={16} /> Finalizar Service
+                    </button>
+                </div>
+            )}
             {isReady && (
                 <div className="flex gap-2 mt-3">
                     <button

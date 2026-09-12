@@ -213,8 +213,11 @@ export function PuntoDeEquilibrio({ stats, dateStart, dateEnd }: {
     return (
         <Card>
             <CardContent className="p-6 space-y-5">
-                <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2">
+                {/* 🔴 EN EL CELULAR EL TÍTULO QUEDABA EN UNA COLUMNA DE 150 px (12-sep-2026):
+                    «Cambiar mis números» le comía el costado y la bajada se partía en siete
+                    renglones. En pantalla angosta van apilados; desde `sm`, uno al lado del otro. */}
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
                         <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-100">
                             <Scale className="w-5 h-5 text-primary" />
                         </div>
@@ -226,7 +229,7 @@ export function PuntoDeEquilibrio({ stats, dateStart, dateEnd }: {
                             </p>
                         </div>
                     </div>
-                    <Button variant="ghost" size="sm" onClick={() => setEditando(true)} className="h-7 text-xs shrink-0">
+                    <Button variant="ghost" size="sm" onClick={() => setEditando(true)} className="h-7 text-xs shrink-0 self-start -ml-2 sm:ml-0">
                         <Pencil className="h-3 w-3 mr-1" /> Cambiar mis números
                     </Button>
                 </div>
@@ -249,14 +252,19 @@ export function PuntoDeEquilibrio({ stats, dateStart, dateEnd }: {
                                     así el corte no se mueve de un mes a otro y se compara a ojo. */}
                                 <div className="absolute inset-y-0 w-0.5 bg-slate-900" style={{ left: `${CORTE}%` }} />
                             </div>
+                            {/* 🔴 «facturás» y «equilibrio» iban en el MISMO renglón, uno anclado a
+                                la izquierda y el otro a la marca del 70%. En un celular el ancho no
+                                alcanza y se pisaban: se leía «facturás $ 640.0equilibrio»
+                                (12-sep-2026). La etiqueta de la marca se queda bajo la marca; lo
+                                que facturás baja a su propio renglón, que no choca con nada. */}
                             <div className="relative mt-1 h-4">
-                                <span className="absolute left-0 text-[11px] text-muted-foreground">
-                                    facturás <strong className="text-slate-700">{plata(porMes)}</strong>
-                                </span>
                                 <span className="absolute text-[11px] font-semibold text-slate-900 -translate-x-1/2 whitespace-nowrap"
                                       style={{ left: `${CORTE}%` }}>
                                     equilibrio
                                 </span>
+                            </div>
+                            <div className="mt-0.5 text-[11px] text-muted-foreground">
+                                facturás <strong className="text-slate-700">{plata(porMes)}</strong>
                             </div>
                         </div>
                         {/* El número que se repite en voz alta */}

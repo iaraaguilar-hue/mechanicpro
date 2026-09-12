@@ -178,6 +178,21 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
     });
     const rolForm = useAuthStore(s => s.rol);
     const esAdmin = rolForm?.toLowerCase()?.trim() === 'admin';
+    // 🔴 LA VISTA PREVIA MOSTRABA UN SERVICE QUE EL TALLER NO TIENE (12-sep-2026).
+    // Decía «Service Completo $ 45.000» fijo, para todos: en un taller con SPORT/PRO/EXPERT
+    // la previa de SU comprobante mostraba un renglón que su comprobante nunca va a traer.
+    // Va el PRIMER service que cargó (el principal de su menú, casi siempre): el más barato
+    // salía «Lavado y lubricación», que es un renglón real pero no es su comprobante típico.
+    // El ejemplo fijo queda solo si el menú está vacío.
+    const [muestra, setMuestra] = useState<{ nombre: string; precio: number } | null>(null);
+    useEffect(() => {
+        let vivo = true;
+        supabase.from('catalogo_servicios').select('nombre, precio')
+            .eq('taller_id', taller.id).eq('activo', true)
+            .order('creado_en', { ascending: true }).limit(1)
+            .then(({ data }) => { if (vivo && data?.[0]) setMuestra({ nombre: data[0].nombre, precio: Number(data[0].precio) || 0 }); });
+        return () => { vivo = false; };
+    }, [taller.id]);
     const [isUploading, setIsUploading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [logoError, setLogoError] = useState<string | null>(null);
@@ -535,8 +550,8 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                         </div>
                         <div className="p-4 bg-white space-y-3">
                             <div className="flex justify-between text-sm">
-                                <span className="text-slate-500">Service Completo</span>
-                                <span className="font-mono font-bold">$ 45.000</span>
+                                <span className="text-slate-500">{muestra?.nombre ?? 'Service Completo'}</span>
+                                <span className="font-mono font-bold">$ {(muestra?.precio ?? 45000).toLocaleString('es-AR')}</span>
                             </div>
                             <div className="flex justify-between items-center border-t pt-3">
                                 <span className="text-xs text-slate-500">{form.mensaje_informe || 'Gracias por confiar en nosotros.'}</span>

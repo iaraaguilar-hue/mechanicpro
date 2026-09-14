@@ -42,7 +42,9 @@ const TECHO = {
     'Config › Mi Taller': 350,
     'Config › Menú de Services': 200,
     'Config › WhatsApp': 350,
-    'Config › Mensajes automáticos': 400,
+    // Se llamaba «Mensajes automáticos» hasta el 14-sep-2026. Ahora arranca con
+    // quién firma y cómo hablás (se mudaron de Mi Taller), con su ayuda plegada.
+    'Config › Mensajes': 400,
     'Config › Preferencias': 400,
     'Orden abierta': 850,   // lo más largo de acá es el mensaje que se le manda al cliente: es el contenido, no ayuda
 };
@@ -50,8 +52,13 @@ const TECHO = {
 // el taller, o sea el contenido de la pantalla, no texto de ayuda.
 
 const SNIFF = () => {
+    // `[data-contenido]` (14-sep-2026): el texto que ES el contenido de la pantalla
+    // —el mensaje que sale al cliente, la razón de cada candidato— no es ayuda y no
+    // se pliega. Se marca a mano, elemento por elemento, y nunca un contenedor: si
+    // se marcara una tarjeta entera, su ayuda dejaría de contarse. El control
+    // negativo sigue cazando porque el párrafo que inyecta no lleva la marca.
     const salta = (n) => n.parentElement && n.parentElement.closest(
-        'button, a, th, td, input, textarea, select, [role="tab"], nav, aside, script, style, svg');
+        'button, a, th, td, input, textarea, select, [role="tab"], nav, aside, script, style, svg, [data-contenido]');
     const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
     const out = []; let n;
     while ((n = w.nextNode())) {

@@ -439,6 +439,18 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
     const servicios = useDataStore(s => s.servicios);
     const createServicio = useDataStore(s => s.createServicio);
     const updateServicio = useDataStore(s => s.updateServicio);
+
+    // 🔴 LA ORDEN ABIERTA NO DECÍA DE QUIÉN ERA (14-sep-2026). Al abrir una orden
+    // existente desde el Taller Activo este paso recibe solo el id del service:
+    // `bike` llega null y `clientName` vacío, y la franja de arriba —la que dice de
+    // quién es la bici— se dibujaba vacía. El mecánico editaba una orden sin ver
+    // de quién era. Se completa desde el store, que ya tiene todo cargado.
+    const bicicletasStore = useDataStore(s => s.bicicletas);
+    const clientesStore = useDataStore(s => s.clientes);
+    const servicioAbierto = serviceId ? servicios.find(s => s.id === serviceId) : undefined;
+    const biciMostrada = bike ?? (servicioAbierto ? bicicletasStore.find(b => b.id === servicioAbierto.bicicleta_id) ?? null : null);
+    const nombreCliente = clientName || (biciMostrada ? clientesStore.find(c => c.id === biciMostrada.cliente_id)?.nombre ?? '' : '');
+    const numeroOrden = servicioAbierto?.numero_orden != null ? `#${String(servicioAbierto.numero_orden).padStart(4, '0')}` : null;
     const upsertRecordatorios = useDataStore(s => s.upsertRecordatorios);
     const taller_id = useAuthStore(s => s.taller_id);
     const taller = useAuthStore(s => s.taller);
@@ -719,8 +731,11 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                 </DialogHeader>
                 <div className="mt-4 p-4 bg-orange-50 rounded-lg border border-orange-100 flex justify-between items-center text-orange-900">
                     <div>
-                        <p className="text-sm font-semibold">{clientName}</p>
-                        <p className="font-bold">{bike?.marca} {bike?.modelo}</p>
+                        <p className="text-sm font-semibold">
+                            {nombreCliente}
+                            {numeroOrden && <span className="ml-2 font-mono text-xs text-orange-700">{numeroOrden}</span>}
+                        </p>
+                        <p className="font-bold">{[biciMostrada?.marca, biciMostrada?.modelo].filter(Boolean).join(' ')}</p>
                     </div>
                     {!serviceId && <Button variant="ghost" size="sm" onClick={onBack} className="hover:bg-primary/10 text-primary">Cambiar Bici</Button>}
                 </div>

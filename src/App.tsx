@@ -196,25 +196,26 @@ function AppContent() {
             >
               <User size={20} />
             </button>
+            {/* Tocar afuera lo cierra: sin esto el menú quedaba abierto encima de
+                la pantalla hasta volver a tocar el ícono. */}
+            {userMenuOpen && (
+              <div className="fixed inset-0 z-[55]" onClick={() => setUserMenuOpen(false)} />
+            )}
             {userMenuOpen && (
               <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-slate-100 z-[60] py-2 animate-in fade-in slide-in-from-top-1 duration-150">
                 <div className="px-4 py-2 border-b border-slate-100">
                   <p className="text-xs font-bold text-slate-800 truncate">{displayName}</p>
                   <p className="text-[10px] text-slate-500 truncate">{session?.user?.email}</p>
                 </div>
+                {/* Acá había «Mi Perfil» y «Ajustes del Taller», y los dos llevaban a
+                    la misma pantalla: no existe una página de perfil. Dos puertas con
+                    nombres distintos al mismo lugar hacen buscar algo que no está. */}
                 <Link
                   to="/configuracion"
                   onClick={() => setUserMenuOpen(false)}
                   className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
                 >
-                  <User size={15} className="text-slate-500" /> Mi Perfil
-                </Link>
-                <Link
-                  to="/configuracion"
-                  onClick={() => setUserMenuOpen(false)}
-                  className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                >
-                  <Settings size={15} className="text-slate-500" /> Ajustes del Taller
+                  <Settings size={15} className="text-slate-500" /> Configuración
                 </Link>
                 <div className="border-t border-slate-100 mt-1 pt-1">
                   <button
@@ -347,14 +348,16 @@ function AppContent() {
         </div>
 
         <div className="mt-auto pb-8 shrink-0">
+          {/* Con su nombre abajo, como el resto del menú: un ícono suelto de
+              flecha no se sabe qué hace hasta que alguien lo aprieta. */}
           <Button
             variant="ghost"
-            size="icon"
-            className="h-10 w-10 text-red-500 hover:bg-red-50 hover:text-red-600 rounded-full"
+            className="h-auto w-24 py-2 px-1 flex flex-col items-center gap-1 rounded-xl text-red-500 hover:bg-red-50 hover:text-red-600"
             title="Cerrar Sesión"
             onClick={handleLogout}
           >
             <LogOut size={20} />
+            <span className="text-[10px] font-semibold leading-tight">Salir</span>
           </Button>
         </div>
       </nav>

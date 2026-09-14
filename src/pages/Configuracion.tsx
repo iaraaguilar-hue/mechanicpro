@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
+import { useState, useEffect, type ReactNode } from 'react';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore, type TallerData } from '@/store/authStore';
 import { tieneFeature } from '@/lib/planFeatures';
@@ -15,7 +15,7 @@ import { NuevoBadge } from '@/components/NuevoBadge';
 import {
     Settings, Loader2, Save, UploadCloud, Plus, Edit2, Check, X, Users,
     AlertCircle, Sparkles, ListChecks, CheckCircle, Lock, Bell, HeartPulse,
-    GraduationCap, PlayCircle, PhoneCall
+    GraduationCap, PlayCircle, PhoneCall, Eye, Bike
 } from 'lucide-react';
 import { useTourStore } from '@/components/OnboardingTour';
 import { resetTours } from '@/lib/tourSeen';
@@ -25,6 +25,7 @@ import { MensajesAutomaticos } from '@/components/MensajesAutomaticos';
 import { AltasDesdeERP } from '@/components/AltasDesdeERP';
 import { ComoFunciona } from '@/components/ComoFunciona';
 import { tintaSobre, tintaLegible, PISO_TEXTO_GRANDE } from '@/lib/contraste';
+import { BuscadorDeAjustes, AJUSTES, type Ajuste, type PestanaConfig } from '@/components/BuscadorDeAjustes';
 
 // ─────────────────────────────────────────────────────────────
 // Guardrails del logo: la calidad del branding ya no pasa por Iara,
@@ -73,8 +74,33 @@ export default function Configuracion() {
     const taller_id = useAuthStore(s => s.taller_id);
     const setTaller = useAuthStore(s => s.setTaller);
 
-    const [activeTab, setActiveTab] = useState('taller');
+    const [activeTab, setActiveTab] = useState<string>('taller');
     const [toast, setToast] = useState<{ tipo: 'ok' | 'error'; msg: string } | null>(null);
+
+    // Lleva a un ajuste: abre su pestaña, lo acomoda en pantalla y lo marca un
+    // momento. El retraso es porque el contenido de una pestaña cerrada no existe
+    // en el DOM hasta que se abre.
+    function irAAjuste(a: { id: string; tab: PestanaConfig }) {
+        setActiveTab(a.tab);
+        setTimeout(() => {
+            const el = document.querySelector<HTMLElement>(`[data-ajuste="${a.id}"]`);
+            if (!el) return;
+            const alto = el.getBoundingClientRect().height;
+            el.scrollIntoView({ behavior: 'smooth', block: alto > window.innerHeight * 0.6 ? 'start' : 'center' });
+            el.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
+            setTimeout(() => el.classList.remove('ring-2', 'ring-primary', 'ring-offset-2'), 2400);
+        }, 200);
+    }
+
+    // `/configuracion?ajuste=firma` abre directo en el ajuste: sirve para que otra
+    // pantalla mande al lugar exacto («cargá las formas de pago») y no a una
+    // pestaña donde hay que volver a buscar.
+    const [params] = useSearchParams();
+    useEffect(() => {
+        const a = AJUSTES.find(x => x.id === params.get('ajuste'));
+        if (a && taller) irAAjuste(a);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [params, !!taller]);
 
     // Abierta a todo el equipo del taller (admin + mecánicos, pedido de Iara
     // 21-jul-2026). El plan lo protege la BD (trigger proteger_plan_actual).
@@ -94,16 +120,22 @@ export default function Configuracion() {
         setTimeout(() => setToast(null), 4000);
     };
 
+    // Solo se ofrece lo que está en pantalla para ESTE taller: un resultado que
+    // lleva a un ajuste que su plan no muestra es un botón que no hace nada.
+    const ajustesVisibles = AJUSTES.filter((a: Ajuste) =>
+        (!a.requiere || tieneFeature(taller, a.requiere)) && (!a.soloAdmin || rolNorm === 'admin'));
+
     return (
         <div className="space-y-6">
-            <div data-tour="configuracion">
+            <div data-tour="configuracion" className="space-y-4">
                 <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
                     <Settings className="h-8 w-8 text-primary" />
                     Configuración del Taller
                 </h1>
-                <p className="text-muted-foreground mt-1">
-                    Tu marca, tu menú de services y cómo trabaja tu equipo. Los cambios se aplican al instante.
-                </p>
+                {/* Acá decía «los cambios se aplican al instante», y en Mi Taller no era
+                    cierto: había que apretar Guardar. En su lugar va lo que resuelve la
+                    pregunta de verdad, «¿dónde se cambia tal cosa?» (14-sep-2026). */}
+                <BuscadorDeAjustes ajustes={ajustesVisibles} onIr={irAAjuste} />
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -112,7 +144,7 @@ export default function Configuracion() {
                     al sumar la quinta (Mensajes automáticos, 3-sep-2026). En pantalla
                     chica van en fila con scroll horizontal, que es lo que hace cualquier
                     app con más pestañas que ancho; desde `sm` vuelve la grilla pareja. */}
-                <TabsList className="flex w-full justify-start overflow-x-auto sm:grid sm:grid-cols-5">
+                <TabsList className={`flex w-full justify-start overflow-x-auto sm:grid ${verWhatsApp ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
                     <TabsTrigger value="taller" className="flex-shrink-0">Mi Taller</TabsTrigger>
                     <TabsTrigger value="servicios" className="flex-shrink-0">Menú de Services</TabsTrigger>
                     {/* El WhatsApp propio y todo lo que cuelga de él son del Pro
@@ -120,22 +152,36 @@ export default function Configuracion() {
                         muestra en Sport: un botón que lleva a un cartel de "tu plan
                         no incluye esto" es peor que no tenerlo. */}
                     {verWhatsApp && <TabsTrigger value="whatsapp" data-tour="config-whatsapp" className="flex-shrink-0">WhatsApp</TabsTrigger>}
-                    {verWhatsApp && <TabsTrigger value="automaticos" data-tour="config-automaticos" className="flex-shrink-0">Mensajes automáticos</TabsTrigger>}
+                    {/* «Mensajes» y no «Mensajes automáticos» (14-sep-2026): ahora arranca
+                        con quién firma y cómo hablás, que valen para TODOS los planes
+                        (vivían en Mi Taller, al lado del logo, donde nadie los buscaba).
+                        Lo automático sigue siendo del Pro para arriba y en Sport no aparece. */}
+                    <TabsTrigger value="automaticos" data-tour={verWhatsApp ? 'config-automaticos' : undefined} className="flex-shrink-0">Mensajes</TabsTrigger>
                     <TabsTrigger value="preferencias" className="flex-shrink-0">Preferencias</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="taller" className="mt-6">
+                {/* `forceMount`: con cambios sin guardar, cambiar de pestaña los borraba
+                    sin avisar (Radix desmonta la pestaña cerrada). Queda montada y
+                    oculta, y lo escrito sigue ahí al volver. */}
+                <TabsContent value="taller" forceMount className="mt-6 data-[state=inactive]:hidden">
                     <TabMiTaller taller={taller} setTaller={setTaller} puedeEditar={puedeEditar} avisar={avisar} />
                 </TabsContent>
                 <TabsContent value="servicios" className="mt-6">
                     <TabMenuServices taller={taller} taller_id={taller_id} puedeEditar={puedeEditar} avisar={avisar} />
                 </TabsContent>
                 {verWhatsApp && <TabsContent value="whatsapp" className="mt-6">
-                    <ConectarWhatsApp taller={taller} avisar={avisar} />
+                    <div data-ajuste="whatsapp" className="rounded-lg">
+                        <ConectarWhatsApp taller={taller} avisar={avisar} />
+                    </div>
                 </TabsContent>}
-                {verWhatsApp && <TabsContent value="automaticos" className="mt-6">
-                    <MensajesAutomaticos taller={taller} avisar={avisar} />
-                </TabsContent>}
+                <TabsContent value="automaticos" className="mt-6 space-y-6">
+                    <ComoEscribis taller={taller} setTaller={setTaller} avisar={avisar} />
+                    {verWhatsApp && (
+                        <div data-ajuste="automaticos" className="rounded-lg">
+                            <MensajesAutomaticos taller={taller} avisar={avisar} />
+                        </div>
+                    )}
+                </TabsContent>
 
                 <TabsContent value="preferencias" className="mt-6">
                     <TabPreferencias taller={taller} setTaller={setTaller} avisar={avisar} />
@@ -168,16 +214,18 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
         color_secundario: taller.color_secundario || '#03adef',
         mensaje_informe: taller.mensaje_informe || '',
         politica_pago: (taller as any).politica_pago || '',
-        firma_nombre: (taller as any).firma_nombre || '',
-        voz_taller: (taller as any).voz_taller || '',
-        ia_mensajes_activa: (taller as any).ia_mensajes_activa === true,
-        // El default de la base es true: solo queda apagado si el taller lo apagó.
-        ia_presupuesto_activa: (taller as any).ia_presupuesto_activa !== false,
-        // Default false: la lista de bicis paradas trae clientes con su gasto.
-        bicis_paradas_ve_mecanico: (taller as any).bicis_paradas_ve_mecanico === true,
     });
-    const rolForm = useAuthStore(s => s.rol);
-    const esAdmin = rolForm?.toLowerCase()?.trim() === 'admin';
+    // Lo que está guardado, para saber si hay cambios sin guardar. Quién firma,
+    // cómo hablás y los interruptores de IA se mudaron el 14-sep-2026 a «Mensajes»
+    // y «Preferencias»: acá quedó solo la marca y el comprobante.
+    const guardadoEnBase = {
+        color_primario: taller.color_primario || '#f25a30',
+        color_secundario: taller.color_secundario || '#03adef',
+        mensaje_informe: taller.mensaje_informe || '',
+        politica_pago: (taller as any).politica_pago || '',
+    };
+    const sinGuardar = (Object.keys(guardadoEnBase) as (keyof typeof guardadoEnBase)[])
+        .some(k => form[k] !== guardadoEnBase[k]);
     // 🔴 LA VISTA PREVIA MOSTRABA UN SERVICE QUE EL TALLER NO TIENE (12-sep-2026).
     // Decía «Service Completo $ 45.000» fijo, para todos: en un taller con SPORT/PRO/EXPERT
     // la previa de SU comprobante mostraba un renglón que su comprobante nunca va a traer.
@@ -252,11 +300,6 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                     color_secundario: form.color_secundario,
                     mensaje_informe: form.mensaje_informe,
                     politica_pago: form.politica_pago,
-                    firma_nombre: form.firma_nombre.trim() || null,
-                    voz_taller: form.voz_taller.trim() || null,
-                    ia_mensajes_activa: form.ia_mensajes_activa,
-                    ia_presupuesto_activa: form.ia_presupuesto_activa,
-                    bicis_paradas_ve_mecanico: form.bicis_paradas_ve_mecanico,
                 })
                 .eq('id', taller.id);
             if (error) throw error;
@@ -272,7 +315,7 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
     return (
         <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-6">
-                <Card>
+                <Card data-ajuste="logo">
                     <CardHeader>
                         <CardTitle className="text-lg">Logo</CardTitle>
                     </CardHeader>
@@ -323,7 +366,7 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card data-ajuste="colores">
                     <CardHeader>
                         <CardTitle className="text-lg">Colores de tu marca</CardTitle>
                     </CardHeader>
@@ -381,7 +424,7 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card data-ajuste="textos_pdf">
                     <CardHeader>
                         <CardTitle className="text-lg">Textos del PDF / orden de trabajo</CardTitle>
                     </CardHeader>
@@ -406,127 +449,6 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                                 disabled={!puedeEditar}
                             />
                         </div>
-                        <Button onClick={handleSave} disabled={saving || !puedeEditar} className="w-full">
-                            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                            Guardar cambios
-                        </Button>
-                    </CardContent>
-                </Card>
-
-                {/* Quién firma los WhatsApp y cómo habla.
-                    Sin un nombre, el mensaje arranca sin dueño y el cliente lo
-                    lee como un sistema — y a un sistema no se le contesta. */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-lg">Cómo le escribís a tus clientes</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>¿Quién firma los mensajes?</Label>
-                            <Input
-                                value={form.firma_nombre}
-                                onChange={(e) => setForm({ ...form, firma_nombre: e.target.value })}
-                                placeholder="Luis"
-                                disabled={!puedeEditar}
-                            />
-                            <ComoFunciona>
-                                <p className="text-xs text-muted-foreground">
-                                    El nombre de pila del que atiende. Los mensajes van a empezar con
-                                    “Hola Marcos, acá {form.firma_nombre.trim() || '…'} de {taller.nombre || 'tu taller'}”.
-                                    Si lo dejás vacío, se firma con el nombre del taller.
-                                </p>
-                            </ComoFunciona>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Cómo hablás</Label>
-                            <textarea
-                                className="w-full min-h-[80px] p-2 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-                                value={form.voz_taller}
-                                onChange={(e) => setForm({ ...form, voz_taller: e.target.value })}
-                                placeholder="Tuteamos, somos directos y cortos. No decimos 'estimado' ni 'aguardamos su respuesta'. Al cliente le hablamos como a un compañero de salida."
-                                disabled={!puedeEditar}
-                            />
-                            <ComoFunciona>
-                                <p className="text-xs text-muted-foreground">
-                                    Escribilo en tus palabras: si tuteás, qué muletillas usás, y sobre todo qué NO decís nunca.
-                                    Es lo que hace que tus mensajes suenen a vos y no a todos los talleres iguales.
-                                </p>
-                            </ComoFunciona>
-                        </div>
-
-                        {/* Los dos interruptores de abajo son de Pro/Expert (la IA es lo
-                            que separa los planes, 17-ago). En Sport NO se muestran: un
-                            switch que se puede prender y que el servidor rechaza es peor
-                            que no tenerlo, y una demo con reloj genera bronca, no upgrade. */}
-                        {tieneFeature(taller, 'mensaje_ia') && (
-                        <div className="flex items-start justify-between gap-4 rounded-lg border p-3 bg-slate-50">
-                            <div className="space-y-0.5">
-                                <Label className="text-sm">Mensajes personalizados uno por uno</Label>
-                                <ComoFunciona>
-                                    <p className="text-xs text-muted-foreground">
-                                        Cada recordatorio se escribe mirando el historial de ese cliente: su bici,
-                                        la carrera que corrió, lo que le hicimos la última vez. Apagado, sale el
-                                        texto de siempre igual para todos.
-                                    </p>
-                                </ComoFunciona>
-                            </div>
-                            <Switch
-                                checked={form.ia_mensajes_activa}
-                                onCheckedChange={(v) => setForm({ ...form, ia_mensajes_activa: v })}
-                                disabled={!puedeEditar}
-                            />
-                        </div>
-                        )}
-
-                        {tieneFeature(taller, 'segundo_ojos') && (
-                        <div className="flex items-start justify-between gap-4 rounded-lg border p-3 bg-slate-50">
-                            <div className="space-y-0.5">
-                                <Label className="text-sm">Segundo par de ojos sobre el presupuesto</Label>
-                                <ComoFunciona>
-                                    <p className="text-xs text-muted-foreground">
-                                        Al finalizar una orden, el sistema mira el historial de esa bici y avisa
-                                        lo que se está escapando ("la cadena es de hace 14 meses, preguntale").
-                                        Sugiere, nunca agrega solo: el mecánico decide.
-                                    </p>
-                                </ComoFunciona>
-                            </div>
-                            <Switch
-                                checked={form.ia_presupuesto_activa}
-                                onCheckedChange={(v) => setForm({ ...form, ia_presupuesto_activa: v })}
-                                disabled={!puedeEditar}
-                            />
-                        </div>
-                        )}
-
-                        {/* Decisión de Iara (19-ago): si el mecánico ve Bicis paradas lo
-                            decide el ADMIN de cada taller. Default apagado: la lista trae
-                            clientes con su gasto. El candado real está en RLS + en la
-                            Edge Function; este switch es la llave del admin. */}
-                        {tieneFeature(taller, 'bicis_paradas') && (
-                        <div className="flex items-start justify-between gap-4 rounded-lg border p-3 bg-slate-50">
-                            <div className="space-y-0.5">
-                                <Label className="text-sm">El mecánico también ve Bicis paradas</Label>
-                                <ComoFunciona>
-                                    <p className="text-xs text-muted-foreground">
-                                        El panel de bicis paradas muestra clientes con lo que gastaron.
-                                        Apagado, lo ve solo el administrador; prendido, también los
-                                        usuarios mecánicos del taller.
-                                    </p>
-                                </ComoFunciona>
-                            </div>
-                            <Switch
-                                checked={form.bicis_paradas_ve_mecanico}
-                                onCheckedChange={(v) => setForm({ ...form, bicis_paradas_ve_mecanico: v })}
-                                disabled={!puedeEditar || !esAdmin}
-                            />
-                        </div>
-                        )}
-
-                        <Button onClick={handleSave} disabled={saving || !puedeEditar} className="w-full">
-                            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-                            Guardar cambios
-                        </Button>
                     </CardContent>
                 </Card>
             </div>
@@ -576,7 +498,150 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
                     </ComoFunciona>
                 </CardContent>
             </Card>
+
+            {/* 🔴 UN SOLO GUARDAR, Y SOLO CUANDO HAY ALGO PARA GUARDAR (14-sep-2026).
+                Había dos botones «Guardar cambios» iguales, uno por tarjeta, y los dos
+                guardaban TODO: se cambiaba un color, se apretaba el de la otra tarjeta
+                "por las dudas", y nadie sabía qué había quedado. Ahora la barra aparece
+                apenas se toca algo y dice lo que pasa. */}
+            {sinGuardar && (
+                <div className="fixed inset-x-4 bottom-4 md:inset-x-auto md:right-8 z-40 flex items-center justify-between gap-3 rounded-xl bg-slate-900 text-white px-4 py-3 shadow-2xl">
+                    <span className="text-sm font-medium">Tenés cambios sin guardar</span>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="ghost" size="sm"
+                            className="text-white hover:bg-white/10 hover:text-white"
+                            onClick={() => setForm(guardadoEnBase)}
+                            disabled={saving}
+                        >
+                            Descartar
+                        </Button>
+                        <Button size="sm" onClick={handleSave} disabled={saving || !puedeEditar}>
+                            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+                            Guardar cambios
+                        </Button>
+                    </div>
+                </div>
+            )}
         </div>
+    );
+}
+
+// ═════════════════════════════════════════════════════════════
+// PESTAÑA MENSAJES — quién firma, cómo hablás, la IA de los mensajes.
+//
+// Vivía en «Mi Taller», entre el logo y los colores: el que quería cambiar la
+// firma de los WhatsApp no la iba a buscar al lado del logo (14-sep-2026). Ahora
+// encabeza «Mensajes», que ven todos los planes. Y se guarda sola al salir del
+// campo: antes dependía del botón «Guardar» de otra tarjeta, y cambiar la firma
+// e irse era perderla.
+// ═════════════════════════════════════════════════════════════
+function ComoEscribis({ taller, setTaller, avisar }: {
+    taller: TallerData;
+    setTaller: (t: TallerData) => void;
+    avisar: (tipo: 'ok' | 'error', msg: string) => void;
+}) {
+    const [firma, setFirma] = useState((taller as any).firma_nombre || '');
+    const [voz, setVoz] = useState((taller as any).voz_taller || '');
+    const [iaMensajes, setIaMensajes] = useState((taller as any).ia_mensajes_activa === true);
+    const [recienGuardado, setRecienGuardado] = useState<string | null>(null);
+
+    const guardar = async (patch: Record<string, unknown>, cual: string): Promise<boolean> => {
+        const { error } = await supabase.from('talleres').update(patch).eq('id', taller.id);
+        if (error) { avisar('error', 'No se pudo guardar: ' + error.message); return false; }
+        setTaller({ ...taller, ...patch } as TallerData);
+        setRecienGuardado(cual);
+        setTimeout(() => setRecienGuardado(g => (g === cual ? null : g)), 2500);
+        return true;
+    };
+
+    const Guardado = ({ cual }: { cual: string }) => recienGuardado === cual
+        ? <span className="text-xs text-green-700 inline-flex items-center gap-1"><Check className="h-3 w-3" /> Guardado</span>
+        : null;
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-lg">Cómo le escribís a tus clientes</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {/* Sin un nombre, el mensaje arranca sin dueño y el cliente lo lee
+                    como un sistema — y a un sistema no se le contesta. */}
+                <div className="space-y-2" data-ajuste="firma">
+                    <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor="firma-mensajes">¿Quién firma los mensajes?</Label>
+                        <Guardado cual="firma" />
+                    </div>
+                    <Input
+                        id="firma-mensajes"
+                        value={firma}
+                        onChange={(e) => setFirma(e.target.value)}
+                        onBlur={() => {
+                            const nueva = firma.trim();
+                            if (nueva !== ((taller as any).firma_nombre || '')) void guardar({ firma_nombre: nueva || null }, 'firma');
+                        }}
+                        placeholder="Luis"
+                    />
+                    <ComoFunciona>
+                        <p className="text-xs text-muted-foreground">
+                            El nombre de pila del que atiende. Los mensajes van a empezar con
+                            “Hola Marcos, acá {firma.trim() || '…'} de {taller.nombre || 'tu taller'}”.
+                            Si lo dejás vacío, se firma con el nombre del taller.
+                        </p>
+                    </ComoFunciona>
+                </div>
+
+                <div className="space-y-2" data-ajuste="voz">
+                    <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor="voz-mensajes">Cómo hablás</Label>
+                        <Guardado cual="voz" />
+                    </div>
+                    <textarea
+                        id="voz-mensajes"
+                        className="w-full min-h-[80px] p-2 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={voz}
+                        onChange={(e) => setVoz(e.target.value)}
+                        onBlur={() => {
+                            const nueva = voz.trim();
+                            if (nueva !== ((taller as any).voz_taller || '')) void guardar({ voz_taller: nueva || null }, 'voz');
+                        }}
+                        placeholder="Tuteamos, somos directos y cortos. No decimos 'estimado' ni 'aguardamos su respuesta'. Al cliente le hablamos como a un compañero de salida."
+                    />
+                    <ComoFunciona>
+                        <p className="text-xs text-muted-foreground">
+                            Escribilo en tus palabras: si tuteás, qué muletillas usás, y sobre todo qué NO decís nunca.
+                            Es lo que hace que tus mensajes suenen a vos y no a todos los talleres iguales.
+                        </p>
+                    </ComoFunciona>
+                </div>
+
+                {/* De Pro/Expert (la IA es lo que separa los planes, 17-ago). En Sport NO
+                    se muestra: un switch que se puede prender y que el servidor rechaza es
+                    peor que no tenerlo. */}
+                {tieneFeature(taller, 'mensaje_ia') && (
+                    <div className="flex items-start justify-between gap-4 rounded-lg border p-3 bg-slate-50" data-ajuste="ia_mensajes">
+                        <div className="space-y-0.5">
+                            <Label className="text-sm">Mensajes personalizados uno por uno</Label>
+                            <ComoFunciona>
+                                <p className="text-xs text-muted-foreground">
+                                    Cada recordatorio se escribe mirando el historial de ese cliente: su bici,
+                                    la carrera que corrió, lo que le hicimos la última vez. Apagado, sale el
+                                    texto de siempre igual para todos.
+                                </p>
+                            </ComoFunciona>
+                        </div>
+                        <Switch
+                            checked={iaMensajes}
+                            onCheckedChange={async (v) => {
+                                const antes = iaMensajes;
+                                setIaMensajes(v);
+                                if (!(await guardar({ ia_mensajes_activa: v }, 'ia'))) setIaMensajes(antes);
+                            }}
+                        />
+                    </div>
+                )}
+            </CardContent>
+        </Card>
     );
 }
 
@@ -686,7 +751,7 @@ function TabMenuServices({ taller, taller_id, puedeEditar, avisar }: {
     };
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 rounded-lg" data-ajuste="menu">
             <Card className="border-dashed bg-muted/20">
                 <CardHeader className="py-3 px-4">
                     <CardTitle className="text-sm">Agregar service al menú</CardTitle>
@@ -1037,6 +1102,28 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     const [mecanicosHab, setMecanicosHab] = useState(taller.config_mecanicos?.habilitado === true);
     const [savingMec, setSavingMec] = useState(false);
 
+    // ── Los dos interruptores que vivían en «Mi Taller» (14-sep-2026). Ahí
+    // dependían del botón «Guardar» de otra tarjeta; acá se guardan al tocarlos,
+    // como todo lo de esta pestaña, y vuelven atrás si el guardado falla.
+    // El default de ia_presupuesto_activa en la base es true: solo queda apagado si
+    // el taller lo apagó. bicis_paradas_ve_mecanico es false: la lista trae
+    // clientes con su gasto.
+    const [segundoOjos, setSegundoOjos] = useState((taller as any).ia_presupuesto_activa !== false);
+    const [paradasMecanico, setParadasMecanico] = useState((taller as any).bicis_paradas_ve_mecanico === true);
+    const rolPref = useAuthStore(s => s.rol);
+    const esAdminPref = rolPref?.toLowerCase()?.trim() === 'admin';
+
+    const guardarInterruptor = async (
+        columna: 'ia_presupuesto_activa' | 'bicis_paradas_ve_mecanico',
+        valor: boolean, poner: (v: boolean) => void, anterior: boolean, ok: string,
+    ) => {
+        poner(valor);
+        const { error } = await supabase.from('talleres').update({ [columna]: valor }).eq('id', taller.id);
+        if (error) { poner(anterior); avisar('error', 'No se pudo guardar: ' + error.message); return; }
+        setTaller({ ...taller, [columna]: valor } as any);
+        avisar('ok', ok);
+    };
+
     const guardarMecanicos = async (valor: boolean) => {
         const anterior = mecanicosHab;
         setMecanicosHab(valor);
@@ -1084,10 +1171,13 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     // un vistazo — grilla de 2 columnas en desktop, textos cortos, el ejemplo
     // plegado. La información es la misma; el scroll, la mitad.
     return (
-        /* Sin items-start: las 2 tarjetas de cada fila se estiran a la misma
-           altura y el Guardar queda anclado abajo (mt-auto) → columnas parejas. */
-        <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="flex flex-col">
+        // 14-sep-2026: las 9 tarjetas iban en una sola grilla, en el orden en que se
+        // fueron agregando, y «Preferencias» no dice qué hay adentro. Van agrupadas
+        // por PARA QUÉ sirven, con el grupo escrito arriba: el que busca algo de las
+        // órdenes mira un solo bloque. (Y arriba de todo está el buscador.)
+        <div className="space-y-8">
+        <SeccionPreferencias titulo="En cada orden">
+        <Card className="flex flex-col" data-ajuste="checklist">
             <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                     <ListChecks className="h-4 w-4 text-primary" />
@@ -1132,7 +1222,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
         </Card>
 
         {/* ── Tareas del service (todos los planes) — pedido Cronobikes ── */}
-        <Card className="flex flex-col">
+        <Card className="flex flex-col" data-ajuste="tareas">
             <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                     <Bell className="h-4 w-4 text-primary" />
@@ -1167,8 +1257,112 @@ function TabPreferencias({ taller, setTaller, avisar }: {
             </CardContent>
         </Card>
 
-        {/* ── Avisos suaves (Alejo, Once a Fondo, 3-sep-2026) ── */}
-        <Card className="flex flex-col">
+        {/* «Vale una llamada» y «La bici vendida entra sola» se mudaron a «Clientes y seguimiento», más abajo. */}
+
+        {/* ── Quién hizo cada service (opt-in, 3-sep-2026) ── */}
+        <Card className="flex flex-col" data-ajuste="mecanico">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                    <Users className="h-5 w-5" /> Quién hizo cada service
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col gap-3">
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <p className="font-semibold text-sm pr-3">Registrar el mecánico</p>
+                    <Switch
+                        checked={mecanicosHab}
+                        onCheckedChange={guardarMecanicos}
+                        disabled={savingMec}
+                    />
+                </div>
+                {/* Lo que sigue evita el reclamo del primer día: se prende, se abre
+                    Métricas y está vacío. No es un bug, es que el dato empieza hoy. */}
+                <ComoFunciona>
+                    <p>
+                        Si en el taller trabaja más de una persona, al finalizar cada service elegís
+                        quién lo hizo. Después, en Métricas, ves cuánto generó cada uno en mano de
+                        obra y en repuestos, por separado.
+                    </p>
+                    <p>
+                        Se cuenta <strong>desde que lo prendés</strong>: los services que ya cerraste
+                        no tienen guardado quién los hizo y no se puede saber a esta altura.
+                        {' '}Si trabajás solo, dejalo apagado y te ahorrás un clic en cada orden.
+                    </p>
+                </ComoFunciona>
+            </CardContent>
+        </Card>
+
+        {/* ── Registro del diagnóstico (todos los planes) ── */}
+        <Card className="flex flex-col" data-ajuste="diagnostico">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <HeartPulse className="h-4 w-4 text-primary" />
+                    Registro del diagnóstico
+                    <NuevoBadge feature="registro-diagnostico" />
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col gap-2">
+                {([
+                    { val: 'final', tit: 'Al finalizar el service', desc: 'Al cerrar la orden. Por defecto.' },
+                    { val: 'durante', tit: 'Durante el service', desc: 'Mientras se trabaja en la bici.' },
+                    { val: 'ambos', tit: 'Durante y al finalizar', desc: 'Siempre disponible, con repaso al cerrar.' },
+                ] as const).map(opt => (
+                    <button
+                        key={opt.val}
+                        type="button"
+                        onClick={() => guardarDiag(opt.val)}
+                        disabled={savingDiag}
+                        className={`w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg border transition-colors ${momentoDiag === opt.val ? 'border-primary bg-primary/5' : 'bg-muted/20 hover:border-primary/40'}`}
+                    >
+                        <span className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${momentoDiag === opt.val ? 'border-primary bg-primary' : 'border-muted-foreground/40'}`} />
+                        <span className="flex-1 flex items-baseline justify-between gap-2 flex-wrap">
+                            <span className="font-semibold text-sm">{opt.tit}</span>
+                            <span className="text-[11px] text-muted-foreground">{opt.desc}</span>
+                        </span>
+                    </button>
+                ))}
+                <ComoFunciona>
+                    <p>
+                        El diagnóstico genera los avisos de mantenimiento que aparecen en Retención.
+                        Acá elegís en qué momento del service se registra.
+                    </p>
+                </ComoFunciona>
+            </CardContent>
+        </Card>
+
+        {/* ── Segundo par de ojos (vivía en «Mi Taller» hasta el 14-sep-2026) ── */}
+        {tieneFeature(taller, 'segundo_ojos') && (
+        <Card className="flex flex-col" data-ajuste="segundo_ojos">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <Eye className="h-4 w-4 text-primary" />
+                    Segundo par de ojos sobre el presupuesto
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col gap-3">
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <p className="font-semibold text-sm pr-3">Avisar lo que se escapa al finalizar</p>
+                    <Switch
+                        checked={segundoOjos}
+                        onCheckedChange={v => guardarInterruptor('ia_presupuesto_activa', v, setSegundoOjos, segundoOjos,
+                            v ? 'Listo: al finalizar te avisa lo que se está escapando.' : 'Desactivado.')}
+                    />
+                </div>
+                <ComoFunciona>
+                    <p>
+                        Al finalizar una orden, el sistema mira el historial de esa bici y avisa
+                        lo que se está escapando ("la cadena es de hace 14 meses, preguntale").
+                        Sugiere, nunca agrega solo: el mecánico decide.
+                    </p>
+                </ComoFunciona>
+            </CardContent>
+        </Card>
+        )}
+        </SeccionPreferencias>
+
+        <SeccionPreferencias titulo="Clientes y seguimiento">
+        {/* ── Avisos suaves (Alejo, Once a Fondo, 3-sep-2026). Mudada acá el 14-sep. ── */}
+        <Card className="flex flex-col" data-ajuste="avisos_suaves">
             <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
                     <Bell className="h-5 w-5" /> Avisos de «vale una llamada»
@@ -1221,82 +1415,8 @@ function TabPreferencias({ taller, setTaller, avisar }: {
             </CardContent>
         </Card>
 
-        {/* ── La bici vendida entra sola (3-sep-2026) ── */}
-        <AltasDesdeERP taller={taller} setTaller={setTaller} avisar={avisar} />
-
-        {/* ── Quién hizo cada service (opt-in, 3-sep-2026) ── */}
-        <Card className="flex flex-col">
-            <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                    <Users className="h-5 w-5" /> Quién hizo cada service
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col gap-3">
-                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
-                    <p className="font-semibold text-sm pr-3">Registrar el mecánico</p>
-                    <Switch
-                        checked={mecanicosHab}
-                        onCheckedChange={guardarMecanicos}
-                        disabled={savingMec}
-                    />
-                </div>
-                {/* Lo que sigue evita el reclamo del primer día: se prende, se abre
-                    Métricas y está vacío. No es un bug, es que el dato empieza hoy. */}
-                <ComoFunciona>
-                    <p>
-                        Si en el taller trabaja más de una persona, al finalizar cada service elegís
-                        quién lo hizo. Después, en Métricas, ves cuánto generó cada uno en mano de
-                        obra y en repuestos, por separado.
-                    </p>
-                    <p>
-                        Se cuenta <strong>desde que lo prendés</strong>: los services que ya cerraste
-                        no tienen guardado quién los hizo y no se puede saber a esta altura.
-                        {' '}Si trabajás solo, dejalo apagado y te ahorrás un clic en cada orden.
-                    </p>
-                </ComoFunciona>
-            </CardContent>
-        </Card>
-
-        {/* ── Registro del diagnóstico (todos los planes) ── */}
-        <Card className="flex flex-col">
-            <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                    <HeartPulse className="h-4 w-4 text-primary" />
-                    Registro del diagnóstico
-                    <NuevoBadge feature="registro-diagnostico" />
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col gap-2">
-                {([
-                    { val: 'final', tit: 'Al finalizar el service', desc: 'Al cerrar la orden. Por defecto.' },
-                    { val: 'durante', tit: 'Durante el service', desc: 'Mientras se trabaja en la bici.' },
-                    { val: 'ambos', tit: 'Durante y al finalizar', desc: 'Siempre disponible, con repaso al cerrar.' },
-                ] as const).map(opt => (
-                    <button
-                        key={opt.val}
-                        type="button"
-                        onClick={() => guardarDiag(opt.val)}
-                        disabled={savingDiag}
-                        className={`w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg border transition-colors ${momentoDiag === opt.val ? 'border-primary bg-primary/5' : 'bg-muted/20 hover:border-primary/40'}`}
-                    >
-                        <span className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${momentoDiag === opt.val ? 'border-primary bg-primary' : 'border-muted-foreground/40'}`} />
-                        <span className="flex-1 flex items-baseline justify-between gap-2 flex-wrap">
-                            <span className="font-semibold text-sm">{opt.tit}</span>
-                            <span className="text-[11px] text-muted-foreground">{opt.desc}</span>
-                        </span>
-                    </button>
-                ))}
-                <ComoFunciona>
-                    <p>
-                        El diagnóstico genera los avisos de mantenimiento que aparecen en Retención.
-                        Acá elegís en qué momento del service se registra.
-                    </p>
-                </ComoFunciona>
-            </CardContent>
-        </Card>
-
         {/* ── Cuánto se espera al cliente antes de llamarlo (8-sep-2026) ── */}
-        <Card className="flex flex-col">
+        <Card className="flex flex-col" data-ajuste="horas">
             <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                     <PhoneCall className="h-4 w-4 text-primary" />
@@ -1330,8 +1450,52 @@ function TabPreferencias({ taller, setTaller, avisar }: {
             </CardContent>
         </Card>
 
+        {/* ── La bici vendida entra sola (3-sep-2026) ── */}
+        <div data-ajuste="altas_erp" className="rounded-lg flex flex-col">
+            <AltasDesdeERP taller={taller} setTaller={setTaller} avisar={avisar} />
+        </div>
+        </SeccionPreferencias>
+
+        {/* Decisión de Iara (19-ago): si el mecánico ve Bicis paradas lo decide el
+            ADMIN de cada taller. Default apagado: la lista trae clientes con su
+            gasto. El candado real está en RLS + en la Edge Function; este switch es
+            la llave del admin. Vivía en «Mi Taller» hasta el 14-sep-2026. */}
+        {tieneFeature(taller, 'bicis_paradas') && (
+        <SeccionPreferencias titulo="Tu equipo">
+        <Card className="flex flex-col" data-ajuste="bicis_paradas_mecanico">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <Bike className="h-4 w-4 text-primary" />
+                    Quién ve Bicis paradas
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col gap-3">
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <p className="font-semibold text-sm pr-3">El mecánico también ve Bicis paradas</p>
+                    <Switch
+                        checked={paradasMecanico}
+                        disabled={!esAdminPref}
+                        onCheckedChange={v => guardarInterruptor('bicis_paradas_ve_mecanico', v, setParadasMecanico, paradasMecanico,
+                            v ? 'Listo: los mecánicos también ven Bicis paradas.' : 'Listo: Bicis paradas la ve solo el administrador.')}
+                    />
+                </div>
+                {!esAdminPref && (
+                    <p className="text-xs text-muted-foreground">Esto lo cambia el administrador del taller.</p>
+                )}
+                <ComoFunciona>
+                    <p>
+                        El panel de bicis paradas muestra clientes con lo que gastaron. Apagado, lo
+                        ve solo el administrador; prendido, también los usuarios mecánicos del taller.
+                    </p>
+                </ComoFunciona>
+            </CardContent>
+        </Card>
+        </SeccionPreferencias>
+        )}
+
+        <SeccionPreferencias titulo="Ayuda y repuestos">
         {/* ── Recorrido de bienvenida (todos los planes) ── */}
-        <Card className="flex flex-col">
+        <Card className="flex flex-col" data-ajuste="recorrido">
             <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                     <GraduationCap className="h-4 w-4 text-primary" />
@@ -1342,7 +1506,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                 <Button
                     size="sm"
                     variant="outline"
-                    className="w-full mt-auto"
+                    className="w-full"
                     onClick={() => { resetTours(); useTourStore.getState().iniciar('bienvenida'); }}
                 >
                     <PlayCircle className="h-4 w-4 mr-2" />
@@ -1362,7 +1526,20 @@ function TabPreferencias({ taller, setTaller, avisar }: {
         {/* La vuelta atrás del "no sugerir más" del buscador de repuestos.
             Sin esto, ocultar un producto era una acción de un clic, permanente
             y sin deshacer. */}
-        <ProductosOcultos avisar={avisar} />
+        <div data-ajuste="ocultos" className="rounded-lg flex flex-col">
+            <ProductosOcultos avisar={avisar} />
         </div>
+        </SeccionPreferencias>
+        </div>
+    );
+}
+
+/** Un grupo de Preferencias, con su nombre arriba. */
+function SeccionPreferencias({ titulo, children }: { titulo: string; children: ReactNode }) {
+    return (
+        <section>
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">{titulo}</h2>
+            <div className="grid gap-4 lg:grid-cols-2">{children}</div>
+        </section>
     );
 }

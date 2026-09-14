@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { HeartPulse, Check, CalendarDays } from "lucide-react";
+import { diaCalendario } from "@/lib/fechaAR";
 
 // 🔴 «Service Brain» se sumó el 8-sep-2026 a pedido de Ariel Leira (Leira Bikes).
 // La horquilla ya estaba; lo que faltaba era la suspensión trasera, que en las
@@ -141,7 +142,7 @@ export function HealthCheckWidget({ onChange }: HealthCheckWidgetProps) {
                                 {isActive && (
                                     <div className="text-xs text-muted-foreground sm:text-right min-w-[100px] flex items-center justify-end gap-1">
                                         <CalendarDays className="h-3 w-3" />
-                                        {new Date(selection.date).toLocaleDateString()}
+                                        {diaCalendario(selection.date)}
                                     </div>
                                 )}
                             </div>

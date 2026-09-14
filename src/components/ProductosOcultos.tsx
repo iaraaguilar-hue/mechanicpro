@@ -95,6 +95,17 @@ export function ProductosOcultos({ avisar }: { avisar: (tipo: 'ok' | 'error', ms
                         aparecer en el buscador de repuestos. No se borra: las órdenes que ya lo nombran
                         quedan igual. Acá los ves todos y los volvés a mostrar cuando quieras.
                     </p>
+                    {/* Vivía suelto al pie de la tarjeta: 270 caracteres a la vista al
+                        entrar a Preferencias (14-sep-2026). Es explicación, no dato. */}
+                    {noRepuestos > 0 && (
+                        <p>
+                            Además, <span className="font-semibold text-slate-700">{noRepuestos.toLocaleString('es-AR')} productos</span> de
+                            tu catálogo (bicicletas completas, ropa, cascos y calzado) no se ofrecen en el
+                            buscador de repuestos, porque no son cosas que se carguen en una orden de service.
+                            Siguen en tu ERP y se pueden vender igual. Si alguna vez cargás una en una orden,
+                            vuelve a aparecer sola.
+                        </p>
+                    )}
                 </ComoFunciona>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col gap-3">
@@ -150,16 +161,6 @@ export function ProductosOcultos({ avisar }: { avisar: (tipo: 'ok' | 'error', ms
                             )}
                         </div>
                     </>
-                )}
-
-                {noRepuestos > 0 && (
-                    <p className="text-xs text-muted-foreground leading-relaxed border-t pt-3 mt-auto">
-                        Además, <span className="font-semibold text-slate-700">{noRepuestos.toLocaleString('es-AR')} productos</span> de
-                        tu catálogo (bicicletas completas, ropa, cascos y calzado) no se ofrecen en el
-                        buscador de repuestos, porque no son cosas que se carguen en una orden de service.
-                        Siguen en tu ERP y se pueden vender igual. Si alguna vez cargás una en una orden,
-                        vuelve a aparecer sola.
-                    </p>
                 )}
             </CardContent>
         </Card>

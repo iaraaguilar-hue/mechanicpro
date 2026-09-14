@@ -59,12 +59,12 @@ const PLANTILLAS: Record<string, { cuerpo: string; conPdf: boolean; titulo: stri
 const EVENTOS: Record<string, { titulo: string; cuando: string; plantillas: string[] }> = {
     service_finalizado: {
         titulo: 'Cuando termina el service',
-        cuando: 'En el momento en que el mecánico aprieta «Finalizar».',
+        cuando: 'Al apretar «Finalizar».',
         plantillas: ['bici_lista_pdf'],
     },
     bici_entregada: {
         titulo: 'Cuando se entrega la bici',
-        cuando: 'En el momento en que se aprieta «Entregar», cuando el cliente la retira.',
+        cuando: 'Al apretar «Entregar», cuando la retira.',
         plantillas: ['comprobante_entrega_pdf', 'aviso_tienda_entrega'],
     },
     // ── EL PRIMER MOMENTO QUE NO ES UN BOTÓN (5-sep-2026).
@@ -73,7 +73,7 @@ const EVENTOS: Record<string, { titulo: string; cuando: string; plantillas: stri
     // apretando algo; este lo dispara el reloj, desde un cron en la nube.
     dias_despues: {
         titulo: 'Un tiempo después de que se llevó la bici',
-        cuando: 'Sale solo, a la mañana, sin que nadie apriete nada.',
+        cuando: 'Sale solo, a la mañana.',
         plantillas: ['seguimiento_service'],
     },
 };
@@ -146,7 +146,11 @@ function opcionesDePlantilla(evento: string, propias: PlantillaDelTaller[]) {
     const delSistema = (EVENTOS[evento]?.plantillas ?? [])
         .map((n) => ({ valor: n, titulo: PLANTILLAS[n]?.titulo ?? n, conPdf: PLANTILLAS[n]?.conPdf ?? false }));
     const delTaller = propias
-        .filter((p) => p.estado === 'aprobada' && (p.evento === evento || p.evento === 'cualquiera'))
+        // `cualquiera` son los dos momentos de BOTÓN (finalizar y entregar), no el
+        // aviso por días: una plantilla pensada para «ya está lista» no tiene que
+        // ofrecerse para mandarse un mes después.
+        .filter((p) => p.estado === 'aprobada' && (p.evento === evento
+            || (p.evento === 'cualquiera' && (evento === 'service_finalizado' || evento === 'bici_entregada'))))
         .map((p) => ({ valor: p.nombre_meta, titulo: `${p.titulo} (tuya)`, conPdf: p.lleva_pdf }));
     return [...delSistema, ...delTaller];
 }
@@ -160,6 +164,29 @@ export function MensajesAutomaticos({ taller, avisar }: {
     const [cargando, setCargando] = useState(true);
     const [guardando, setGuardando] = useState<string | null>(null);
     const [nueva, setNueva] = useState<Partial<Regla> | null>(null);
+
+    // «¿No está el que querés?» desde un momento abre el armador de plantillas con
+    // ese momento ya dicho. `n` cambia en cada pedido para volver a dispararlo.
+    const [armarPara, setArmarPara] = useState<{ evento: PlantillaDelTaller['evento']; n: number } | null>(null);
+
+    /**
+     * Una plantilla aprobada → el aviso armado con ella, listo para guardar.
+     *
+     * Antes del 14-sep, que Meta la aprobara era el final del camino en pantalla y
+     * el principio del trabajo del mecánico: ir al momento, agregar un mensaje,
+     * encontrarla en el desplegable. Ese último tramo es el que nadie recorre.
+     */
+    const ponerAAndar = (p: PlantillaDelTaller) => {
+        const evento = p.evento === 'cualquiera' ? 'service_finalizado' : p.evento;
+        setNueva({
+            nombre: p.titulo, evento, destino: 'cliente', plantilla: p.nombre_meta,
+            adjunta_pdf: p.lleva_pdf && evento !== 'dias_despues',
+            dias_despues: evento === 'dias_despues' ? DIAS_POR_DEFECTO : null,
+            activa: true,
+        });
+        requestAnimationFrame(() => document.getElementById(`momento-${evento}`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    };
 
     const cargarPropias = useCallback(async () => {
         const { data } = await supabase
@@ -308,7 +335,7 @@ export function MensajesAutomaticos({ taller, avisar }: {
                 Object.entries(EVENTOS).map(([evento, cfg]) => {
                     const delEvento = reglas.filter((r) => r.evento === evento);
                     return (
-                        <Card key={evento}>
+                        <Card key={evento} id={`momento-${evento}`} className="scroll-mt-4">
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-base">{cfg.titulo}</CardTitle>
                                 <p className="text-xs text-muted-foreground">{cfg.cuando}</p>
@@ -330,6 +357,7 @@ export function MensajesAutomaticos({ taller, avisar }: {
                                         onGuardar={guardar}
                                         onBorrar={() => borrar(regla.id)}
                                         onAlternar={(a) => alternar(regla, a)}
+                                        onArmarNuevo={() => setArmarPara({ evento: evento as PlantillaDelTaller['evento'], n: Date.now() })}
                                     />
                                 ))}
 
@@ -342,6 +370,7 @@ export function MensajesAutomaticos({ taller, avisar }: {
                                         onCambio={setNueva}
                                         onGuardar={() => guardar(nueva)}
                                         onCancelar={() => setNueva(null)}
+                                        onArmarNuevo={() => setArmarPara({ evento: evento as PlantillaDelTaller['evento'], n: Date.now() })}
                                     />
                                 ) : (
                                     <Button
@@ -376,15 +405,19 @@ export function MensajesAutomaticos({ taller, avisar }: {
                     recargar={cargarPropias}
                     avisar={avisar}
                     waListo={waListo}
+                    enUso={new Set(reglas.map((r) => r.plantilla))}
+                    onUsar={ponerAAndar}
+                    abrirCon={armarPara}
                 />
             )}
         </div>
     );
 }
 
-function FilaRegla({ regla, taller, propias, guardando, onGuardar, onBorrar, onAlternar }: {
+function FilaRegla({ regla, taller, propias, guardando, onGuardar, onBorrar, onAlternar, onArmarNuevo }: {
     regla: Regla; taller: TallerData; propias: PlantillaDelTaller[]; guardando: boolean;
     onGuardar: (r: Partial<Regla>) => void; onBorrar: () => void; onAlternar: (a: boolean) => void;
+    onArmarNuevo?: () => void;
 }) {
     const [editando, setEditando] = useState(false);
     const [borrador, setBorrador] = useState<Partial<Regla>>(regla);
@@ -393,6 +426,7 @@ function FilaRegla({ regla, taller, propias, guardando, onGuardar, onBorrar, onA
         return (
             <Editor
                 regla={borrador} taller={taller} propias={propias} guardando={guardando}
+                onArmarNuevo={onArmarNuevo}
                 onCambio={setBorrador}
                 onGuardar={() => { onGuardar(borrador); setEditando(false); }}
                 onCancelar={() => { setBorrador(regla); setEditando(false); }}
@@ -414,7 +448,12 @@ function FilaRegla({ regla, taller, propias, guardando, onGuardar, onBorrar, onA
                         {regla.destino === 'cliente' ? 'al cliente' : `a ${regla.numero_fijo}`}
                     </span>
                 </div>
-                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                {/* Una línea, no dos: tres avisos con dos renglones de mensaje cada uno
+                    eran la mitad de lo que había que leer al entrar. Alcanza para
+                    reconocerlo; el mensaje entero está en «Editar» y al pasar el mouse.
+                    `data-contenido`: es el mensaje que sale, no ayuda (el candado de
+                    lectura no lo cuenta como prosa). */}
+                <p className="text-xs text-muted-foreground mt-1 line-clamp-1" data-contenido title={vistaPrevia(regla, taller, propias)}>
                     {vistaPrevia(regla, taller, propias)}
                 </p>
             </div>
@@ -429,9 +468,11 @@ function FilaRegla({ regla, taller, propias, guardando, onGuardar, onBorrar, onA
     );
 }
 
-function Editor({ regla, taller, propias, guardando, onCambio, onGuardar, onCancelar }: {
+function Editor({ regla, taller, propias, guardando, onCambio, onGuardar, onCancelar, onArmarNuevo }: {
     regla: Partial<Regla>; taller: TallerData; propias: PlantillaDelTaller[]; guardando: boolean;
     onCambio: (r: Partial<Regla>) => void; onGuardar: () => void; onCancelar: () => void;
+    /** Abre el armador de plantillas con este momento ya elegido. */
+    onArmarNuevo?: () => void;
 }) {
     const previa = vistaPrevia(regla, taller, propias);
     const opciones = opcionesDePlantilla(regla.evento ?? '', propias);
@@ -516,6 +557,18 @@ function Editor({ regla, taller, propias, guardando, onCambio, onGuardar, onCanc
                     <p className="text-xs text-red-700">
                         Este mensaje ya no está disponible: elegí otro o este aviso no va a salir.
                     </p>
+                )}
+                {/* La puerta al armador desde el lugar donde se nota que falta: el
+                    desplegable. Antes el mecánico tenía que saber que abajo de todo
+                    había una tarjeta «Tus plantillas» (14-sep-2026). */}
+                {onArmarNuevo && (
+                    <button
+                        type="button"
+                        className="text-xs text-primary underline underline-offset-2"
+                        onClick={onArmarNuevo}
+                    >
+                        ¿No está el que querés? Armá uno nuevo contándolo con tus palabras
+                    </button>
                 )}
             </div>
 

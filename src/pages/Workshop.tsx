@@ -702,7 +702,8 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                                     }
                                     window.open('https://wa.me/' + cleanedPhone, '_blank');
                                 }}
-                                title="Contactar por WhatsApp"
+                                title="Abrir el chat con el cliente"
+                                aria-label="Abrir el chat de WhatsApp con el cliente"
                             >
                                 <MessageCircle className="h-5 w-5" />
                             </Button>
@@ -712,7 +713,12 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                         </Button>
                         {job.status !== 'delivered' && (
                             <>
-                                {WHATSAPP_CONFIGURADO && (
+                                {/* Solo cuando la bici YA está lista: el botón dice «avisar que
+                                    está lista» y manda el comprobante. Antes aparecía también en
+                                    las órdenes en curso, al lado del de Finalizar, y un toque de
+                                    más le avisaba al cliente que pasara a buscar una bici que
+                                    seguía desarmada (14-sep-2026). */}
+                                {WHATSAPP_CONFIGURADO && isReady && (
                                 <Button
                                     size="sm"
                                     variant="outline"

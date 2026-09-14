@@ -38,13 +38,20 @@ const NOMBRES_TOOL: Record<string, string> = {
     top_clientes: 'clientes por gasto',
     retencion_resumen: 'retención',
     bicis_paradas_resumen: 'bicis paradas',
+    mis_plantillas: 'tus plantillas',
+    crear_plantilla: 'plantillas',
+    armar_campana: 'campañas',
 };
 
+// Los dos últimos existen desde el 5-sep y nadie sabía que el chat los hacía:
+// una función que no se ofrece no existe (cuña del 28-ago).
 const EJEMPLOS = [
-    '¿Qué services tengo sin entregar?',
-    '¿Qué bicis tiene Juan?',
-    '¿Cuánto facturé este mes?',
-    '¿A quién se le vence la cadena?',
+    'Qué services tengo sin entregar?',
+    'Qué bicis tiene Juan?',
+    'Cuánto facturé este mes?',
+    'A quién se le vence la cadena?',
+    'Armame un mensaje para avisar que falta un repuesto',
+    'Armá una campaña para los que no vienen hace 6 meses',
 ];
 
 export default function PreguntaleTaller() {
@@ -91,7 +98,18 @@ export default function PreguntaleTaller() {
             created_at: new Date().toISOString(),
         }]);
         try {
-            const llamada = supabase.functions.invoke('preguntar-taller', { body: { pregunta } });
+            // 🔴 LA CHARLA DE ESTA SESIÓN VIAJA CON LA PREGUNTA (14-sep-2026). Antes
+            // cada pregunta llegaba sola, y la regla del chat «mostrale el texto de
+            // la plantilla y esperá que te diga que sí» no se podía cumplir: cuando
+            // el mecánico contestaba «sí, dale», el modelo ya no sabía de qué
+            // plantilla hablaban. Solo la última media hora: lo de ayer no es
+            // contexto, es ruido que lo confunde.
+            const desde = Date.now() - 30 * 60 * 1000;
+            const previas = historial
+                .filter(h => h.respuesta && Date.parse(h.created_at) >= desde)
+                .slice(-4)
+                .map(h => ({ pregunta: h.pregunta, respuesta: h.respuesta }));
+            const llamada = supabase.functions.invoke('preguntar-taller', { body: { pregunta, historial: previas } });
             const timeout = new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 90000));
             const { data, error } = await Promise.race([llamada, timeout]) as any;
             if (error) {

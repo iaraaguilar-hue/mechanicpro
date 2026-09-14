@@ -13,6 +13,20 @@
 // a alguien cuando ya hay un botón es peor que no tener el botón.
 //
 // ─────────────────────────────────────────────────────────────
+// 14-SEP-2026: SE ARMA HABLANDO, NO LLENANDO UN FORMULARIO.
+//
+// Iara: *"siento que la plantilla para crear mensajes es poco intuitiva (…) tal
+// vez si quiere el mecánico que directamente le diga a una IA qué es lo que quiere
+// y que la IA lo vaya viendo con él y lo vaya armando, deduciendo lo que quiere"*.
+//
+// El formulario pedía seis decisiones, y la mitad eran reglas de Meta que no son
+// de un taller: qué es un {{campo}}, por qué no puede ir al final, qué es
+// UTILITY. Ahora el camino por defecto es `ArmadorConIA`: el mecánico dice en
+// criollo qué le quiere decir al cliente y cuándo, ve CÓMO LE LLEGA, y lo ajusta
+// hablando ("más corto", "sacale el precio"). El formulario sigue (editarla a
+// mano), pero pasó a ser la salida y no la entrada.
+//
+// ─────────────────────────────────────────────────────────────
 // LAS TRES COSAS QUE ESTA PANTALLA TIENE QUE DEJAR CLARAS
 //
 // 1. QUE MANDARLA **ES** PEDIR LA APROBACIÓN. No hay un paso de "guardar" y otro
@@ -27,6 +41,7 @@
 //    principio ni al final, ni dos pegados. La validación corre mientras escribe y
 //    explica el porqué, en vez de dejar que Meta rechace un día después: cada
 //    rechazo es una revisión perdida y un mecánico que no entiende qué hizo mal.
+//    (Con la IA, esa validación corre ANTES de mostrarle el borrador.)
 // ─────────────────────────────────────────────────────────────
 
 import { useEffect, useRef, useState } from 'react';
@@ -39,7 +54,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import {
     Loader2, Plus, Save, X, FileText, Clock, CheckCircle2, XCircle, PauseCircle,
-    RefreshCw, Trash2, Pencil,
+    RefreshCw, Trash2, Pencil, Sparkles, Send, PlayCircle,
 } from 'lucide-react';
 import {
     CAMPOS, CAMPOS_VALIDOS, LARGO_MAXIMO, validarCuerpo, vistaPreviaDeCuerpo,
@@ -53,7 +68,7 @@ export type PlantillaDelTaller = {
     nombre_meta: string;
     cuerpo: string;
     variables: string[];
-    evento: 'service_finalizado' | 'bici_entregada' | 'cualquiera' | 'manual';
+    evento: 'service_finalizado' | 'bici_entregada' | 'dias_despues' | 'cualquiera' | 'manual';
     cuando_texto: string | null;
     lleva_pdf: boolean;
     categoria: 'UTILITY' | 'MARKETING';
@@ -62,14 +77,27 @@ export type PlantillaDelTaller = {
     enviada_at: string;
 };
 
-const CUANDO: Record<PlantillaDelTaller['evento'], string> = {
+export const CUANDO: Record<PlantillaDelTaller['evento'], string> = {
     service_finalizado: 'Sale sola cuando termina el service',
     bici_entregada: 'Sale sola cuando se entrega la bici',
+    // El motor la sabe mandar desde el 5-sep (aviso por tiempo); la lista de
+    // momentos de las plantillas propias no la tenía hasta el 14-sep.
+    dias_despues: 'Sale sola unos días después de que se llevó la bici',
     cualquiera: 'Sale sola en los dos momentos',
     // No hay disparador para esto todavía. Se dice así y no "sin configurar":
     // la plantilla funciona, lo que falta es que salga sola.
     manual: 'La mandás vos cuando quieras',
 };
+
+/** Cómo se manda una plantilla que no sale sola. El aviso desde la orden usa sus
+ *  dos plantillas fijas: el único camino para una propia es la campaña. */
+const AYUDA_MANUAL = 'Para mandarla, pedíselo a Preguntale («mandale esta a los que no vienen hace 6 meses») y aprobala en Retención → Campañas.';
+
+/** Solo estos momentos pueden llevar el PDF: el comprobante lo arma el navegador
+ *  al apretar Finalizar o Entregar. En el aviso por días (sale de un cron, a la
+ *  mañana) no hay navegador que lo genere. */
+const PUEDE_LLEVAR_PDF = (e: PlantillaDelTaller['evento']) =>
+    e === 'service_finalizado' || e === 'bici_entregada' || e === 'cualquiera';
 
 /**
  * Cómo se muestra cada estado.
@@ -132,6 +160,8 @@ type Borrador = {
     lleva_pdf: boolean;
     categoria: 'UTILITY' | 'MARKETING';
     estadoPrevio?: PlantillaDelTaller['estado'];
+    /** Vino del armador: el momento ya lo eligió él hablando, no hay que volver a preguntarlo. */
+    deLaIA?: boolean;
 };
 
 const EN_BLANCO: Borrador = {
@@ -139,16 +169,43 @@ const EN_BLANCO: Borrador = {
     lleva_pdf: false, categoria: 'UTILITY',
 };
 
-export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waListo }: {
+/** Lee el detalle de un error de Edge Function (viene en el cuerpo, no en `error.message`). */
+async function detalleDeError(data: any, error: any, porDefecto: string): Promise<string> {
+    return data?.detalle
+        ?? (await error?.context?.json?.().catch(() => null))?.detalle
+        ?? porDefecto;
+}
+
+export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waListo, enUso, onUsar, abrirCon }: {
     taller: TallerData;
     plantillas: PlantillaDelTaller[];
     recargar: () => Promise<void> | void;
     avisar: (tipo: 'ok' | 'error', msg: string) => void;
     waListo: boolean;
+    /** Los `nombre_meta` que ya usa algún aviso automático. */
+    enUso?: Set<string>;
+    /** Arma el aviso automático con esta plantilla ya elegida. */
+    onUsar?: (p: PlantillaDelTaller) => void;
+    /** Pedido de abrir el armador desde un momento («¿no está el que querés?»). `n` cambia en cada pedido. */
+    abrirCon?: { evento: PlantillaDelTaller['evento']; n: number } | null;
 }) {
     const [borrador, setBorrador] = useState<Borrador | null>(null);
+    const [armando, setArmando] = useState(false);
+    const [momentoDeEntrada, setMomentoDeEntrada] = useState<PlantillaDelTaller['evento'] | null>(null);
     const [mandando, setMandando] = useState(false);
     const [refrescando, setRefrescando] = useState(false);
+    const tarjetaRef = useRef<HTMLDivElement>(null);
+
+    // Entrar desde un momento concreto («Cuando termina el service → ¿no está el
+    // que querés?») abre el armador con ese momento ya dicho: el mecánico no
+    // tiene que repetir lo que la pantalla ya sabe.
+    useEffect(() => {
+        if (!abrirCon || !waListo) return;
+        setBorrador(null);
+        setMomentoDeEntrada(abrirCon.evento);
+        setArmando(true);
+        requestAnimationFrame(() => tarjetaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }, [abrirCon, waListo]);
 
     /** Le pregunta a Meta en qué quedó cada una. Ver la nota del botón, más abajo. */
     const refrescar = async () => {
@@ -161,41 +218,39 @@ export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waLi
         await recargar();
     };
 
-    const mandar = async () => {
-        if (!borrador) return;
-        if (borrador.titulo.trim().length < 3) return avisar('error', 'Ponele un nombre para reconocerla en tu lista.');
-        const problema = validarCuerpo(borrador.cuerpo);
+    const mandar = async (b: Borrador | null = borrador) => {
+        if (!b) return;
+        if (b.titulo.trim().length < 3) return avisar('error', 'Ponele un nombre para reconocerla en tu lista.');
+        const problema = validarCuerpo(b.cuerpo);
         if (problema) return avisar('error', problema);
 
         setMandando(true);
         const { data, error } = await supabase.functions.invoke('plantillas-taller', {
             body: {
-                accion: borrador.id ? 'corregir' : 'crear',
-                id: borrador.id,
-                titulo: borrador.titulo.trim(),
-                cuerpo: borrador.cuerpo.trim(),
-                cuando_texto: borrador.cuandoTexto.trim(),
-                evento: borrador.evento,
+                accion: b.id ? 'corregir' : 'crear',
+                id: b.id,
+                titulo: b.titulo.trim(),
+                cuerpo: b.cuerpo.trim(),
+                cuando_texto: b.cuandoTexto.trim(),
+                evento: b.evento,
                 // Lo que la IA entendió que le faltaría al sistema. Solo viaja
                 // cuando no hay disparador: es lo que se lee después en la bandeja.
-                resumen: borrador.evento === 'manual' ? (borrador.resumen ?? null) : null,
-                lleva_pdf: borrador.lleva_pdf,
-                categoria: borrador.categoria,
+                resumen: b.evento === 'manual' ? (b.resumen ?? null) : null,
+                lleva_pdf: b.lleva_pdf && PUEDE_LLEVAR_PDF(b.evento),
+                categoria: b.categoria,
             },
         });
         setMandando(false);
 
         // El detalle del error viene en el cuerpo de la respuesta, no en el mensaje
         // de `error` (que dice "Edge Function returned a non-2xx status code" y no
-        // le sirve a nadie). Hay que leerlo del context.
+        // le sirve a nadie).
         if (error || (data && data.error)) {
-            const detalle = data?.detalle
-                ?? (await (error as any)?.context?.json?.().catch(() => null))?.detalle
-                ?? 'No pudimos mandarla. Probá de nuevo.';
-            return avisar('error', detalle);
+            return avisar('error', await detalleDeError(data, error, 'No pudimos mandarla. Probá de nuevo.'));
         }
 
         setBorrador(null);
+        setArmando(false);
         await recargar();
         avisar('ok', 'Se la mandamos a Meta. Te avisamos acá cuando contesten, suele ser en menos de un día.');
     };
@@ -205,25 +260,23 @@ export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waLi
             body: { accion: 'archivar', id: p.id },
         });
         if (error || data?.error) {
-            const detalle = data?.detalle
-                ?? (await (error as any)?.context?.json?.().catch(() => null))?.detalle
-                ?? 'No se pudo sacar de la lista.';
-            return avisar('error', detalle);
+            return avisar('error', await detalleDeError(data, error, 'No se pudo sacar de la lista.'));
         }
         await recargar();
         avisar('ok', 'La sacamos de tu lista.');
     };
 
     return (
-        <Card>
+        <Card ref={tarjetaRef} className="scroll-mt-4" data-ajuste="plantillas">
             <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-3">
                     <div>
                         <CardTitle className="text-base">Tus plantillas</CardTitle>
                         <ComoFunciona className="mt-1">
                             <p>
-                                Si te falta un aviso que no está en la lista de arriba, escribilo acá y se lo
-                                mandamos a Meta al toque. Cuando lo aprueben te aparece para usar.
+                                Si te falta un aviso que no está en la lista de arriba, contá con tus palabras
+                                qué le querés decir al cliente y cuándo, y te lo armamos. Lo mandamos a Meta a
+                                aprobar y, cuando contesten, te aparece para usar.
                             </p>
                         </ComoFunciona>
                     </div>
@@ -241,15 +294,22 @@ export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waLi
             </CardHeader>
 
             <CardContent className="space-y-3">
-                {plantillas.length === 0 && !borrador && (
+                {plantillas.length === 0 && !borrador && !armando && (
                     <p className="text-sm text-muted-foreground italic">
-                        Todavía no pediste ninguna.
+                        Todavía no armaste ninguna.
                     </p>
                 )}
 
                 {plantillas.map((p) => {
                     const e = ESTADOS[p.estado];
                     const enRevision = p.estado === 'pendiente';
+                    // 🔴 APROBADA NO ES ANDANDO. Hasta el 14-sep la plantilla aprobada
+                    // quedaba en la lista con «ya podés elegirla arriba» y el mecánico
+                    // tenía que ir a buscar el aviso, abrirlo y elegirla de un
+                    // desplegable. El último paso es el que nadie hace: se le pone el
+                    // botón acá, donde la está mirando.
+                    const faltaPonerla = p.estado === 'aprobada' && p.evento !== 'manual'
+                        && !!onUsar && !(enUso?.has(p.nombre_meta));
                     return (
                         <div key={p.id} className="p-3 rounded-lg border border-slate-200 bg-white space-y-2">
                             <div className="flex items-start justify-between gap-3">
@@ -274,7 +334,7 @@ export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waLi
                                         )}
                                     </div>
                                     <p className="text-xs text-muted-foreground mt-1">
-                                        {CUANDO[p.evento]}
+                                        {CUANDO[p.evento] ?? CUANDO.manual}
                                         {/* Lo que escribió con sus palabras, si no coincide con
                                             la etiqueta. Es lo que le permite reconocer SU plantilla
                                             seis meses después, cuando "cuando se entrega la bici"
@@ -294,21 +354,39 @@ export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waLi
                                     <Button
                                         variant="ghost" size="sm" disabled={enRevision}
                                         title={enRevision ? 'Meta la está revisando: no deja editarla hasta que conteste' : 'Editar'}
-                                        onClick={() => setBorrador({
-                                            id: p.id, titulo: p.titulo, cuerpo: p.cuerpo, evento: p.evento,
-                                            cuandoTexto: p.cuando_texto ?? '',
-                                            lleva_pdf: p.lleva_pdf, categoria: p.categoria, estadoPrevio: p.estado,
-                                        })}
+                                        aria-label="Editar"
+                                        onClick={() => {
+                                            setArmando(false);
+                                            setBorrador({
+                                                id: p.id, titulo: p.titulo, cuerpo: p.cuerpo, evento: p.evento,
+                                                cuandoTexto: p.cuando_texto ?? '',
+                                                lleva_pdf: p.lleva_pdf, categoria: p.categoria, estadoPrevio: p.estado,
+                                            });
+                                        }}
                                     >
                                         <Pencil className="h-4 w-4" />
                                     </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => archivar(p)} aria-label="Sacar de la lista">
+                                    <Button variant="ghost" size="sm" onClick={() => archivar(p)} aria-label="Sacar de la lista" title="Sacar de la lista">
                                         <Trash2 className="h-4 w-4 text-red-500" />
                                     </Button>
                                 </div>
                             </div>
 
-                            <p className="text-xs text-muted-foreground">{e.ayuda}</p>
+                            {faltaPonerla ? (
+                                <div className="flex items-center justify-between gap-3 flex-wrap rounded-md bg-green-50 border border-green-200 px-3 py-2">
+                                    <span className="text-xs text-green-900">Meta la aprobó. Falta ponerla a andar.</span>
+                                    <Button size="sm" className="h-8" onClick={() => onUsar!(p)}>
+                                        <PlayCircle className="h-4 w-4 mr-1" /> Ponerla a andar
+                                    </Button>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-muted-foreground">
+                                    {/* Una manual aprobada NO aparece en ningún aviso automático:
+                                        decirle «elegila arriba» lo mandaba a buscar algo que no está.
+                                        Se manda por campaña (verificado el 14-sep-2026). */}
+                                    {p.estado === 'aprobada' && p.evento === 'manual' ? AYUDA_MANUAL : e.ayuda}
+                                </p>
+                            )}
                             {p.motivo && (
                                 <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
                                     <strong>Lo que dijo Meta:</strong> {p.motivo}
@@ -324,22 +402,296 @@ export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waLi
                         taller={taller}
                         mandando={mandando}
                         onCambio={setBorrador}
-                        onMandar={mandar}
+                        onMandar={() => mandar()}
                         onCancelar={() => setBorrador(null)}
+                    />
+                ) : armando ? (
+                    <ArmadorConIA
+                        taller={taller}
+                        mandando={mandando}
+                        momentoDeEntrada={momentoDeEntrada}
+                        onMandar={(b) => mandar(b)}
+                        onAMano={(b) => { setArmando(false); setBorrador(b); }}
+                        onCancelar={() => { setArmando(false); setMomentoDeEntrada(null); }}
                     />
                 ) : (
                     <Button
-                        variant="outline" size="sm" disabled={!waListo}
+                        size="sm" disabled={!waListo}
                         title={waListo ? undefined : 'Conectá tu WhatsApp primero: la plantilla se crea en tu propia cuenta'}
-                        onClick={() => setBorrador({ ...EN_BLANCO })}
+                        onClick={() => { setMomentoDeEntrada(null); setArmando(true); }}
                     >
-                        <Plus className="h-4 w-4 mr-1" /> Pedir una plantilla nueva
+                        <Sparkles className="h-4 w-4 mr-1" /> Armar un mensaje nuevo
                     </Button>
                 )}
             </CardContent>
         </Card>
     );
 }
+
+// ═════════════════════════════════════════════════════════════
+// EL ARMADOR — el mecánico dice qué quiere, la IA lo arma y lo van ajustando.
+// ═════════════════════════════════════════════════════════════
+
+type Turno = { de: 'mecanico' | 'ia'; texto: string };
+
+/** Ejemplos para arrancar. Son los pedidos que más se repiten en un taller, no
+ *  un catálogo: el que tiene algo distinto lo escribe. */
+const EJEMPLOS_DE_PEDIDO = [
+    'Cuando la termino, avisarle que está lista y mandarle el comprobante',
+    'A los 15 días, preguntarle cómo anda la bici',
+    'Avisarle que estamos esperando un repuesto y va a demorar',
+    'Cuando la retira, agradecerle y dejarle el comprobante',
+];
+
+function ArmadorConIA({ taller, mandando, momentoDeEntrada, onMandar, onAMano, onCancelar }: {
+    taller: TallerData;
+    mandando: boolean;
+    momentoDeEntrada: PlantillaDelTaller['evento'] | null;
+    onMandar: (b: Borrador) => void;
+    onAMano: (b: Borrador) => void;
+    onCancelar: () => void;
+}) {
+    const [pedido, setPedido] = useState('');
+    const [charla, setCharla] = useState<Turno[]>([]);
+    const [borrador, setBorrador] = useState<Borrador | null>(null);
+    const [pregunta, setPregunta] = useState<string | null>(null);
+    const [problema, setProblema] = useState<string | null>(null);
+    const [pensando, setPensando] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const campoRef = useRef<HTMLTextAreaElement>(null);
+    const finRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => { campoRef.current?.focus(); }, []);
+    useEffect(() => { finRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, [charla, pensando]);
+
+    const pedir = async (texto?: string) => {
+        const t = (texto ?? pedido).trim();
+        if (t.length < 3 || pensando) return;
+        const antes = charla;
+        setCharla([...antes, { de: 'mecanico', texto: t }]);
+        setPedido('');
+        setError(null);
+        setPensando(true);
+
+        const { data, error: e } = await supabase.functions.invoke('plantillas-taller', {
+            body: {
+                accion: 'redactar',
+                pedido: t,
+                historial: antes,
+                evento_sugerido: momentoDeEntrada,
+                borrador: borrador ? {
+                    titulo: borrador.titulo, cuando_texto: borrador.cuandoTexto, evento: borrador.evento,
+                    categoria: borrador.categoria, lleva_pdf: borrador.lleva_pdf, cuerpo: borrador.cuerpo,
+                } : null,
+            },
+        });
+        setPensando(false);
+
+        if (e || !data?.ok) {
+            // Se devuelve lo que escribió al campo: tener que tipearlo de nuevo
+            // porque falló la red es la forma más rápida de que abandone.
+            setCharla(antes);
+            setPedido(t);
+            setError(await detalleDeError(data, e, 'No pudimos armarla ahora. Probá de nuevo, o escribila a mano.'));
+            return;
+        }
+
+        const b = data.borrador;
+        setBorrador({
+            titulo: b.titulo, cuerpo: b.cuerpo, cuandoTexto: b.cuando_texto ?? '', evento: b.evento,
+            resumen: b.resumen ?? null, lleva_pdf: !!b.lleva_pdf, categoria: b.categoria, deLaIA: true,
+        });
+        setPregunta(data.pregunta ?? null);
+        setProblema(data.problema ?? null);
+        setCharla([...antes, { de: 'mecanico', texto: t }, { de: 'ia', texto: data.respuesta || 'Listo, mirá cómo le llega.' }]);
+    };
+
+    const previa = borrador ? vistaPreviaDeCuerpo(borrador.cuerpo, {
+        taller: taller.nombre,
+        firma: taller.firma_nombre || undefined,
+    }) : '';
+    const avisosDeCampos = borrador ? [...new Set(
+        camposDelCuerpo(borrador.cuerpo)
+            .map((c) => CAMPOS[c as Campo]?.siFalta)
+            .filter(Boolean) as string[],
+    )] : [];
+
+    // Los ajustes de un toque. Cambian según el borrador: ofrecer «sacale el
+    // precio» a un mensaje que no tiene precio es un botón que no hace nada.
+    const ajustes = borrador ? [
+        'Más corto',
+        'Más cercano',
+        borrador.cuerpo.includes('{{total}}') ? 'Sacale el precio' : 'Que diga cuánto salió',
+        PUEDE_LLEVAR_PDF(borrador.evento)
+            ? (borrador.lleva_pdf ? 'Sin el comprobante' : 'Que lleve el comprobante')
+            : null,
+    ].filter(Boolean) as string[] : [];
+
+    return (
+        <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-4 space-y-3" data-armador>
+            <div className="flex items-start gap-2">
+                <Sparkles className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                <div>
+                    <p className="font-semibold text-sm">Contame qué le querés decir al cliente, y cuándo</p>
+                    <p className="text-xs text-muted-foreground">Lo armo y lo vas viendo. Si algo no te gusta, decímelo.</p>
+                </div>
+            </div>
+
+            {momentoDeEntrada && !borrador && (
+                <p className="text-xs text-slate-700 flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5" /> Para el momento: {CUANDO[momentoDeEntrada].replace('Sale sola ', '')}.
+                </p>
+            )}
+
+            {charla.length > 0 && (
+                <div className="space-y-2">
+                    {charla.map((t, i) => (
+                        <div key={i} className={`flex ${t.de === 'mecanico' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={t.de === 'mecanico'
+                                ? 'bg-primary text-primary-foreground rounded-2xl rounded-br-sm px-3 py-2 text-sm max-w-[85%]'
+                                : 'bg-white border border-slate-200 rounded-2xl rounded-bl-sm px-3 py-2 text-sm max-w-[85%]'}
+                            >
+                                {t.texto}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {borrador && (
+                <div className="rounded-lg bg-white border border-slate-200 p-3 space-y-3">
+                    <div className="space-y-1.5">
+                        <Label className="text-xs">Así le llega</Label>
+                        <div className="rounded-lg bg-[#dcf8c6] p-3 text-sm text-slate-800 whitespace-pre-wrap">
+                            {borrador.lleva_pdf && (
+                                <div className="flex items-center gap-2 mb-2 pb-2 border-b border-black/10 text-xs text-slate-600">
+                                    <FileText className="h-4 w-4" /> Comprobante de service.pdf
+                                </div>
+                            )}
+                            {previa}
+                        </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 text-[11px]">
+                        <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                            <Clock className="h-3 w-3" /> {CUANDO[borrador.evento] ?? CUANDO.manual}
+                        </span>
+                        {borrador.lleva_pdf && (
+                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                                <FileText className="h-3 w-3" /> con el comprobante
+                            </span>
+                        )}
+                        {borrador.categoria === 'MARKETING' && (
+                            <span className="bg-purple-50 text-purple-700 border border-purple-200 px-2 py-0.5 rounded">
+                                Meta la cobra como publicidad
+                            </span>
+                        )}
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <Label htmlFor="titulo-armador" className="text-xs text-muted-foreground font-normal">En tu lista se llama</Label>
+                        <Input
+                            id="titulo-armador"
+                            value={borrador.titulo}
+                            onChange={(ev) => setBorrador({ ...borrador, titulo: ev.target.value })}
+                            className="h-8 text-sm flex-1 min-w-[160px]"
+                        />
+                    </div>
+
+                    {borrador.evento === 'dias_despues' && (
+                        <p className="text-xs text-muted-foreground">Cuántos días después, lo elegís cuando la pongas a andar.</p>
+                    )}
+                    {borrador.evento === 'manual' && (
+                        <p className="text-xs text-muted-foreground">No sale sola. {AYUDA_MANUAL}</p>
+                    )}
+                    {avisosDeCampos.length > 0 && (
+                        <div className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded p-2 space-y-1">
+                            {avisosDeCampos.map((a) => <p key={a}>{a}</p>)}
+                        </div>
+                    )}
+                    {pregunta && (
+                        <p className="text-sm text-sky-900 bg-sky-50 border border-sky-200 rounded p-2">{pregunta}</p>
+                    )}
+                    {problema && (
+                        <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
+                            Así Meta la rechazaría: {problema} Pedime que lo arregle, o editala a mano.
+                        </p>
+                    )}
+                </div>
+            )}
+
+            <div className="flex flex-wrap gap-1.5">
+                {(borrador ? ajustes : EJEMPLOS_DE_PEDIDO).map((a) => (
+                    <button
+                        key={a} type="button" disabled={pensando}
+                        onClick={() => pedir(a)}
+                        className="text-xs border border-slate-300 bg-white rounded-full px-3 py-1.5 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                        {a}
+                    </button>
+                ))}
+            </div>
+
+            <div className="flex gap-2 items-end">
+                <textarea
+                    ref={campoRef}
+                    rows={2}
+                    className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
+                    value={pedido}
+                    disabled={pensando}
+                    onChange={(ev) => setPedido(ev.target.value)}
+                    onKeyDown={(ev) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); void pedir(); } }}
+                    placeholder={borrador
+                        ? 'Decime qué le cambiarías. Ej: que firme Leandro, o que diga que abrimos hasta las 19'
+                        : 'Ej: cuando la termino, avisarle que está lista y que la puede pasar a buscar hasta las 19'}
+                    aria-label="Qué querés que diga el mensaje"
+                />
+                <Button type="button" onClick={() => pedir()} disabled={pensando || pedido.trim().length < 3} aria-label="Mandar">
+                    {pensando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+            </div>
+            {pensando && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <Loader2 className="h-3 w-3 animate-spin" /> {borrador ? 'Cambiándolo…' : 'Armándolo…'}
+                </p>
+            )}
+            {error && <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">{error}</p>}
+
+            <div className="flex gap-2 items-center flex-wrap pt-2 border-t border-primary/20">
+                {borrador && (
+                    <Button onClick={() => onMandar(borrador)} disabled={mandando || pensando || !!problema} size="sm">
+                        {mandando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+                        Mandarla a aprobar
+                    </Button>
+                )}
+                <Button
+                    variant="ghost" size="sm"
+                    onClick={() => onAMano(borrador ?? {
+                        ...EN_BLANCO,
+                        evento: momentoDeEntrada ?? 'manual',
+                        deLaIA: !!momentoDeEntrada,
+                    })}
+                >
+                    <Pencil className="h-4 w-4 mr-1" /> {borrador ? 'Editarla a mano' : 'Prefiero escribirla yo'}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={onCancelar}>
+                    <X className="h-4 w-4 mr-1" /> Cancelar
+                </Button>
+                {borrador && (
+                    <span className="text-xs text-muted-foreground">
+                        Al apretar se la mandamos a Meta y queda en revisión. No hay otro paso.
+                    </span>
+                )}
+            </div>
+            <div ref={finRef} />
+        </div>
+    );
+}
+
+// ═════════════════════════════════════════════════════════════
+// EL FORMULARIO — la salida a mano. Lo usan el que prefiere escribir, y el que
+// quiere retocar a mano lo que armó la IA.
+// ═════════════════════════════════════════════════════════════
 
 function EditorDePlantilla({ borrador, taller, mandando, onCambio, onMandar, onCancelar }: {
     borrador: Borrador; taller: TallerData; mandando: boolean;
@@ -351,7 +703,8 @@ function EditorDePlantilla({ borrador, taller, mandando, onCambio, onMandar, onC
     // ── Lo que la IA leyó del «cuándo».
     const [lectura, setLectura] = useState<{ evento: Borrador['evento'] | null; pregunta?: string | null; resumen?: string | null } | null>(null);
     const [interpretando, setInterpretando] = useState(false);
-    const [confirmado, setConfirmado] = useState(!!borrador.id);
+    // Si viene del armador, el momento ya lo dijo hablando: no se le vuelve a preguntar.
+    const [confirmado, setConfirmado] = useState(!!borrador.id || !!borrador.deLaIA);
     const [aMano, setAMano] = useState(false);
     // Contra qué texto se interpretó la última vez. Sin esto, cada vez que el
     // mecánico toca el campo y sale sin cambiar nada se paga otra llamada.
@@ -521,9 +874,12 @@ function EditorDePlantilla({ borrador, taller, mandando, onCambio, onMandar, onC
                     </div>
                 )}
 
-                {confirmado && borrador.evento !== 'manual' && (
+                {confirmado && borrador.evento !== 'manual' && !aMano && (
                     <p className="text-xs text-green-800 flex items-center gap-1.5">
                         <CheckCircle2 className="h-3.5 w-3.5" /> {CUANDO[borrador.evento]}.
+                        <button type="button" className="underline underline-offset-2 text-muted-foreground" onClick={() => setAMano(true)}>
+                            Cambiar
+                        </button>
                     </p>
                 )}
 
@@ -533,15 +889,20 @@ function EditorDePlantilla({ borrador, taller, mandando, onCambio, onMandar, onC
                     <select
                         className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
                         value={borrador.evento}
-                        onChange={(e) => { onCambio({ ...borrador, evento: e.target.value as Borrador['evento'] }); setConfirmado(true); }}
+                        onChange={(e) => {
+                            const evento = e.target.value as Borrador['evento'];
+                            onCambio({ ...borrador, evento, lleva_pdf: borrador.lleva_pdf && PUEDE_LLEVAR_PDF(evento) });
+                            setConfirmado(true);
+                        }}
                     >
                         <option value="manual">La mando yo cuando quiera</option>
                         <option value="service_finalizado">Sola, cuando termina el service</option>
                         <option value="bici_entregada">Sola, cuando se entrega la bici</option>
                         <option value="cualquiera">Sola, en los dos momentos</option>
+                        <option value="dias_despues">Sola, unos días después de que se la llevó</option>
                     </select>
                 )}
-                {!aMano && !lectura && !interpretando && (
+                {!aMano && !lectura && !interpretando && !confirmado && (
                     <button
                         type="button"
                         className="text-xs text-muted-foreground underline underline-offset-2"
@@ -656,19 +1017,23 @@ function EditorDePlantilla({ borrador, taller, mandando, onCambio, onMandar, onC
                 </p>
             </div>
 
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <Switch
-                    checked={borrador.lleva_pdf}
-                    onCheckedChange={(v) => onCambio({ ...borrador, lleva_pdf: v })}
-                />
-                Que pueda llevar el comprobante en PDF
-            </label>
-            {/* 🔴 El encabezado se declara AL CREAR o no existe nunca. Una plantilla
-                aprobada sin él no puede llevar el PDF y no hay forma de agregárselo
-                después: hay que crear otra. Por eso se avisa acá y no en el error. */}
-            <p className="text-xs text-muted-foreground -mt-2">
-                Decidilo ahora: esto no se puede agregar después de que Meta la apruebe.
-            </p>
+            {PUEDE_LLEVAR_PDF(borrador.evento) && (
+                <>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <Switch
+                            checked={borrador.lleva_pdf}
+                            onCheckedChange={(v) => onCambio({ ...borrador, lleva_pdf: v })}
+                        />
+                        Que pueda llevar el comprobante en PDF
+                    </label>
+                    {/* 🔴 El encabezado se declara AL CREAR o no existe nunca. Una plantilla
+                        aprobada sin él no puede llevar el PDF y no hay forma de agregárselo
+                        después: hay que crear otra. Por eso se avisa acá y no en el error. */}
+                    <p className="text-xs text-muted-foreground -mt-2">
+                        Decidilo ahora: esto no se puede agregar después de que Meta la apruebe.
+                    </p>
+                </>
+            )}
 
             {borrador.cuerpo.trim() && !problema && (
                 <div className="space-y-1.5">

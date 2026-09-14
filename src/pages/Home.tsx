@@ -11,6 +11,7 @@ import { Search, PlusCircle, Trash2, Clock, CheckCircle, ChevronDown, ChevronUp,
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/authStore";
+import { diaCalendario } from "@/lib/fechaAR";
 
 export default function Home() {
     const [searchTerm, setSearchTerm] = useState("");
@@ -231,7 +232,7 @@ export default function Home() {
                                                     {bike.next_due_date ? (
                                                         <div className="bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full text-[10px] font-medium flex items-center gap-1">
                                                             <Clock size={10} />
-                                                            {bike.next_due_component}: {new Date(bike.next_due_date).toLocaleDateString()}
+                                                            {bike.next_due_component}: {diaCalendario(bike.next_due_date)}
                                                         </div>
                                                     ) : (
                                                         <div className="bg-slate-50 text-slate-500 border border-slate-100 px-2 py-0.5 rounded-full text-[10px] font-medium flex items-center gap-1">

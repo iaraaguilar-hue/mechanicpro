@@ -305,8 +305,11 @@ export default function BicisParadas() {
                                                 </span>
                                             )}
                                         </div>
-                                        <p className="text-sm mt-1">{m.argumento}</p>
-                                        <p className="text-[11px] text-muted-foreground mt-1">
+                                        {/* `data-contenido`: la razón de cada candidato ES lo que se
+                                            viene a leer a esta pantalla, no una ayuda que se pliega. El
+                                            candado de lectura no la cuenta como prosa (14-sep-2026). */}
+                                        <p className="text-sm mt-1" data-contenido>{m.argumento}</p>
+                                        <p className="text-[11px] text-muted-foreground mt-1" data-contenido>
                                             Se apoya en: {m.dato_usado}
                                         </p>
                                     </div>

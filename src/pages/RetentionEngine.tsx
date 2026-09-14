@@ -16,6 +16,7 @@ import { tieneFeature } from "@/lib/planFeatures";
 import PanelRetorno from "@/components/PanelRetorno";
 import BandejaRespuestas from "@/components/BandejaRespuestas";
 import { ComoFunciona } from '@/components/ComoFunciona';
+import { diaCalendario } from '@/lib/fechaAR';
 
 // Acceso rápido al perfil del cliente desde la alerta: si tenemos la bici,
 // abrimos esa bici (el perfil muestra igual al cliente con TODAS sus bicis en
@@ -334,14 +335,16 @@ export default function RetentionEngine() {
                                 {upcomingAlerts.map((alert) => (
                                     <TableRow key={alert.id}>
                                         <TableCell className="font-medium">
-                                            {alert.isPreCarrera
-                                                ? alert.dueDate.split('-').reverse().join('/')
-                                                : new Date(alert.dueDate).toLocaleDateString()
-                                            }
+                                            {/* 🔴 Un vencimiento es un DÍA DE CALENDARIO ('2026-09-14'):
+                                                `new Date(x).toLocaleDateString()` lo leía como medianoche UTC
+                                                y en Argentina lo mostraba un día antes, en formato yanqui
+                                                (9/13/2026), mezclado en la misma columna con las carreras
+                                                (11/10/2026). Ver lib/fechaAR.ts. */}
+                                            {diaCalendario(alert.dueDate)}
                                         </TableCell>
                                         <TableCell>
                                             <Badge variant="outline" className={`border ${alert.isPreCarrera ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                                                {alert.daysRemaining} días
+                                                {alert.daysRemaining} {alert.daysRemaining === 1 ? 'día' : 'días'}
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="font-semibold">
@@ -641,8 +644,8 @@ function AlertCard({ alert }: { alert: RetentionAlert }) {
                     <div className={`font-semibold ${alert.isPostCarrera ? 'text-violet-700' : 'text-red-700'}`}>{alert.component}</div>
                     <div className={`text-xs mt-1 ${alert.isPostCarrera ? 'text-violet-500' : 'text-red-500'}`}>
                         {alert.isPostCarrera
-                            ? `Fue el ${alert.dueDate.split('-').reverse().join('/')}`
-                            : `Venció el ${new Date(alert.dueDate).toLocaleDateString()}`
+                            ? `Fue el ${diaCalendario(alert.dueDate)}`
+                            : `Venció el ${diaCalendario(alert.dueDate)}`
                         }
                     </div>
                     {/* Idea 5: si la fecha salió del historial de ESE ciclista, se

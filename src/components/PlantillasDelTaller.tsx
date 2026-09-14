@@ -68,7 +68,7 @@ export type PlantillaDelTaller = {
     nombre_meta: string;
     cuerpo: string;
     variables: string[];
-    evento: 'service_finalizado' | 'bici_entregada' | 'dias_despues' | 'cualquiera' | 'manual';
+    evento: 'service_finalizado' | 'bici_entregada' | 'dias_despues' | 'cualquiera' | 'manual' | 'durante_service';
     cuando_texto: string | null;
     lleva_pdf: boolean;
     categoria: 'UTILITY' | 'MARKETING';
@@ -87,11 +87,14 @@ export const CUANDO: Record<PlantillaDelTaller['evento'], string> = {
     // No hay disparador para esto todavía. Se dice así y no "sin configurar":
     // la plantilla funciona, lo que falta es que salga sola.
     manual: 'La mandás vos cuando quieras',
+    // 14-sep-2026 (Leira): "para mandarles mensaje mientras están haciendo el service".
+    durante_service: 'La mandás vos desde la orden, mientras la bici está en el taller',
 };
 
-/** Cómo se manda una plantilla que no sale sola. El aviso desde la orden usa sus
- *  dos plantillas fijas: el único camino para una propia es la campaña. */
-const AYUDA_MANUAL = 'Para mandarla, pedíselo a Preguntale («mandale esta a los que no vienen hace 6 meses») y aprobala en Retención → Campañas.';
+/** Cómo se manda una plantilla que no sale sola. Desde el 14-sep-2026 también
+ *  desde la orden («Avisarle al cliente» → «Un mensaje tuyo»). */
+const AYUDA_MANUAL = 'Se manda desde la orden ("Avisarle al cliente" → "Un mensaje tuyo") o en una campaña: pedíselo a Preguntale y aprobala en Retención → Campañas.';
+const AYUDA_DURANTE = 'Se manda desde la orden: abrí la bici en el Taller Activo → "Avisarle al cliente" → "Un mensaje tuyo".';
 
 /** Solo estos momentos pueden llevar el PDF: el comprobante lo arma el navegador
  *  al apretar Finalizar o Entregar. En el aviso por días (sale de un cron, a la
@@ -308,7 +311,7 @@ export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waLi
                     // tenía que ir a buscar el aviso, abrirlo y elegirla de un
                     // desplegable. El último paso es el que nadie hace: se le pone el
                     // botón acá, donde la está mirando.
-                    const faltaPonerla = p.estado === 'aprobada' && p.evento !== 'manual'
+                    const faltaPonerla = p.estado === 'aprobada' && p.evento !== 'manual' && p.evento !== 'durante_service'
                         && !!onUsar && !(enUso?.has(p.nombre_meta));
                     return (
                         <div key={p.id} className="p-3 rounded-lg border border-slate-200 bg-white space-y-2">
@@ -340,7 +343,7 @@ export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waLi
                                             seis meses después, cuando "cuando se entrega la bici"
                                             ya no le dice nada. */}
                                         {p.cuando_texto && (
-                                            <span className="italic"> · «{p.cuando_texto}»</span>
+                                            <span className="italic"> · "{p.cuando_texto}"</span>
                                         )}
                                     </p>
                                     <p className="text-xs text-slate-600 mt-1 line-clamp-2">
@@ -382,9 +385,11 @@ export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waLi
                             ) : (
                                 <p className="text-xs text-muted-foreground">
                                     {/* Una manual aprobada NO aparece en ningún aviso automático:
-                                        decirle «elegila arriba» lo mandaba a buscar algo que no está.
+                                        decirle "elegila arriba" lo mandaba a buscar algo que no está.
                                         Se manda por campaña (verificado el 14-sep-2026). */}
-                                    {p.estado === 'aprobada' && p.evento === 'manual' ? AYUDA_MANUAL : e.ayuda}
+                                    {p.estado === 'aprobada' && p.evento === 'manual' ? AYUDA_MANUAL
+                                        : p.estado === 'aprobada' && p.evento === 'durante_service' ? AYUDA_DURANTE
+                                        : e.ayuda}
                                 </p>
                             )}
                             {p.motivo && (
@@ -896,6 +901,7 @@ function EditorDePlantilla({ borrador, taller, mandando, onCambio, onMandar, onC
                         }}
                     >
                         <option value="manual">La mando yo cuando quiera</option>
+                        <option value="durante_service">La mando yo desde la orden, mientras la arreglo</option>
                         <option value="service_finalizado">Sola, cuando termina el service</option>
                         <option value="bici_entregada">Sola, cuando se entrega la bici</option>
                         <option value="cualquiera">Sola, en los dos momentos</option>
@@ -982,7 +988,7 @@ function EditorDePlantilla({ borrador, taller, mandando, onCambio, onMandar, onC
 
                 {/* 🔴 Lo que pasa si el dato no está cargado, dicho ANTES y solo de los
                     campos que se usaron. Medido contra las 352 órdenes reales de
-                    Probikes: «lo que se hizo» está vacío en el 89% de las órdenes, así
+                    Probikes: "lo que se hizo" está vacío en el 89% de las órdenes, así
                     que ofrecerlo callado es regalar un aviso que falla 9 de cada 10
                     veces y que nadie sabe por qué no salió. */}
                 {avisosDeCampos.length > 0 && (

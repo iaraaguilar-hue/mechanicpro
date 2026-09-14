@@ -115,7 +115,7 @@ export interface OrdenDictada {
 
 export interface EnvioWhatsAppInput {
     /** 'consulta' y 'avance' son los dos avisos que salen desde adentro de la orden (8-sep-2026). */
-    proposito: 'retencion' | 'comprobante' | 'evento' | 'consulta' | 'avance';
+    proposito: 'retencion' | 'comprobante' | 'evento' | 'consulta' | 'avance' | 'mensaje_propio';
     /**
      * 'texto' = mensaje libre, SOLO válido dentro de las 24hs desde que el
      * cliente escribió. Fuera de esa ventana Meta únicamente acepta
@@ -128,6 +128,10 @@ export interface EnvioWhatsAppInput {
     plantilla?: string;
     destino: string;
     parametros?: string[];
+    /** Mensaje propio desde la orden (14-sep-2026): lo que escribió el mecánico, que va
+     *  en {{nota}}, y quién firma. El resto de los datos lo completa el servidor. */
+    nota?: string;
+    firma?: string;
     cliente_id?: string | null;
     bicicleta_id?: string | null;
     servicio_id?: string | null;
@@ -167,6 +171,8 @@ export interface SupabaseService {
     bicicleta_id: string;
     /** Quién hizo el trabajo. Se elige al finalizar, si el taller lo tiene prendido. */
     mecanico_id?: string | null;
+    /** Si trajo SOLO una pieza de su bici (rueda, tija…). NULL = la bici entera. 14-sep-2026. */
+    pieza?: string | null;
     numero_orden?: number;
     fecha_ingreso?: string;
     estado?: string;

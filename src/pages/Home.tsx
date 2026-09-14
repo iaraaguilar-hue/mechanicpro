@@ -102,7 +102,7 @@ export default function Home() {
             <div className="flex flex-col md:flex-row justify-between items-center gap-6 pb-2">
                 {/* Era la única pantalla sin su nombre arriba: mostraba el logo del
                     taller (que ya está en el menú lateral) y el título real quedaba más
-                    abajo, como «Base de Datos de Flota y Clientes». Ahora se llama como en
+                    abajo, como "Base de Datos de Flota y Clientes". Ahora se llama como en
                     el menú, igual que las demás (14-sep-2026). */}
                 <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3 self-start md:self-center">
                     <Users className="h-8 w-8 text-primary" />

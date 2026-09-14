@@ -244,7 +244,7 @@ export function VentaDeMostrador({ open, onClose }: Props) {
                             ))}
                             {(conAjuste || conPrimer) && (
                                 <p className="text-[11px] text-muted-foreground leading-snug">
-                                    Así le llega: «{comoLeLlegaPostventa(conPrimer ? cfg.textoPrimerService : cfg.textoAjuste, taller?.nombre ?? '', clienteParaMostrar, biciParaMostrar)}»
+                                    Así le llega: "{comoLeLlegaPostventa(conPrimer ? cfg.textoPrimerService : cfg.textoAjuste, taller?.nombre ?? '', clienteParaMostrar, biciParaMostrar)}"
                                 </p>
                             )}
                         </section>

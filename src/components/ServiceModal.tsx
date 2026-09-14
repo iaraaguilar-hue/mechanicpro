@@ -21,6 +21,7 @@ import { EditBikeDialog } from "@/components/EditBikeDialog";
 import { TareasServiceEditor } from "@/components/TareasServiceEditor";
 import { BuscadorProducto } from "@/components/BuscadorProducto";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
+import { PIEZAS_COMUNES, piezaEnFrase } from "@/lib/piezaSuelta";
 import AvisoAlCliente from "@/components/AvisoAlCliente";
 import { NuevoBadge } from "@/components/NuevoBadge";
 import { type TareaService } from "@/lib/planFeatures";
@@ -460,6 +461,10 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
     const verDiagnostico = !!serviceId && (momentoDiag === 'durante' || momentoDiag === 'ambos');
 
 
+    // Qué trajo: la bici entera ('') o solo una pieza (Leira, 14-sep-2026).
+    const [pieza, setPieza] = useState('');
+    const [piezaOtra, setPiezaOtra] = useState(false);
+
     // Fetch config and existing services
     useEffect(() => {
         const fetchCatalogo = async () => {
@@ -510,6 +515,9 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
 
         setSelectedCarreraId(existing.carrera_id || null);
         setTareasExtra((existing.tareas_extra as any) || []);
+        const piezaGuardada = (existing.pieza ?? '').trim();
+        setPieza(piezaGuardada);
+        setPiezaOtra(!!piezaGuardada && !PIEZAS_COMUNES.some(p => p.valor === piezaGuardada));
     }, [serviceId, servicios]);
 
     // Pre-selects the first catalog item ONLY when creating a new service (not editing).
@@ -637,6 +645,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                     fecha_entrega: fechaEntrega || null,
                     carrera_id: selectedCarreraId || null,
                     tareas_extra: tareasExtra,
+                    pieza: pieza.trim() || null,
                 });
                 // Diagnóstico durante el service → crea recordatorios de Retención
                 // (mismo formato que al finalizar). Solo si la preferencia lo permite.
@@ -672,6 +681,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                     fecha_entrega: fechaEntrega || null,
                     carrera_id: selectedCarreraId || null,
                     tareas_extra: tareasExtra,
+                    pieza: pieza.trim() || null,
                 });
                 setSuccessMessage(`Servicio ${formatOrdenNumber(created.numero_orden, created.id)} creado con éxito.`);
             }
@@ -747,6 +757,9 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                             )}
                         </p>
                         <p className="font-bold">{[biciMostrada?.marca, biciMostrada?.modelo].filter(Boolean).join(' ')}</p>
+                        {pieza.trim() && (
+                            <p className="text-xs font-semibold text-amber-800 mt-0.5">Trajo solo {piezaEnFrase(pieza)}</p>
+                        )}
                     </div>
                     {!serviceId && <Button variant="ghost" size="sm" onClick={onBack} className="hover:bg-primary/10 text-primary">Cambiar Bici</Button>}
                 </div>
@@ -760,6 +773,53 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                     bici={[bike?.marca, bike?.modelo].filter(Boolean).join(' ') || undefined}
                     onAplicar={aplicarDictado}
                 />
+
+                {/* Leira, 14-sep-2026: «si un cliente solo trae una rueda, que se sepa que
+                    le trajo la rueda sola, aunque se sepa que ese cliente tiene una bici".
+                    La orden sigue siendo de su bici (la pieza es de esa bici). */}
+                <div>
+                    <Label className="text-lg font-semibold mb-2 block">Qué trajo</Label>
+                    <div className="flex flex-wrap gap-2">
+                        {[{ valor: '', etiqueta: 'La bici entera' }, ...PIEZAS_COMUNES].map(o => {
+                            const activo = !piezaOtra && pieza === o.valor;
+                            return (
+                                <button
+                                    key={o.valor || 'entera'}
+                                    type="button"
+                                    onClick={() => { setPiezaOtra(false); setPieza(o.valor); }}
+                                    className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${activo
+                                        ? 'bg-primary text-primary-foreground border-primary'
+                                        : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
+                                >
+                                    {o.etiqueta}
+                                </button>
+                            );
+                        })}
+                        <button
+                            type="button"
+                            onClick={() => { setPiezaOtra(true); if (PIEZAS_COMUNES.some(p => p.valor === pieza)) setPieza(''); }}
+                            className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${piezaOtra
+                                ? 'bg-primary text-primary-foreground border-primary'
+                                : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
+                        >
+                            Otra pieza
+                        </button>
+                    </div>
+                    {piezaOtra && (
+                        <Input
+                            value={pieza}
+                            onChange={e => setPieza(e.target.value.toLowerCase())}
+                            placeholder="Qué pieza. Ej: manubrio"
+                            className="mt-2 max-w-xs"
+                        />
+                    )}
+                    {pieza.trim() && (
+                        <p className="text-xs text-muted-foreground mt-1.5">
+                            Queda anotado que trajo solo {piezaEnFrase(pieza)}
+                            {biciMostrada ? `, de su ${[biciMostrada.marca, biciMostrada.modelo].filter(Boolean).join(' ')}` : ''}.
+                        </p>
+                    )}
+                </div>
 
                 <div data-tour="service-tipo">
                     <Label className="text-lg font-semibold mb-3 block">Tipo de Service</Label>

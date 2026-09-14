@@ -610,7 +610,7 @@ export default function Metrics() {
             {/* Lo primero del Expert: cuánto tiene que vender para no perder
                 plata. Va arriba de todo porque es LA pregunta del dueño, no una
                 métrica más (pedido de Iara, 10-sep-2026). Solo Expert: es lo que
-                la web vende como «BI avanzado». */}
+                la web vende como "BI avanzado". */}
             <PuntoDeEquilibrio stats={stats} dateStart={dateStart} dateEnd={dateEnd} />
             <PanelSugerencias />
             {taller?.config_mecanicos?.habilitado && (

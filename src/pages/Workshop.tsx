@@ -42,6 +42,7 @@ import { FiltroDeColumna, type OpcionFiltro, type Direccion } from '@/components
 import { grupoDeEstado, ETIQUETA_DE_GRUPO } from '@/components/StatusBadge';
 import { hoyAR } from '@/lib/mantenimiento';
 import { VentaDeMostrador } from '@/components/VentaDeMostrador';
+import { piezaEnFrase } from '@/lib/piezaSuelta';
 
 // 🚩 Las fechas se formatean en UN SOLO lugar: `lib/fechaAR.ts`. Ahí está
 // explicado por qué los INSTANTES (fecha_ingreso, fecha_finalizacion,
@@ -65,6 +66,8 @@ interface DashboardJob {
     date_out?: string;
     total_price?: number;
     bicicleta_id: string;
+    /** Si trajo solo una pieza (rueda, tija…). Leira, 14-sep-2026. */
+    pieza?: string | null;
     /** false = el POST de la orden de venta al ERP no llegó. */
     webhook_erp_ok?: boolean | null;
     webhook_erp_detalle?: string | null;
@@ -200,6 +203,7 @@ export default function Workshop() {
                     bicicleta_id: s.bicicleta_id,
                     webhook_erp_ok: s.webhook_erp_ok ?? null,
                     webhook_erp_detalle: s.webhook_erp_detalle ?? null,
+                    pieza: s.pieza ?? null,
                 };
             });
 
@@ -594,6 +598,11 @@ function MobileJobCard({ job, onClick, onFinalize, onDeliver, onReopen }: { job:
                         <Wrench size={12} className="flex-shrink-0" />
                         <span className="truncate">{job.bike_brand} {job.bike_model}</span>
                     </div>
+                    {job.pieza && (
+                        <span className="w-fit text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                            Solo {piezaEnFrase(job.pieza)}
+                        </span>
+                    )}
                     <ChipDeEspera serviceId={job.service_id} />
                     {(mostrarEtapas || mostrarTareas) && <EtapasChecklist serviceId={job.service_id} />}
                 </div>
@@ -846,6 +855,11 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                     <div className="flex flex-col">
                         <span className="font-semibold">{job.bike_model}</span>
                         <span className="text-xs text-muted-foreground">{job.bike_brand}</span>
+                        {job.pieza && (
+                            <span className="mt-1 w-fit text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                                Solo {piezaEnFrase(job.pieza)}
+                            </span>
+                        )}
                     </div>
                 </TableCell>
                 <TableCell>{serviceBadge}</TableCell>
@@ -878,7 +892,7 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                         {job.status !== 'delivered' && (
                             <>
                                 {/* Solo cuando la bici YA está lista: el botón dice «avisar que
-                                    está lista» y manda el comprobante. Antes aparecía también en
+                                    está lista" y manda el comprobante. Antes aparecía también en
                                     las órdenes en curso, al lado del de Finalizar, y un toque de
                                     más le avisaba al cliente que pasara a buscar una bici que
                                     seguía desarmada (14-sep-2026). */}
@@ -1464,6 +1478,11 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                         elegido registrarlo SOLO 'durante' el service (Tarea G-pref). */}
                     {!isCompleted && (taller?.config_notificaciones?.momento_diagnostico || 'final') !== 'durante' && (
                         <div data-tour="finalizar-diagnostico" className="pt-2">
+                            {job.pieza && (
+                                <p className="mb-2 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                                    Trajo solo {piezaEnFrase(job.pieza)}: tildá solo lo que miraste. El resto de la bici no pasó por el taller.
+                                </p>
+                            )}
                             <HealthCheckWidget onChange={setHealthCheckData} />
                         </div>
                     )}

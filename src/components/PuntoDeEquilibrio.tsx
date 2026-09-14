@@ -214,7 +214,7 @@ export function PuntoDeEquilibrio({ stats, dateStart, dateEnd }: {
         <Card>
             <CardContent className="p-6 space-y-5">
                 {/* 🔴 EN EL CELULAR EL TÍTULO QUEDABA EN UNA COLUMNA DE 150 px (12-sep-2026):
-                    «Cambiar mis números» le comía el costado y la bajada se partía en siete
+                    "Cambiar mis números" le comía el costado y la bajada se partía en siete
                     renglones. En pantalla angosta van apilados; desde `sm`, uno al lado del otro. */}
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
                     <div className="flex items-center gap-2 min-w-0">
@@ -254,7 +254,7 @@ export function PuntoDeEquilibrio({ stats, dateStart, dateEnd }: {
                             </div>
                             {/* 🔴 «facturás» y «equilibrio» iban en el MISMO renglón, uno anclado a
                                 la izquierda y el otro a la marca del 70%. En un celular el ancho no
-                                alcanza y se pisaban: se leía «facturás $ 640.0equilibrio»
+                                alcanza y se pisaban: se leía "facturás $ 640.0equilibrio"
                                 (12-sep-2026). La etiqueta de la marca se queda bajo la marca; lo
                                 que facturás baja a su propio renglón, que no choca con nada. */}
                             <div className="relative mt-1 h-4">

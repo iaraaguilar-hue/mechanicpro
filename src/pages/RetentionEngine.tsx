@@ -790,7 +790,7 @@ function AlertCard({ alert }: { alert: RetentionAlert }) {
                         }}
                     >
                         {/* "Escribir" va en el rótulo a propósito: las instrucciones que se le
-                            entregaron a Meta en el App Review dicen textual «press "Escribir"»,
+                            entregaron a Meta en el App Review dicen textual "press "Escribir"",
                             y esa solicitud ya no se puede editar. El resto de la frase queda
                             porque para el mecánico "Escribir" a secas no dice qué se escribe. */}
                         {enviando

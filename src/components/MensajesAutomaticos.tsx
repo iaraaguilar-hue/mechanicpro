@@ -59,12 +59,12 @@ const PLANTILLAS: Record<string, { cuerpo: string; conPdf: boolean; titulo: stri
 const EVENTOS: Record<string, { titulo: string; cuando: string; plantillas: string[] }> = {
     service_finalizado: {
         titulo: 'Cuando termina el service',
-        cuando: 'Al apretar «Finalizar».',
+        cuando: 'Al apretar "Finalizar".',
         plantillas: ['bici_lista_pdf'],
     },
     bici_entregada: {
         titulo: 'Cuando se entrega la bici',
-        cuando: 'Al apretar «Entregar», cuando la retira.',
+        cuando: 'Al apretar "Entregar", cuando la retira.',
         plantillas: ['comprobante_entrega_pdf', 'aviso_tienda_entrega'],
     },
     // ── EL PRIMER MOMENTO QUE NO ES UN BOTÓN (5-sep-2026).
@@ -293,8 +293,8 @@ export function MensajesAutomaticos({ taller, avisar }: {
 
             {/* Antes esto era una tarjeta entera de texto arriba de todo: lo primero
                 que veías al entrar eran cuatro párrafos. Ahora está plegado (Iara,
-                9-sep-2026: «no quiero que haya lectura en el instante en el que el
-                mecánico entra a las pestañas»). El texto es el mismo. */}
+                9-sep-2026: "no quiero que haya lectura en el instante en el que el
+                mecánico entra a las pestañas"). El texto es el mismo. */}
             <ComoFunciona titulo="Cómo funcionan estos mensajes">
                 <p>
                     Cuando terminás o entregás un service, Mechanic Pro le puede escribir al cliente
@@ -450,7 +450,7 @@ function FilaRegla({ regla, taller, propias, guardando, onGuardar, onBorrar, onA
                 </div>
                 {/* Una línea, no dos: tres avisos con dos renglones de mensaje cada uno
                     eran la mitad de lo que había que leer al entrar. Alcanza para
-                    reconocerlo; el mensaje entero está en «Editar» y al pasar el mouse.
+                    reconocerlo; el mensaje entero está en "Editar" y al pasar el mouse.
                     `data-contenido`: es el mensaje que sale, no ayuda (el candado de
                     lectura no lo cuenta como prosa). */}
                 <p className="text-xs text-muted-foreground mt-1 line-clamp-1" data-contenido title={vistaPrevia(regla, taller, propias)}>
@@ -560,7 +560,7 @@ function Editor({ regla, taller, propias, guardando, onCambio, onGuardar, onCanc
                 )}
                 {/* La puerta al armador desde el lugar donde se nota que falta: el
                     desplegable. Antes el mecánico tenía que saber que abajo de todo
-                    había una tarjeta «Tus plantillas» (14-sep-2026). */}
+                    había una tarjeta "Tus plantillas" (14-sep-2026). */}
                 {onArmarNuevo && (
                     <button
                         type="button"
@@ -624,7 +624,7 @@ function Editor({ regla, taller, propias, guardando, onCambio, onGuardar, onCanc
                         />
                         <p className="text-xs text-muted-foreground">
                             Acá va lo que quieras decir siempre: cómo se paga, el horario, lo que sea. Si lo
-                            dejás vacío se pone «{NOTA_POR_DEFECTO}».
+                            dejás vacío se pone "{NOTA_POR_DEFECTO}".
                         </p>
                     </div>
             )}

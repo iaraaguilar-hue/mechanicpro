@@ -325,7 +325,7 @@ export default function ExpertMetrics({ servicios, isLoading }: Props) {
                                         name="Mano de Obra"
                                     />
                                     {/* Sin formatter, el rótulo hereda el color de la serie: «Repuestos» en
-                                        ámbar sobre blanco daba 2,15:1 y «Mano de Obra» 2,54:1. El punto de
+                                        ámbar sobre blanco daba 2,15:1 y "Mano de Obra" 2,54:1. El punto de
                                         color ya dice cuál es cuál; el texto va en gris que se lee. */}
                                     <Legend
                                         verticalAlign="bottom"

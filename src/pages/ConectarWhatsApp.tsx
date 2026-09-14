@@ -351,7 +351,7 @@ function FlujoDeConexion({ avisar }: { avisar: (tipo: "ok" | "error", msg: strin
                     <ul className="text-sm text-amber-900 space-y-1.5 list-disc pl-5">
                         <li>Listas de difusión</li>
                         <li>Mensajes temporales</li>
-                        <li>Mensajes de «ver una vez»</li>
+                        <li>Mensajes de "ver una vez"</li>
                         <li>Ubicación en tiempo real</li>
                         <li><strong>WhatsApp Web y la PC del mostrador se desvinculan</strong> en el momento de conectar, y hay que volver a escanear el código desde el celular. ⚠️ <strong>Ojo con esto:</strong> no se puede volver a vincular hasta que WhatsApp termine de sincronizar, y eso puede tardar <strong>hasta 24 horas</strong>. Durante ese día el mostrador atiende desde el celular, que funciona normal. Es lo normal, no es una falla</li>
                         <li><strong>La aplicación de WhatsApp instalada en Windows deja de servir para siempre.</strong> Meta no la soporta con el número conectado. Se sigue usando por el navegador (web.whatsapp.com), que sí anda</li>

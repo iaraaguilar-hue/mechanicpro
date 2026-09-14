@@ -135,7 +135,7 @@ export default function Configuracion() {
                 </h1>
                 {/* Acá decía «los cambios se aplican al instante», y en Mi Taller no era
                     cierto: había que apretar Guardar. En su lugar va lo que resuelve la
-                    pregunta de verdad, «¿dónde se cambia tal cosa?» (14-sep-2026). */}
+                    pregunta de verdad, "¿dónde se cambia tal cosa?" (14-sep-2026). */}
                 <BuscadorDeAjustes ajustes={ajustesVisibles} onIr={irAAjuste} />
             </div>
 
@@ -501,7 +501,7 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
             </Card>
 
             {/* 🔴 UN SOLO GUARDAR, Y SOLO CUANDO HAY ALGO PARA GUARDAR (14-sep-2026).
-                Había dos botones «Guardar cambios» iguales, uno por tarjeta, y los dos
+                Había dos botones "Guardar cambios" iguales, uno por tarjeta, y los dos
                 guardaban TODO: se cambiaba un color, se apretaba el de la otra tarjeta
                 "por las dudas", y nadie sabía qué había quedado. Ahora la barra aparece
                 apenas se toca algo y dice lo que pasa. */}
@@ -1526,7 +1526,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
         <Card className="flex flex-col" data-ajuste="avisos_suaves">
             <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
-                    <Bell className="h-5 w-5" /> Avisos de «vale una llamada»
+                    <Bell className="h-5 w-5" /> Avisos de "vale una llamada"
                 </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col gap-3">
@@ -1619,7 +1619,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                             placeholder="qué hay que revisar"
                         />
                         <p className="text-[11px] text-muted-foreground leading-snug" data-contenido>
-                            Así le llega: «{comoLeLlegaPostventa(a.texto, taller.nombre ?? '')}»
+                            Así le llega: "{comoLeLlegaPostventa(a.texto, taller.nombre ?? '')}"
                         </p>
                     </div>
                 ))}
@@ -1682,7 +1682,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
         {/* Decisión de Iara (19-ago): si el mecánico ve Bicis paradas lo decide el
             ADMIN de cada taller. Default apagado: la lista trae clientes con su
             gasto. El candado real está en RLS + en la Edge Function; este switch es
-            la llave del admin. Vivía en «Mi Taller» hasta el 14-sep-2026. */}
+            la llave del admin. Vivía en "Mi Taller" hasta el 14-sep-2026. */}
         {tieneFeature(taller, 'bicis_paradas') && (
         <SeccionPreferencias titulo="Tu equipo">
         <Card className="flex flex-col" data-ajuste="bicis_paradas_mecanico">

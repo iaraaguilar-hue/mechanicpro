@@ -9,6 +9,9 @@ import { Label } from '@/components/ui/label';
 import { primerNombre, nombreBiciAmigable } from '@/lib/nombreAmigable';
 import { instanteARConHora } from '@/lib/fechaAR';
 import { soloNumeros } from '@/lib/telefonoAR';
+import { vistaPreviaDeCuerpo, camposDelCuerpo } from '@/lib/plantillasTaller';
+import { biciConPieza } from '@/lib/piezaSuelta';
+import { Link } from 'react-router-dom';
 import {
     HALLAZGOS, AVANCES, RESULTADO_DE_LLAMADA,
     comoLeVaALlegar, limpiarDetalle, estadoDeEspera, type ClaseDeAviso,
@@ -76,6 +79,15 @@ function motivoDelFallo(codigo?: string | null): string {
     return `WhatsApp no lo entregó${codigo ? ` (código ${codigo})` : ''}. Escribile desde tu celular.`;
 }
 
+/** Una plantilla propia del taller que se puede mandar desde la orden (14-sep-2026). */
+interface PlantillaPropia {
+    id: string;
+    titulo: string;
+    nombre_meta: string;
+    cuerpo: string;
+    evento: string;
+}
+
 export default function AvisoAlCliente({ serviceId }: Props) {
     const taller = useAuthStore(s => s.taller);
     const taller_id = useAuthStore(s => s.taller_id);
@@ -101,6 +113,22 @@ export default function AvisoAlCliente({ serviceId }: Props) {
     const [textoLlamada, setTextoLlamada] = useState('');
     const [guardandoLlamada, setGuardandoLlamada] = useState(false);
 
+    // ── LOS MENSAJES PROPIOS DEL TALLER (14-sep-2026, Leira): "plantillas
+    // personalizadas para poder mandarles mensaje al cliente mientras están
+    // haciendo el service". Se ofrecen las aprobadas que no salen solas (las de
+    // «desde la orden» y las manuales) y que no llevan comprobante.
+    const [propias, setPropias] = useState<PlantillaPropia[]>([]);
+    const [propiaId, setPropiaId] = useState<string | null>(null);
+    const [usandoPropia, setUsandoPropia] = useState(false);
+    useEffect(() => {
+        supabase.from('plantillas_taller')
+            .select('id, titulo, nombre_meta, cuerpo, evento')
+            .eq('estado', 'aprobada').eq('lleva_pdf', false)
+            .in('evento', ['durante_service', 'manual'])
+            .order('evento', { ascending: true })
+            .then(({ data }) => setPropias((data ?? []) as PlantillaPropia[]));
+    }, []);
+
     const bici = bicicletas.find(b => b.id === servicio?.bicicleta_id);
     const cliente = clientes.find(c => c.id === (bici as any)?.cliente_id);
     const telefono = soloNumeros((cliente as any)?.telefono);
@@ -108,7 +136,8 @@ export default function AvisoAlCliente({ serviceId }: Props) {
     // Lo que sale hacia el CLIENTE va con el nombre corto; la ficha y el remito
     // van con el nombre completo. Ver lib/nombreAmigable.ts.
     const nombreCliente = primerNombre((cliente as any)?.nombre, 'Hola');
-    const nombreBici = nombreBiciAmigable((bici as any)?.marca, (bici as any)?.modelo, 'bici');
+    // Si trajo solo una pieza, se le escribe por la pieza: «tu rueda de la Epic».
+    const nombreBici = biciConPieza(nombreBiciAmigable((bici as any)?.marca, (bici as any)?.modelo, 'bici'), servicio?.pieza);
     // 🔴 EL ORDEN DE LA FIRMA ES EL MISMO QUE EL DEL RESTO DEL SISTEMA
     // (ver MensajesAutomaticos: `regla.firma || taller.firma_nombre || nombre`).
     // Primero manda la firma que el taller configuró —que es el nombre con el que
@@ -134,6 +163,32 @@ export default function AvisoAlCliente({ serviceId }: Props) {
         cliente: nombreCliente, firma, taller: nombreTaller, bici: nombreBici,
         detalle: limpiarDetalle(detalle) || '…',
     }), [clase, nombreCliente, firma, nombreTaller, nombreBici, detalle]);
+
+    // El mensaje propio lo completa EL SERVIDOR desde la orden (whatsapp-enviar).
+    // 🚩 Estos valores son un espejo de `valoresDelService`
+    // (supabase/functions/_shared/motor_wa.ts): la vista previa tiene que decir lo
+    // mismo que después le llega al cliente, palabra por palabra.
+    const propia = usandoPropia ? (propias.find(p => p.id === propiaId) ?? propias[0] ?? null) : null;
+    const valoresPropia = useMemo(() => {
+        const biciEntera = [(bici as any)?.marca, (bici as any)?.modelo].filter(Boolean).join(' ');
+        const total = Number(servicio?.precio_total);
+        return {
+            cliente: String((cliente as any)?.nombre ?? '').split(' ')[0] || 'que tal',
+            bici: biciConPieza(biciEntera || 'tu bici', servicio?.pieza, !!biciEntera),
+            taller: taller?.nombre ?? '',
+            firma,
+            nota: limpiarDetalle(detalle) || '…',
+            orden: servicio?.numero_orden != null ? `#${String(servicio.numero_orden).padStart(4, '0')}` : '',
+            total: total > 0 ? `$${Math.round(total).toLocaleString('es-AR')}` : '',
+            tipo: String(servicio?.tipo_servicio ?? '').trim(),
+            trabajo: String(servicio?.notas_mecanico ?? '').trim(),
+            pago: String((taller as any)?.politica_pago ?? '').trim(),
+        } as Record<string, string>;
+    }, [bici, cliente, servicio, taller, firma, detalle]);
+    const camposPropia = propia ? camposDelCuerpo(propia.cuerpo) : [];
+    const propiaLlevaNota = camposPropia.includes('nota');
+    // Un dato vacío hace rebotar el mensaje entero en Meta: se dice antes de mandar.
+    const faltaEnPropia = camposPropia.find(c => c !== 'nota' && !valoresPropia[c]) ?? null;
 
     // ── La línea de tiempo: se arma uniendo las cuatro tablas.
     //
@@ -217,8 +272,62 @@ export default function AvisoAlCliente({ serviceId }: Props) {
 
     useEffect(() => { void cargar(); }, [cargar]);
 
+    // ── Mandar un mensaje propio del taller ─────────────────────
+    // Mismo recorrido que el aviso fijo: texto libre si la ventana de 24 hs está
+    // abierta, la plantilla si no, y WhatsApp a mano si no hay API o falló. No deja
+    // la orden esperando: un mensaje propio puede decir cualquier cosa, y marcar
+    // como "esperando" algo que no pregunta haría saltar el «llamalo» sin motivo.
+    const mandarPropia = async () => {
+        if (!propia) return setAviso({ tipo: 'error', texto: 'Elegí cuál de tus mensajes le mandás.' });
+        const texto = limpiarDetalle(detalle);
+        if (propiaLlevaNota && texto.length < 4) {
+            return setAviso({ tipo: 'error', texto: 'Este mensaje lleva lo que le querés decir: escribilo, aunque sea corto.' });
+        }
+        if (faltaEnPropia) {
+            return setAviso({ tipo: 'error', texto: `A esta orden le falta ${faltaEnPropia} para completar el mensaje.` });
+        }
+        if (!telefono) {
+            return setAviso({ tipo: 'error', texto: 'Este cliente no tiene teléfono cargado. Cargáselo en su ficha y volvé.' });
+        }
+        setEnviando(true);
+        setAviso(null);
+        const mensajeCompleto = vistaPreviaDeCuerpo(propia.cuerpo, { ...valoresPropia, nota: texto });
+
+        let salioPorApi = false;
+        if (modoAuto) {
+            let r = await enviar({
+                proposito: 'mensaje_propio', tipo: 'texto', texto: mensajeCompleto, destino: telefono,
+                cliente_id: (cliente as any)?.id ?? null, bicicleta_id: servicio?.bicicleta_id ?? null, servicio_id: serviceId,
+            });
+            if (!r.ok && r.error === 'ventana_cerrada') {
+                r = await enviar({
+                    proposito: 'mensaje_propio', tipo: 'plantilla', plantilla: propia.nombre_meta, destino: telefono,
+                    nota: texto, firma,
+                    cliente_id: (cliente as any)?.id ?? null, bicicleta_id: servicio?.bicicleta_id ?? null, servicio_id: serviceId,
+                });
+            }
+            salioPorApi = r.ok;
+            if (!r.ok) console.warn('El mensaje propio no salió por la API:', r.error, r.detalle);
+        }
+        if (!salioPorApi) {
+            window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(mensajeCompleto)}`, '_blank');
+            if (taller_id && usuario_id) {
+                await registrarContacto({
+                    taller_id, usuario_id, usuario_nombre,
+                    servicio_id: serviceId, cliente_id: (cliente as any)?.id ?? null,
+                    canal: 'whatsapp_manual', texto: mensajeCompleto,
+                });
+            }
+        }
+        setDetalle('');
+        setEnviando(false);
+        setAviso({ tipo: 'ok', texto: salioPorApi ? 'Mandado.' : 'Se abrió WhatsApp con el mensaje escrito. Quedó anotado en la orden.' });
+        void cargar();
+    };
+
     // ── Mandar el aviso ─────────────────────────────────────────
     const mandar = async () => {
+        if (usandoPropia) return mandarPropia();
         const texto = limpiarDetalle(detalle);
         if (texto.length < 4) {
             return setAviso({ tipo: 'error', texto: 'Escribí qué le querés decir, aunque sea corto.' });
@@ -419,70 +528,129 @@ export default function AvisoAlCliente({ serviceId }: Props) {
             {/* ── Escribir el aviso ── */}
             <div className="rounded-lg border border-slate-200 p-3 space-y-3 bg-white">
                 <div className="flex gap-2">
-                    <button
-                        type="button"
-                        onClick={() => setClase('consulta')}
-                        className={`flex-1 text-sm font-semibold py-2 rounded-lg border transition-colors ${clase === 'consulta'
-                            ? 'bg-primary/10 border-primary text-primary'
-                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
-                    >
-                        Preguntarle algo
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setClase('avance')}
-                        className={`flex-1 text-sm font-semibold py-2 rounded-lg border transition-colors ${clase === 'avance'
-                            ? 'bg-primary/10 border-primary text-primary'
-                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
-                    >
-                        Contarle cómo va
-                    </button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                    {clase === 'consulta'
-                        ? 'Encontraste algo y necesitás un sí para seguir. La orden queda esperando la respuesta.'
-                        : 'Le contás en qué anda la bici. No espera respuesta y no frena nada.'}
-                </p>
-
-                <div className="flex flex-wrap gap-1.5">
-                    {sugerencias.map(f => (
+                    {([
+                        { clave: 'consulta', etiqueta: 'Preguntarle algo' },
+                        { clave: 'avance', etiqueta: 'Contarle cómo va' },
+                    ] as const).map(b => (
                         <button
-                            key={f}
+                            key={b.clave}
                             type="button"
-                            onClick={() => setDetalle(f)}
-                            className="text-xs text-left px-2.5 py-1.5 rounded-full border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+                            onClick={() => { setUsandoPropia(false); setClase(b.clave); }}
+                            className={`flex-1 min-w-0 px-2 leading-tight text-sm font-semibold py-2 rounded-lg border transition-colors ${!usandoPropia && clase === b.clave
+                                ? 'bg-primary/10 border-primary text-primary'
+                                : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
                         >
-                            {f}
+                            {b.etiqueta}
                         </button>
                     ))}
+                    {/* Leira, 14-sep-2026: sus propios mensajes, desde la orden. Solo en
+                        los planes que pueden armar plantillas: en Sport el botón
+                        mandaba a armarlas a una pestaña que ese plan no tiene. */}
+                    {tieneFeature(taller, 'mensajes_automaticos') && <button
+                        type="button"
+                        onClick={() => { setUsandoPropia(true); if (!propiaId && propias[0]) setPropiaId(propias[0].id); }}
+                        className={`flex-1 min-w-0 px-2 leading-tight text-sm font-semibold py-2 rounded-lg border transition-colors ${usandoPropia
+                            ? 'bg-primary/10 border-primary text-primary'
+                            : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                    >
+                        Un mensaje tuyo
+                    </button>}
                 </div>
 
-                <Textarea
-                    rows={2}
-                    value={detalle}
-                    onChange={e => setDetalle(e.target.value)}
-                    placeholder={clase === 'consulta'
-                        ? 'Qué encontraste. Ej: las pastillas están gastadas, hay que cambiarlas.'
-                        : 'En qué anda. Ej: ya le hice la transmisión, me falta el freno.'}
-                    className="text-base"
-                />
+                {usandoPropia ? (
+                    propias.length === 0 ? (
+                        <p className="text-xs text-muted-foreground bg-slate-50 border border-slate-200 rounded-md p-2.5">
+                            Todavía no tenés mensajes propios aprobados.{' '}
+                            <Link to="/configuracion?ajuste=plantillas" className="font-semibold text-primary hover:underline">
+                                Armalos en Configuración
+                            </Link>
+                            : contale al armador qué le querés decir y elegí "desde la orden". Meta los aprueba en unas horas.
+                        </p>
+                    ) : (
+                        <>
+                            {propias.length > 1 && (
+                                <select
+                                    value={propia?.id ?? ''}
+                                    onChange={e => setPropiaId(e.target.value)}
+                                    className="w-full h-9 rounded-md border bg-background px-2 text-sm"
+                                >
+                                    {propias.map(p => <option key={p.id} value={p.id}>{p.titulo}</option>)}
+                                </select>
+                            )}
+                            {propias.length === 1 && <p className="text-sm font-medium text-slate-700">{propias[0].titulo}</p>}
+                            {faltaEnPropia && (
+                                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                                    A esta orden le falta {faltaEnPropia} para completar este mensaje.
+                                </p>
+                            )}
+                            {propiaLlevaNota && (
+                                <Textarea
+                                    rows={2}
+                                    value={detalle}
+                                    onChange={e => setDetalle(e.target.value)}
+                                    placeholder="Lo que le querés decir. Va en el mensaje donde dice tu línea."
+                                    className="text-base"
+                                />
+                            )}
+                        </>
+                    )
+                ) : (
+                    <>
+                        <p className="text-xs text-muted-foreground">
+                            {clase === 'consulta'
+                                ? 'Encontraste algo y necesitás un sí para seguir. La orden queda esperando la respuesta.'
+                                : 'Le contás en qué anda la bici. No espera respuesta y no frena nada.'}
+                        </p>
+
+                        <div className="flex flex-wrap gap-1.5">
+                            {sugerencias.map(f => (
+                                <button
+                                    key={f}
+                                    type="button"
+                                    onClick={() => setDetalle(f)}
+                                    className="text-xs text-left px-2.5 py-1.5 rounded-full border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 transition-colors"
+                                >
+                                    {f}
+                                </button>
+                            ))}
+                        </div>
+
+                        <Textarea
+                            rows={2}
+                            value={detalle}
+                            onChange={e => setDetalle(e.target.value)}
+                            placeholder={clase === 'consulta'
+                                ? 'Qué encontraste. Ej: las pastillas están gastadas, hay que cambiarlas.'
+                                : 'En qué anda. Ej: ya le hice la transmisión, me falta el freno.'}
+                            className="text-base"
+                        />
+                    </>
+                )}
 
                 {/* Lo que va a leer el cliente, palabra por palabra. Que el
                     mecánico lo vea antes de mandarlo es lo único que evita
                     mandar algo que no se diría hablando. */}
-                <div className="rounded-md bg-slate-50 border border-slate-200 p-2.5">
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Le va a llegar así</p>
-                    <p className="text-sm text-slate-700 leading-snug">{preview}</p>
-                </div>
+                {/* Sin mensajes propios no hay nada que previsualizar ni mandar: el
+                    cartel de arriba ya dice dónde armarlos. */}
+                {!(usandoPropia && !propia) && (
+                    <div className="rounded-md bg-slate-50 border border-slate-200 p-2.5">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1">Le va a llegar así</p>
+                        <p className="text-sm text-slate-700 leading-snug">
+                            {usandoPropia && propia ? vistaPreviaDeCuerpo(propia.cuerpo, valoresPropia) : preview}
+                        </p>
+                    </div>
+                )}
 
                 {aviso && (
                     <p className={`text-sm ${aviso.tipo === 'ok' ? 'text-green-700' : 'text-red-600'}`}>{aviso.texto}</p>
                 )}
 
-                <Button onClick={mandar} disabled={enviando} className="w-full">
-                    {enviando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-                    {enviando ? 'Mandando...' : 'Mandar por WhatsApp'}
-                </Button>
+                {!(usandoPropia && !propia) && (
+                    <Button onClick={mandar} disabled={enviando} className="w-full">
+                        {enviando ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                        {enviando ? 'Mandando...' : 'Mandar por WhatsApp'}
+                    </Button>
+                )}
                 {!modoAuto && (
                     <p className="text-xs text-muted-foreground">
                         Se abre WhatsApp con el mensaje escrito y queda anotado acá.{' '}

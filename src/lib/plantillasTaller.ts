@@ -176,7 +176,7 @@ export function validarCuerpo(cuerpo: string): string | null {
 
     const campos = tokens.map((m) => m[1].trim().toLowerCase());
     const desconocido = campos.find((c) => !CAMPOS_VALIDOS.includes(c as Campo));
-    if (desconocido) return `«${desconocido}» no es un campo que podamos completar. Usá los botones de abajo.`;
+    if (desconocido) return `"${desconocido}" no es un campo que podamos completar. Usá los botones de abajo.`;
     if (campos.length > MAXIMO_DE_CAMPOS) return `No metas más de ${MAXIMO_DE_CAMPOS} campos en un mismo mensaje.`;
 
     if (tokens.length > 0) {
@@ -186,7 +186,7 @@ export function validarCuerpo(cuerpo: string): string | null {
         const despues = t.slice((ultimo.index ?? 0) + ultimo[0].length);
 
         if (!HAY_LETRA.test(antes)) {
-            return 'El mensaje no puede EMPEZAR con un campo. Meta lo rechaza. Poné algo antes, por ejemplo «Hola».';
+            return 'El mensaje no puede EMPEZAR con un campo. Meta lo rechaza. Poné algo antes, por ejemplo "Hola".';
         }
         if (!HAY_LETRA.test(despues)) {
             return 'El mensaje no puede TERMINAR con un campo, ni aunque le pongas un signo después. Meta lo rechaza: movelo al medio y cerrá con una frase tuya.';
@@ -308,7 +308,7 @@ export const ESTADO_DE_META: Record<string, string> = {
  * lado de su plantilla no le dice qué corregir.
  */
 export const MOTIVO_DE_META: Record<string, string> = {
-    INCORRECT_CATEGORY: 'Meta dice que el mensaje no es del tipo que elegiste. Si ofrece algo que el cliente todavía no pidió, marcalo como «ofrece algo».',
+    INCORRECT_CATEGORY: 'Meta dice que el mensaje no es del tipo que elegiste. Si ofrece algo que el cliente todavía no pidió, marcalo como "ofrece algo".',
     INVALID_FORMAT: 'A Meta no le gustó el formato: revisá que no haya campos al principio ni al final, ni dos pegados.',
     SCAM: 'Meta lo leyó como un mensaje engañoso. Sacá promesas, premios o urgencias.',
     ABUSIVE_CONTENT: 'Meta lo marcó como contenido abusivo. Reescribilo más neutro.',

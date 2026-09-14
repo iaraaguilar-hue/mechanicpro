@@ -7,7 +7,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 import { Input } from "@/components/ui/input";
 
-import { Search, PlusCircle, Trash2, Clock, CheckCircle, ChevronDown, ChevronUp, CreditCard, Phone } from "lucide-react";
+import { Search, PlusCircle, Trash2, Clock, CheckCircle, ChevronDown, ChevronUp, CreditCard, Phone, Users } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/authStore";
@@ -23,7 +23,6 @@ export default function Home() {
     const deleteCliente = useDataStore(s => s.deleteCliente);
     const fetchDashboardData = useDataStore(s => s.fetchDashboardData);
     const taller_id = useAuthStore(s => s.taller_id);
-    const taller = useAuthStore(s => s.taller);
 
     // Build fleet view from store data (replaces getFleetStatus)
     const clientList = useMemo(() => {
@@ -99,21 +98,14 @@ export default function Home() {
 
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-center gap-6 pb-2">
-                <div className="flex items-center gap-3">
-                    {taller?.logo_url ? (
-                        <img
-                            src={taller.logo_url}
-                            alt={taller.nombre ? `Logo de ${taller.nombre}` : "Logo del Taller"}
-                            className="h-16 w-auto object-contain"
-                        />
-                    ) : (
-                        <div className="flex items-center justify-center h-16 px-4 bg-slate-100 border border-slate-200 rounded-md">
-                            <span className="text-xl font-bold text-slate-800">
-                                {taller?.nombre || "Mi Taller"}
-                            </span>
-                        </div>
-                    )}
-                </div>
+                {/* Era la única pantalla sin su nombre arriba: mostraba el logo del
+                    taller (que ya está en el menú lateral) y el título real quedaba más
+                    abajo, como «Base de Datos de Flota y Clientes». Ahora se llama como en
+                    el menú, igual que las demás (14-sep-2026). */}
+                <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3 self-start md:self-center">
+                    <Users className="h-8 w-8 text-primary" />
+                    Clientes
+                </h1>
 
                 <div className="flex items-center gap-4 flex-1 justify-end w-full md:w-auto">
                     <div data-tour="buscador-clientes" className="relative w-full md:w-96">
@@ -135,7 +127,7 @@ export default function Home() {
             <VentasSinCargar />
 
             <div data-tour="clientes" className="flex justify-between items-center">
-                <h2 className="text-xl font-medium text-slate-600">Base de Datos de Flota y Clientes</h2>
+                <h2 className="text-xl font-medium text-slate-600">Tus clientes y sus bicis</h2>
                 <RapidIntakeWizard
                     onComplete={() => handleRefresh()}
                     trigger={

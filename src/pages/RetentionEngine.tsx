@@ -1,8 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Campanas } from '@/components/Campanas';
 import { Link } from "react-router-dom";
-import { useDataStore } from "@/store/dataStore";
-import { useAuthStore } from "@/store/authStore";
+import { useDataStore, type SupabaseClient, type SupabaseBike } from "@/store/dataStore";
+import { useAuthStore, type TallerData } from "@/store/authStore";
+import { supabase } from "@/lib/supabase";
+import { hoyAR, sumarMeses, configMantenimiento, comoLeLlegaPostventa } from "@/lib/mantenimiento";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -214,6 +216,73 @@ function useContactarWhatsApp() {
     return { modoAuto, contactar };
 }
 
+// ─────────────────────────────────────────────────────────────
+// LO QUE DEJÓ AGENDADO UNA VENTA Y NO SALIÓ SOLO (Leira, 14-sep-2026).
+//
+// El ajuste y el primer service de «Vendí una bici» los manda el cron de las 10.
+// Acá aparecen los que quedaron para hacer a mano, que son tres casos:
+//   · el taller no tiene WhatsApp conectado (el cron no lo toca) y ya es el día;
+//   · Meta lo rechazó — al enviarlo (`fallo`) o minutos después, por webhook
+//     (`enviado` con el mensaje en `failed`: el caso de la cuenta sin moneda);
+//   · el cliente no tiene celular: la acción es conseguirlo, no escribirle.
+// Un taller CON WhatsApp no ve el del día hasta que el cron tuvo su oportunidad:
+// si no, el mostrador le escribe a las 9 y el cron le vuelve a escribir a las 10.
+// ─────────────────────────────────────────────────────────────
+interface FilaPostventa {
+    id: string;
+    bicicleta_id: string;
+    tipo: 'ajuste' | 'primer_service';
+    fecha: string;
+    estado: string;
+    detalle: string | null;
+    mensajes_whatsapp?: { estado?: string | null } | { estado?: string | null }[] | null;
+}
+
+function avisosDePostventa(filas: FilaPostventa[], clientes: SupabaseClient[], bicicletas: SupabaseBike[], taller: TallerData | null): AvisoSuave[] {
+    const hoy = hoyAR();
+    const cfg = configMantenimiento(taller).postventa;
+    const conWhatsApp = taller?.wa_activo === true;
+    const avisos: AvisoSuave[] = [];
+    for (const f of filas) {
+        const msj = Array.isArray(f.mensajes_whatsapp) ? f.mensajes_whatsapp[0] : f.mensajes_whatsapp;
+        const rebotado = f.estado === 'fallo' || (f.estado === 'enviado' && msj?.estado === 'failed');
+        const sinCelular = f.estado === 'omitido' && /celular/.test(f.detalle ?? '');
+        const sinSalir = f.estado === 'pendiente' && (!conWhatsApp || f.fecha < hoy);
+        if (!rebotado && !sinCelular && !sinSalir) continue;
+
+        const bici = bicicletas.find(b => b.id === f.bicicleta_id);
+        const cli = bici ? clientes.find(c => c.id === bici.cliente_id) : null;
+        if (!bici || !cli || cli.eliminado_en) continue;
+
+        const modelo = [bici.marca, bici.modelo].filter(Boolean).join(' ') || 'la bici';
+        const cual = f.tipo === 'ajuste' ? 'el ajuste' : 'el primer service';
+        avisos.push({
+            id: `postventa-${f.id}`,
+            motivo: 'postventa',
+            clienteId: cli.id,
+            clienteNombre: cli.nombre,
+            clienteTelefono: sinCelular ? '' : (cli.telefono ?? ''),
+            bicicletaId: bici.id,
+            bicicletaModelo: modelo,
+            dias: Math.max(0, Math.round((Date.parse(hoy) - Date.parse(f.fecha)) / 86_400_000)),
+            visitas: 0,
+            // Van primero en la lista: son un compromiso que se tomó en la venta, no una sospecha.
+            gastado: Number.MAX_SAFE_INTEGER,
+            argumento: `Se llevó la ${modelo}${bici.fecha_compra ? ` el ${diaCalendario(bici.fecha_compra)}` : ''} y el ${diaCalendario(f.fecha)} le tocaba ${cual}.${rebotado ? ' El WhatsApp automático no salió.' : ''}`,
+            etiqueta: f.tipo === 'ajuste' ? 'Ajuste de bici nueva' : 'Primer service de bici nueva',
+            texto: comoLeLlegaPostventa(
+                f.tipo === 'ajuste' ? cfg.textoAjuste : cfg.textoPrimerService,
+                taller?.nombre ?? '',
+                primerNombre(cli.nombre) || 'qué tal',
+                bici.modelo || modelo,
+            ),
+            avisoPostventaId: f.id,
+            tipoPostventa: f.tipo,
+        });
+    }
+    return avisos;
+}
+
 export default function RetentionEngine() {
     const recordatorios = useDataStore(s => s.recordatorios);
     const bicicletas = useDataStore(s => s.bicicletas);
@@ -254,6 +323,26 @@ export default function RetentionEngine() {
         [clientes, bicicletas, servicios, enFuga, configSuaves.habilitado, configSuaves.primerServiceDias, configSuaves.noVolvioDias, configSuaves.limite, configSuaves.incluirFrecuentes]
     );
 
+    // Lo que dejó agendado una venta de mostrador y quedó para hacer a mano. No
+    // está en el store: se lee acá, de los últimos dos meses.
+    const idTaller = useAuthStore(s => s.taller_id);
+    const [filasPostventa, setFilasPostventa] = useState<FilaPostventa[]>([]);
+    const [recargaPostventa, setRecargaPostventa] = useState(0);
+    useEffect(() => {
+        if (!idTaller) return;
+        const hoy = hoyAR();
+        supabase.from('avisos_postventa')
+            .select('id, bicicleta_id, tipo, fecha, estado, detalle, mensajes_whatsapp(estado)')
+            .eq('taller_id', idTaller)
+            .in('estado', ['pendiente', 'fallo', 'enviado', 'omitido'])
+            .lte('fecha', hoy).gte('fecha', sumarMeses(hoy, -2))
+            .then(({ data }) => setFilasPostventa((data ?? []) as FilaPostventa[]));
+    }, [idTaller, recargaPostventa]);
+    const postventa = useMemo(
+        () => avisosDePostventa(filasPostventa, clientes, bicicletas, taller),
+        [filasPostventa, clientes, bicicletas, taller]
+    );
+
     if (isHydrating) return <div className="p-8 text-center text-muted-foreground">Cargando motor de retención...</div>;
 
     const urgentAlerts = alerts.filter(a => a.daysRemaining <= 0);
@@ -288,8 +377,14 @@ export default function RetentionEngine() {
 
             {/* Los suaves van DESPUÉS de lo urgente y en su propia sección: un
                 aviso opcional que tapa un vencimiento deja de ser opcional. */}
-            {configSuaves.habilitado && (avisosSuaves.avisos.length > 0 || avisosSuaves.enCamino.cuantas > 0) && (
-                <SeccionAvisosSuaves resultado={avisosSuaves} />
+            {/* Los de postventa se muestran aunque los suaves estén apagados: los
+                agendó el mostrador en la venta, no son una sugerencia. */}
+            {(postventa.length > 0 || (configSuaves.habilitado && (avisosSuaves.avisos.length > 0 || avisosSuaves.enCamino.cuantas > 0))) && (
+                <SeccionAvisosSuaves
+                    resultado={avisosSuaves}
+                    extra={postventa}
+                    onResuelto={() => setRecargaPostventa(n => n + 1)}
+                />
             )}
 
             {alerts.length === 0 && (
@@ -415,8 +510,10 @@ export default function RetentionEngine() {
 // IA: el argumento ES el dato). El contacto se registra en
 // contactos_retencion → el Panel de Retorno ya le atribuye la plata.
 // ─────────────────────────────────────────────────────────────
-function SeccionAvisosSuaves({ resultado }: { resultado: ResultadoSuaves }) {
-    const { avisos, enCamino } = resultado;
+function SeccionAvisosSuaves({ resultado, extra = [], onResuelto }: { resultado: ResultadoSuaves; extra?: AvisoSuave[]; onResuelto?: () => void }) {
+    const { enCamino } = resultado;
+    // Los de postventa van primero: son un compromiso que se tomó en la venta.
+    const avisos = [...extra, ...resultado.avisos];
     const registrar = useDataStore(s => s.registrarContactoRetencion);
     const taller_id = useAuthStore(s => s.taller_id);
     const [contactados, setContactados] = useState<Record<string, boolean>>({});
@@ -431,7 +528,9 @@ function SeccionAvisosSuaves({ resultado }: { resultado: ResultadoSuaves }) {
         // lo primero que delata un mensaje armado por una máquina.
         const frecuente = a.motivo === 'no_volvio' && a.visitas >= 3;
         const laBici = a.bicicletaId && a.bicicletaModelo !== 'su bici' ? `la ${a.bicicletaModelo}` : 'la bici';
-        const texto = a.motivo === 'primer_service'
+        const texto = a.motivo === 'postventa' && a.texto
+            ? a.texto
+            : a.motivo === 'primer_service'
             ? `${hola} Cómo va? Te escribo por la ${a.bicicletaModelo}. Como es nueva, le corresponde el primer service de asentamiento: se acomodan los cables y los rayos después de las primeras salidas. Querés que la veamos?`
             : frecuente
                 ? `${hola} Cómo andás? Hace un tiempo que no pasás por el taller. Querés traer ${laBici} para un service así la dejamos a punto? Avisame y coordinamos.`
@@ -441,9 +540,19 @@ function SeccionAvisosSuaves({ resultado }: { resultado: ResultadoSuaves }) {
         if (taller_id) {
             registrar({
                 taller_id, cliente_id: a.clienteId, bicicleta_id: a.bicicletaId,
-                componente: a.motivo, canal: 'whatsapp_manual',
-                variante: frecuente ? 'v1_no_volvio_frecuente' : `v1_${a.motivo}`, texto_enviado: texto,
+                componente: a.motivo === 'postventa' ? `postventa_${a.tipoPostventa}` : a.motivo,
+                canal: 'whatsapp_manual',
+                variante: a.motivo === 'postventa' ? 'v1_postventa' : frecuente ? 'v1_no_volvio_frecuente' : `v1_${a.motivo}`,
+                texto_enviado: texto,
             });
+        }
+        // El de postventa se da por resuelto: si no, mañana vuelve a aparecer
+        // (y si el taller conecta el WhatsApp, el cron lo mandaría otra vez).
+        if (a.motivo === 'postventa' && a.avisoPostventaId) {
+            supabase.from('avisos_postventa')
+                .update({ estado: 'enviado', detalle: 'a mano, desde Retención', enviado_at: new Date().toISOString() })
+                .eq('id', a.avisoPostventaId)
+                .then(() => onResuelto?.());
         }
         setContactados(prev => ({ ...prev, [a.id]: true }));
         window.open(`https://wa.me/${tel}?text=${encodeURIComponent(texto)}`, '_blank');
@@ -486,7 +595,7 @@ function SeccionAvisosSuaves({ resultado }: { resultado: ResultadoSuaves }) {
                                 </Link>
                             </CardTitle>
                             <span className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">
-                                {a.motivo === 'primer_service' ? 'Primer service' : a.visitas >= 3 ? 'Hace rato que no viene' : 'No volvió'}
+                                {a.etiqueta ?? (a.motivo === 'primer_service' ? 'Primer service' : a.visitas >= 3 ? 'Hace rato que no viene' : 'No volvió')}
                             </span>
                         </CardHeader>
                         <CardContent className="space-y-3">

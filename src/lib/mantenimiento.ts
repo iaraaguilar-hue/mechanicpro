@@ -23,10 +23,13 @@ export interface ComponenteDiagnostico {
 }
 
 export interface ConfigPostventa {
-    /** Al registrar una venta de mostrador, agendar el ajuste y el primer service. */
-    habilitado: boolean;
+    /** A cuántos meses de la venta se propone el ajuste. */
     ajusteMeses: number;
+    /** A cuántos meses de la venta se propone el primer service. */
     primerServiceMeses: number;
+    /** Lo que va en "para recordarte que toca revisar ___ en tu bici". */
+    textoAjuste: string;
+    textoPrimerService: string;
 }
 
 export interface ConfigMantenimiento {
@@ -48,9 +51,25 @@ export const COMPONENTES_BASE: ComponenteDiagnostico[] = [
     { nombre: 'Cubiertas', meses: null },
 ];
 
-// Los números de Leira. Arranca apagado: agendar mensajes a clientes es algo que
-// cada taller prende sabiendo que lo prende.
-export const POSTVENTA_DEFAULT: ConfigPostventa = { habilitado: false, ajusteMeses: 1, primerServiceMeses: 4 };
+// Los plazos son los de Leira. Los textos van en el {{3}} de la plantilla del
+// sistema `recordatorio_mantenimiento`.
+// 🚩 Espejo de TEXTO_POSTVENTA en `supabase/functions/automatizaciones-cron/index.ts`.
+// Si se toca uno, el otro.
+export const POSTVENTA_DEFAULT: ConfigPostventa = {
+    ajusteMeses: 1,
+    primerServiceMeses: 4,
+    textoAjuste: 'el ajuste de cables y rayos',
+    textoPrimerService: 'el primer service',
+};
+
+/**
+ * Cómo le llega al cliente. 🚩 Espejo del cuerpo de `recordatorio_mantenimiento`
+ * en `supabase/functions/_shared/plantillas.ts`: el texto aprobado por Meta no se
+ * puede cambiar desde acá, solo lo que va en el hueco.
+ */
+export function comoLeLlegaPostventa(que: string, taller: string, cliente = 'Juan', bici = 'Epic 8'): string {
+    return `Hola ${cliente}! Te escribo de ${taller || 'tu taller'} para recordarte que toca revisar ${que || '…'} en tu ${bici}. Querés que coordinemos un turno?`;
+}
 
 /** Los plazos que ofrece el diagnóstico. Leira: "por 1 mes, 2 meses, 3, 4, 5, etc.". */
 export const PLAZOS_MESES = [1, 2, 3, 4, 5, 6, 9, 12, 18, 24];
@@ -73,9 +92,10 @@ export function configMantenimiento(taller: TallerData | null | undefined): Conf
         // tildar: en ese caso vuelve la de siempre.
         componentes: propios.length ? propios : COMPONENTES_BASE,
         postventa: {
-            habilitado: p.habilitado === true,
             ajusteMeses: mesesValidos(p.ajusteMeses) ?? POSTVENTA_DEFAULT.ajusteMeses,
             primerServiceMeses: mesesValidos(p.primerServiceMeses) ?? POSTVENTA_DEFAULT.primerServiceMeses,
+            textoAjuste: String(p.textoAjuste ?? '').trim() || POSTVENTA_DEFAULT.textoAjuste,
+            textoPrimerService: String(p.textoPrimerService ?? '').trim() || POSTVENTA_DEFAULT.textoPrimerService,
         },
     };
 }

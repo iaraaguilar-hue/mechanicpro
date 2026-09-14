@@ -44,7 +44,10 @@
 
 const MS_DIA = 86_400_000;
 
-export type MotivoSuave = 'primer_service' | 'no_volvio';
+// 'postventa' = el ajuste o el primer service que dejó agendado una venta de
+// mostrador (14-sep-2026) y que no pudo salir solo. No lo arma este archivo: lo
+// arma Retención leyendo `avisos_postventa`, y comparte la tarjeta y el botón.
+export type MotivoSuave = 'primer_service' | 'no_volvio' | 'postventa';
 
 export interface AvisoSuave {
     id: string;
@@ -62,6 +65,11 @@ export interface AvisoSuave {
     gastado: number;
     /** La frase que el mecánico lee. Dice el porqué, no solo el qué. */
     argumento: string;
+    /** Solo postventa: el rótulo de la tarjeta, el mensaje ya armado y la fila a cerrar. */
+    etiqueta?: string;
+    texto?: string;
+    avisoPostventaId?: string;
+    tipoPostventa?: 'ajuste' | 'primer_service';
 }
 
 export interface ConfigAvisosSuaves {

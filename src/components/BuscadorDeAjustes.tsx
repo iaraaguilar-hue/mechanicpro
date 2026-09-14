@@ -62,6 +62,7 @@ export const AJUSTES: Ajuste[] = [
     { id: 'orden_grande', titulo: 'Número de orden grande', tab: 'preferencias', palabras: 'numero de orden grande tamaño letra agrandar ver mejor orden' },
     { id: 'segundo_ojos', titulo: 'Segundo par de ojos sobre el presupuesto', tab: 'preferencias', palabras: 'presupuesto sugerencias ia se escapa olvidos al finalizar', requiere: 'segundo_ojos' },
     { id: 'avisos_suaves', titulo: 'Avisos de «vale una llamada»', tab: 'preferencias', palabras: 'primer service no volvio clientes perdidos llamar retencion avisos frecuentes clientes de siempre activos invitar service' },
+    { id: 'postventa', titulo: 'Después de vender una bici (ajuste y primer service)', tab: 'preferencias', palabras: 'venta vendi vendida mostrador bici nueva ajuste primer service meses despues de la compra aviso mensaje agendar' },
     { id: 'horas', titulo: 'Cuánto esperar al cliente antes de llamarlo', tab: 'preferencias', palabras: 'horas esperar respuesta llamar plazo no contesta' },
     { id: 'altas_erp', titulo: 'La bici vendida entra sola', tab: 'preferencias', palabras: 'erp contabilium venta vendida alta provincias bici nueva cliente nuevo factura' },
     { id: 'bicis_paradas_mecanico', titulo: 'El mecánico también ve Bicis paradas', tab: 'preferencias', palabras: 'permisos permiso mecanico ver bicis paradas stock acceso', requiere: 'bicis_paradas', soloAdmin: true },

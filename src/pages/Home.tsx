@@ -3,11 +3,12 @@ import { Link } from "react-router-dom";
 import { useDataStore, type SupabaseBike } from "@/store/dataStore";
 import { RapidIntakeWizard } from "@/components/RapidIntakeWizard";
 import { VentasSinCargar } from "@/components/VentasSinCargar";
+import { VentaDeMostrador } from "@/components/VentaDeMostrador";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 import { Input } from "@/components/ui/input";
 
-import { Search, PlusCircle, Trash2, Clock, CheckCircle, ChevronDown, ChevronUp, CreditCard, Phone, Users } from "lucide-react";
+import { Search, PlusCircle, Trash2, Clock, CheckCircle, ChevronDown, ChevronUp, CreditCard, Phone, Users, Bike } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/store/authStore";
@@ -15,6 +16,7 @@ import { diaCalendario } from "@/lib/fechaAR";
 
 export default function Home() {
     const [searchTerm, setSearchTerm] = useState("");
+    const [ventaOpen, setVentaOpen] = useState(false);
     const clientes = useDataStore(s => s.clientes);
     const bicicletas = useDataStore(s => s.bicicletas);
     const servicios = useDataStore(s => s.servicios);
@@ -128,15 +130,22 @@ export default function Home() {
 
             <div data-tour="clientes" className="flex justify-between items-center">
                 <h2 className="text-xl font-medium text-slate-600">Tus clientes y sus bicis</h2>
-                <RapidIntakeWizard
-                    onComplete={() => handleRefresh()}
-                    trigger={
-                        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-6">
-                            <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Cliente
-                        </Button>
-                    }
-                />
+                <div className="flex items-center gap-2">
+                    {/* Leira, 14-sep-2026: la venta de mostrador deja agendados el ajuste y el primer service. */}
+                    <Button variant="outline" className="font-medium" onClick={() => setVentaOpen(true)}>
+                        <Bike className="mr-2 h-4 w-4" /> Vendí una bici
+                    </Button>
+                    <RapidIntakeWizard
+                        onComplete={() => handleRefresh()}
+                        trigger={
+                            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-6">
+                                <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Cliente
+                            </Button>
+                        }
+                    />
+                </div>
             </div>
+            <VentaDeMostrador open={ventaOpen} onClose={() => setVentaOpen(false)} />
 
             {/* Grid */}
             {/* ── MOBILE: Accordion list (hidden on md+) ── */}

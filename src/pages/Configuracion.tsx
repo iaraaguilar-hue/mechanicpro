@@ -24,7 +24,7 @@ import ConectarWhatsApp from '@/pages/ConectarWhatsApp';
 import { MensajesAutomaticos } from '@/components/MensajesAutomaticos';
 import { AltasDesdeERP } from '@/components/AltasDesdeERP';
 import { ComoFunciona } from '@/components/ComoFunciona';
-import { configMantenimiento, COMPONENTES_BASE, PLAZOS_MESES, mesesEnPalabras, type ComponenteDiagnostico } from '@/lib/mantenimiento';
+import { configMantenimiento, COMPONENTES_BASE, PLAZOS_MESES, POSTVENTA_DEFAULT, mesesEnPalabras, comoLeLlegaPostventa, type ComponenteDiagnostico, type ConfigPostventa } from '@/lib/mantenimiento';
 import { tintaSobre, tintaLegible, PISO_TEXTO_GRANDE } from '@/lib/contraste';
 import { BuscadorDeAjustes, AJUSTES, type Ajuste, type PestanaConfig } from '@/components/BuscadorDeAjustes';
 
@@ -1150,6 +1150,29 @@ function TabPreferencias({ taller, setTaller, avisar }: {
         guardarComponentes([...componentes, { nombre, meses: null }]);
     };
 
+    // ── Después de vender una bici (Leira, 14-sep-2026): a cuántos meses el ajuste
+    // y el primer service, y qué dice el mensaje. Los plazos se guardan al elegir;
+    // los textos al salir del campo (onBlur), como los demás campos de escribir.
+    const [postventa, setPostventa] = useState<ConfigPostventa>(() => configMantenimiento(taller).postventa);
+    const guardarPostventa = async (patch: Partial<ConfigPostventa>) => {
+        const antes = postventa;
+        const nueva = { ...postventa, ...patch };
+        // Un texto borrado vuelve al de fábrica: un hueco vacío en la plantilla hace
+        // rebotar el mensaje entero en Meta.
+        if (!nueva.textoAjuste.trim()) nueva.textoAjuste = POSTVENTA_DEFAULT.textoAjuste;
+        if (!nueva.textoPrimerService.trim()) nueva.textoPrimerService = POSTVENTA_DEFAULT.textoPrimerService;
+        setPostventa(nueva);
+        try {
+            const config_mantenimiento = { ...(taller.config_mantenimiento || {}), postventa: nueva };
+            const { error } = await supabase.from('talleres').update({ config_mantenimiento }).eq('id', taller.id);
+            if (error) throw error;
+            setTaller({ ...taller, config_mantenimiento });
+        } catch (error: any) {
+            setPostventa(antes);
+            avisar('error', 'No se pudo guardar: ' + error.message);
+        }
+    };
+
     // ── Quién hizo cada service (opt-in, 3-sep-2026).
     // Opt-in y no obligatorio porque un taller de una sola persona no tiene a
     // quién distinguir, y pedirle ese dato en cada service es fricción pura.
@@ -1556,6 +1579,60 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                         Se muestran <strong>los 12 que más gastaron</strong>, no todos: una lista de
                         cien no la llama nadie. Van en su propia sección, abajo de los vencimientos,
                         para que nunca tapen lo urgente.
+                    </p>
+                </ComoFunciona>
+            </CardContent>
+        </Card>
+
+        {/* ── Después de vender una bici (Leira, 14-sep-2026) ── */}
+        <Card className="flex flex-col" data-ajuste="postventa">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <Bike className="h-4 w-4 text-primary" />
+                    Después de vender una bici
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col gap-3">
+                {([
+                    { clave: 'ajuste', titulo: 'Ajuste', meses: postventa.ajusteMeses, texto: postventa.textoAjuste,
+                      mesesKey: 'ajusteMeses', textoKey: 'textoAjuste' },
+                    { clave: 'primer', titulo: 'Primer service', meses: postventa.primerServiceMeses, texto: postventa.textoPrimerService,
+                      mesesKey: 'primerServiceMeses', textoKey: 'textoPrimerService' },
+                ] as const).map(a => (
+                    <div key={a.clave} className="space-y-2 p-3 rounded-lg border bg-muted/20">
+                        <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-medium">{a.titulo}</p>
+                            <select
+                                value={a.meses}
+                                onChange={e => guardarPostventa({ [a.mesesKey]: Number(e.target.value) } as Partial<ConfigPostventa>)}
+                                className="h-8 rounded-md border bg-background px-2 text-xs"
+                            >
+                                {PLAZOS_MESES.map(m => <option key={m} value={m}>a {mesesEnPalabras(m)} de la venta</option>)}
+                            </select>
+                        </div>
+                        <Input
+                            value={a.texto}
+                            maxLength={80}
+                            onChange={e => setPostventa(p => ({ ...p, [a.textoKey]: e.target.value }))}
+                            onBlur={e => guardarPostventa({ [a.textoKey]: e.target.value } as Partial<ConfigPostventa>)}
+                            className="h-9 text-sm"
+                            placeholder="qué hay que revisar"
+                        />
+                        <p className="text-[11px] text-muted-foreground leading-snug" data-contenido>
+                            Así le llega: «{comoLeLlegaPostventa(a.texto, taller.nombre ?? '')}»
+                        </p>
+                    </div>
+                ))}
+                <ComoFunciona>
+                    <p>
+                        Con <strong>Vendí una bici</strong> (en el Taller Activo y en Clientes) quedan
+                        agendados el ajuste y el primer service. Las fechas se pueden cambiar en el
+                        momento de la venta.
+                    </p>
+                    <p>
+                        Si tenés el WhatsApp conectado, ese día a las 10 le escribimos solos. Si no, o si
+                        el mensaje no sale, te aparece en Retención para escribirle vos. Si la bici ya
+                        pasó por el taller ese mes, no se le manda nada.
                     </p>
                 </ComoFunciona>
             </CardContent>

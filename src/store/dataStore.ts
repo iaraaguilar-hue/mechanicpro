@@ -35,6 +35,8 @@ export interface SupabaseBike {
     /** Talle de la bici del cliente (52/M/XL). Lo usa el cruce de bicis paradas. */
     talle?: string;
     notas?: string;
+    /** Día en que la compró EN ESTE TALLER (venta de mostrador, 14-sep-2026). */
+    fecha_compra?: string | null;
 }
 
 // Lo que se guarda cuando sale un mensaje del Motor de Retención.

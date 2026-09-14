@@ -31,7 +31,7 @@ export interface TallerData {
     // (Leira, 14-sep-2026). Se lee siempre por `configMantenimiento()`.
     config_mantenimiento?: {
         componentes?: { nombre: string; meses: number | null }[] | null;
-        postventa?: { habilitado?: boolean; ajusteMeses?: number; primerServiceMeses?: number };
+        postventa?: { ajusteMeses?: number; primerServiceMeses?: number; textoAjuste?: string; textoPrimerService?: string };
     } | null;
     // Cómo se ve la app en ESTE taller (14-sep-2026). Hoy solo el número de orden grande de Leira.
     config_vista?: { numero_orden_grande?: boolean } | null;

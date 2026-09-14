@@ -10,7 +10,7 @@ import { dispararMensajesAutomaticos } from "@/lib/comprobanteALaNube";
 import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign, PackageSearch, Phone } from "lucide-react";
+import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign, PackageSearch, Phone, Bike } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { servicioRevenue } from "@/lib/servicioRevenue";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -41,6 +41,7 @@ import { EtiquetaService } from '@/components/EtiquetaService';
 import { FiltroDeColumna, type OpcionFiltro, type Direccion } from '@/components/FiltroDeColumna';
 import { grupoDeEstado, ETIQUETA_DE_GRUPO } from '@/components/StatusBadge';
 import { hoyAR } from '@/lib/mantenimiento';
+import { VentaDeMostrador } from '@/components/VentaDeMostrador';
 
 // 🚩 Las fechas se formatean en UN SOLO lugar: `lib/fechaAR.ts`. Ahí está
 // explicado por qué los INSTANTES (fecha_ingreso, fecha_finalizacion,
@@ -165,6 +166,8 @@ export default function Workshop() {
     // "Recibir Bici" abre el wizard directo (identificación del cliente),
     // sin la pantalla intermedia de Recepción (Tarea E).
     const [newServiceOpen, setNewServiceOpen] = useState(false);
+    // Leira, 14-sep-2026: la venta de mostrador, que deja agendados ajuste y primer service.
+    const [ventaOpen, setVentaOpen] = useState(false);
     const [searchParams, setSearchParams] = useSearchParams();
     // Confirmación linda (estilo MP) en vez de window.confirm
     const [confirming, setConfirming] = useState<{ kind: 'deliver' | 'reopen'; job: DashboardJob } | null>(null);
@@ -371,6 +374,9 @@ export default function Workshop() {
                 <div className="flex items-center gap-2 shrink-0">
                     {/* Recibir Bici abre el wizard directo (identificación del cliente),
                         sin pantalla intermedia de Recepción (Tarea E). */}
+                    <Button variant="outline" className="gap-2" onClick={() => setVentaOpen(true)} title="Registrar una venta de mostrador">
+                        <Bike className="h-4 w-4" /> Vendí una bici
+                    </Button>
                     <Button
                         data-tour="recibir-bici"
                         className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
@@ -484,6 +490,8 @@ export default function Workshop() {
                     onSuccess={() => { }}
                 />
             )}
+
+            <VentaDeMostrador open={ventaOpen} onClose={() => setVentaOpen(false)} />
 
             {/* Nuevo service directo desde "Recibir Bici" (Tarea E) */}
             {newServiceOpen && (

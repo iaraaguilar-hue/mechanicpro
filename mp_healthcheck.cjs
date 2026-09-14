@@ -162,6 +162,32 @@ async function main() {
         }
     }
 
+    // 3c-ter. Mensajes que Meta rechazó en las últimas 48 hs, por taller.
+    // 🚩 12/13-sep-2026: Leira Bikes tuvo 12 rechazados (131042, la cuenta sin moneda
+    // configurada) y nadie se enteró en dos días: el token estaba sano, el número en verde,
+    // y todos los chequeos de arriba daban OK. Un canal que falla sin avisar se ve igual
+    // que un canal que nadie usa.
+    {
+        const desde = new Date(Date.now() - 48 * 3600000).toISOString();
+        const { data: fallados, error } = await db.from('mensajes_whatsapp')
+            .select('taller_id, error_codigo').eq('estado', 'failed').gte('created_at', desde);
+        if (error) {
+            add('whatsapp_rechazados_48h', 'OMITIDO', `no pude leer mensajes_whatsapp (${error.message})`);
+        } else if (!fallados.length) {
+            add('whatsapp_rechazados_48h', 'OK', 'ningún mensaje rechazado en 48 hs');
+        } else {
+            const nombres = Object.fromEntries((talleres || []).map(t => [t.id, t.nombre || t.id]));
+            const por = {};
+            for (const f of fallados) {
+                const k = `${nombres[f.taller_id] || f.taller_id} (${f.error_codigo || 's/código'})`;
+                por[k] = (por[k] || 0) + 1;
+            }
+            add('whatsapp_rechazados_48h', 'FALLA',
+                Object.entries(por).map(([k, n]) => `${k}: ${n}`).join(' · ')
+                + ' — 131042 = la cuenta del taller sin moneda/medio de pago en Meta');
+        }
+    }
+
     // 3d. Fugas cross-tenant: filas sin taller_id (RLS no las protege)
     for (const t of ['clientes', 'bicicletas', 'servicios', 'recordatorios']) {
         const { count } = await db.from(t).select('*', { count: 'exact', head: true }).is('taller_id', null);

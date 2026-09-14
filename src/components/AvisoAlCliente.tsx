@@ -53,6 +53,8 @@ interface Renglon {
     etiqueta: string;
     /** Lo que contestó Meta (entregado / leído / falló), si lo sabemos. */
     estado?: string | null;
+    /** Si no salió: por qué y qué hacer, dicho para el taller. */
+    fallo?: string | null;
 }
 
 const ESTADO_LEGIBLE: Record<string, string> = {
@@ -62,6 +64,17 @@ const ESTADO_LEGIBLE: Record<string, string> = {
     read: 'leído',
     failed: 'no salió',
 };
+
+// 🚩 12/13-sep-2026, Leira Bikes: 12 mensajes rechazados por Meta y la pantalla solo decía
+// «no salió» en gris. El taller reintentó 6 veces el mismo aviso y terminó escribiendo desde
+// el celular sin saber por qué. Un fallo sin motivo se lee como «el sistema no anda».
+function motivoDelFallo(codigo?: string | null): string {
+    // 131042: la cuenta de WhatsApp del taller no tiene moneda ni medio de pago. Meta rechaza
+    // toda plantilla; solo pasan las respuestas dentro de las 24 hs de que escribió el cliente.
+    if (codigo === '131042') return 'WhatsApp no lo mandó porque a tu cuenta de WhatsApp Business le falta cargar la moneda y el medio de pago en Meta (Facturación). Se hace una sola vez. Hasta entonces, escribile desde tu celular.';
+    if (codigo === 'red') return 'No pudimos llegar a WhatsApp. Probá de nuevo en un rato o escribile desde tu celular.';
+    return `WhatsApp no lo entregó${codigo ? ` (código ${codigo})` : ''}. Escribile desde tu celular.`;
+}
 
 export default function AvisoAlCliente({ serviceId }: Props) {
     const taller = useAuthStore(s => s.taller);
@@ -135,7 +148,7 @@ export default function AvisoAlCliente({ serviceId }: Props) {
 
         const { data: salientes } = await supabase
             .from('mensajes_whatsapp')
-            .select('id, texto, plantilla, estado, created_at')
+            .select('id, texto, plantilla, estado, error_codigo, created_at')
             .eq('servicio_id', serviceId)
             .order('created_at', { ascending: false })
             .limit(30);
@@ -144,6 +157,7 @@ export default function AvisoAlCliente({ serviceId }: Props) {
                 id: `out_${m.id}`, cuando: m.created_at, quien: 'taller',
                 texto: m.texto || `(${m.plantilla})`,
                 etiqueta: 'WhatsApp', estado: ESTADO_LEGIBLE[m.estado] ?? m.estado,
+                fallo: m.estado === 'failed' ? motivoDelFallo(m.error_codigo) : null,
             });
         }
 
@@ -499,10 +513,15 @@ export default function AvisoAlCliente({ serviceId }: Props) {
                                     <span className="font-semibold">{m.quien === 'cliente' ? nombreCliente : 'El taller'}</span>
                                     <span>·</span>
                                     <span>{m.etiqueta}</span>
-                                    {m.estado && <><span>·</span><span>{m.estado}</span></>}
+                                    {m.estado && <><span>·</span><span className={m.fallo ? 'font-bold text-red-700' : undefined}>{m.estado}</span></>}
                                     <span className="ml-auto">{instanteARConHora(m.cuando)}</span>
                                 </div>
                                 {m.texto && <p className="text-sm text-slate-700 leading-snug">{m.texto}</p>}
+                                {m.fallo && (
+                                    <p className="mt-1.5 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-800 leading-snug">
+                                        {m.fallo}
+                                    </p>
+                                )}
                             </div>
                         ))}
                     </div>

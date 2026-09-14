@@ -15,7 +15,7 @@ import { NuevoBadge } from '@/components/NuevoBadge';
 import {
     Settings, Loader2, Save, UploadCloud, Plus, Edit2, Check, X, Users,
     AlertCircle, Sparkles, ListChecks, CheckCircle, Lock, Bell, HeartPulse,
-    GraduationCap, PlayCircle, PhoneCall, Eye, Bike
+    GraduationCap, PlayCircle, PhoneCall, Eye, Bike, Hash
 } from 'lucide-react';
 import { useTourStore } from '@/components/OnboardingTour';
 import { resetTours } from '@/lib/tourSeen';
@@ -24,6 +24,7 @@ import ConectarWhatsApp from '@/pages/ConectarWhatsApp';
 import { MensajesAutomaticos } from '@/components/MensajesAutomaticos';
 import { AltasDesdeERP } from '@/components/AltasDesdeERP';
 import { ComoFunciona } from '@/components/ComoFunciona';
+import { configMantenimiento, COMPONENTES_BASE, PLAZOS_MESES, mesesEnPalabras, type ComponenteDiagnostico } from '@/lib/mantenimiento';
 import { tintaSobre, tintaLegible, PISO_TEXTO_GRANDE } from '@/lib/contraste';
 import { BuscadorDeAjustes, AJUSTES, type Ajuste, type PestanaConfig } from '@/components/BuscadorDeAjustes';
 
@@ -1071,11 +1072,14 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     const [suavesHab, setSuavesHab] = useState(cfgSuaves.habilitado === true);
     const [suavesPS, setSuavesPS] = useState(cfgSuaves.primerServiceDias ?? 30);
     const [suavesNV, setSuavesNV] = useState(cfgSuaves.noVolvioDias ?? 120);
+    // 14-sep-2026 (Leira): también el cliente que viene seguido. Prendido de fábrica.
+    const [suavesFrec, setSuavesFrec] = useState(cfgSuaves.incluirFrecuentes !== false);
     const [savingSuaves, setSavingSuaves] = useState(false);
 
-    const guardarSuaves = async (patch: { habilitado?: boolean; primerServiceDias?: number; noVolvioDias?: number }) => {
-        const antes = { habilitado: suavesHab, primerServiceDias: suavesPS, noVolvioDias: suavesNV };
+    const guardarSuaves = async (patch: { habilitado?: boolean; primerServiceDias?: number; noVolvioDias?: number; incluirFrecuentes?: boolean }) => {
+        const antes = { habilitado: suavesHab, primerServiceDias: suavesPS, noVolvioDias: suavesNV, incluirFrecuentes: suavesFrec };
         if (patch.habilitado !== undefined) setSuavesHab(patch.habilitado);
+        if (patch.incluirFrecuentes !== undefined) setSuavesFrec(patch.incluirFrecuentes);
         try {
             setSavingSuaves(true);
             const avisos_suaves = { ...antes, ...patch };
@@ -1090,10 +1094,60 @@ function TabPreferencias({ taller, setTaller, avisar }: {
             }
         } catch (error: any) {
             setSuavesHab(antes.habilitado); setSuavesPS(antes.primerServiceDias); setSuavesNV(antes.noVolvioDias);
+            setSuavesFrec(antes.incluirFrecuentes);
             avisar('error', 'No se pudo guardar: ' + error.message);
         } finally {
             setSavingSuaves(false);
         }
+    };
+
+    // ── Número de orden grande (Leira, 14-sep-2026): "va a usar mucho el número
+    // de orden". Iara: solo para él, así que es un ajuste del taller y no un cambio
+    // de la app.
+    const [ordenGrande, setOrdenGrande] = useState(taller.config_vista?.numero_orden_grande === true);
+    const guardarOrdenGrande = async (v: boolean) => {
+        setOrdenGrande(v);
+        try {
+            const config_vista = { ...(taller.config_vista || {}), numero_orden_grande: v };
+            const { error } = await supabase.from('talleres').update({ config_vista }).eq('id', taller.id);
+            if (error) throw error;
+            setTaller({ ...taller, config_vista });
+        } catch (error: any) {
+            setOrdenGrande(!v);
+            avisar('error', 'No se pudo guardar: ' + error.message);
+        }
+    };
+
+    // ── Componentes y plazos del diagnóstico (Leira, 14-sep-2026). Se guarda al
+    // tocar: agregar, sacar o cambiar un plazo son cambios de a uno.
+    const [componentes, setComponentes] = useState<ComponenteDiagnostico[]>(() => configMantenimiento(taller).componentes);
+    const [nuevoComponente, setNuevoComponente] = useState('');
+    const [savingComp, setSavingComp] = useState(false);
+    const guardarComponentes = async (lista: ComponenteDiagnostico[] | null) => {
+        const antes = componentes;
+        setComponentes(lista ?? COMPONENTES_BASE);
+        try {
+            setSavingComp(true);
+            const config_mantenimiento = { ...(taller.config_mantenimiento || {}), componentes: lista };
+            const { error } = await supabase.from('talleres').update({ config_mantenimiento }).eq('id', taller.id);
+            if (error) throw error;
+            setTaller({ ...taller, config_mantenimiento });
+        } catch (error: any) {
+            setComponentes(antes);
+            avisar('error', 'No se pudo guardar: ' + error.message);
+        } finally {
+            setSavingComp(false);
+        }
+    };
+    const agregarComponente = () => {
+        const nombre = nuevoComponente.trim();
+        if (!nombre) return;
+        if (componentes.some(c => c.nombre.toLowerCase() === nombre.toLowerCase())) {
+            avisar('error', 'Ese componente ya está en la lista.');
+            return;
+        }
+        setNuevoComponente('');
+        guardarComponentes([...componentes, { nombre, meses: null }]);
     };
 
     // ── Quién hizo cada service (opt-in, 3-sep-2026).
@@ -1358,6 +1412,90 @@ function TabPreferencias({ taller, setTaller, avisar }: {
             </CardContent>
         </Card>
         )}
+
+        {/* ── Componentes y plazos del diagnóstico (Leira, 14-sep-2026) ── */}
+        <Card className="flex flex-col" data-ajuste="componentes">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <HeartPulse className="h-4 w-4 text-primary" />
+                    Componentes del diagnóstico
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col gap-3">
+                <div className="space-y-1.5">
+                    {componentes.map((c, i) => (
+                        <div key={c.nombre} className="flex items-center gap-2 p-2 rounded-lg border bg-muted/20">
+                            <span className="flex-1 min-w-0 text-sm truncate">{c.nombre}</span>
+                            <select
+                                value={c.meses ?? ''}
+                                disabled={savingComp}
+                                onChange={e => guardarComponentes(componentes.map((x, j) => j === i
+                                    ? { ...x, meses: e.target.value ? Number(e.target.value) : null }
+                                    : x))}
+                                className="h-8 rounded-md border bg-background px-2 text-xs"
+                                title="Plazo sugerido"
+                            >
+                                <option value="">Sin sugerido</option>
+                                {PLAZOS_MESES.map(m => <option key={m} value={m}>{mesesEnPalabras(m)}</option>)}
+                            </select>
+                            <button
+                                type="button"
+                                disabled={savingComp || componentes.length <= 1}
+                                onClick={() => guardarComponentes(componentes.filter((_, j) => j !== i))}
+                                className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-40"
+                                title="Sacar de la lista"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+                <div className="flex gap-2">
+                    <Input
+                        value={nuevoComponente}
+                        onChange={e => setNuevoComponente(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') agregarComponente(); }}
+                        placeholder="Agregar un componente"
+                        className="h-9"
+                    />
+                    <Button type="button" variant="outline" size="sm" className="h-9" onClick={agregarComponente} disabled={!nuevoComponente.trim() || savingComp}>
+                        Agregar
+                    </Button>
+                </div>
+                <ComoFunciona>
+                    <p>
+                        Es la lista que aparece en el diagnóstico de cada orden. El plazo sugerido se ve
+                        resaltado para tildarlo de un toque, pero no se marca solo: cada bici se mira.
+                    </p>
+                    <button type="button" className="text-xs font-semibold text-primary hover:underline" onClick={() => guardarComponentes(null)}>
+                        Volver a la lista de siempre
+                    </button>
+                </ComoFunciona>
+            </CardContent>
+        </Card>
+
+        {/* ── Número de orden grande (Leira, 14-sep-2026) ── */}
+        <Card className="flex flex-col" data-ajuste="orden_grande">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <Hash className="h-4 w-4 text-primary" />
+                    Número de orden grande
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col gap-3">
+                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                    <div className="pr-3">
+                        <p className="font-semibold text-sm">Mostrar el número de orden más grande</p>
+                        <p className="text-[11px] text-muted-foreground">Para los talleres que se manejan por número.</p>
+                    </div>
+                    <Switch checked={ordenGrande} onCheckedChange={guardarOrdenGrande} />
+                </div>
+                <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                    Así se ve:
+                    <span className={ordenGrande ? 'text-2xl font-black text-primary tabular-nums' : 'text-[10px] font-bold text-primary'}>#0042</span>
+                </p>
+            </CardContent>
+        </Card>
         </SeccionPreferencias>
 
         <SeccionPreferencias titulo="Clientes y seguimiento">
@@ -1398,13 +1536,21 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                             onBlur={() => guardarSuaves({ noVolvioDias: suavesNV })}
                         />
                     </div>
+                    <div className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-muted/20">
+                        <div>
+                            <p className="text-sm font-medium">También los que vienen seguido</p>
+                            <p className="text-[11px] text-muted-foreground">El cliente de siempre que dejó de venir, para invitarlo al service.</p>
+                        </div>
+                        <Switch checked={suavesFrec} onCheckedChange={v => guardarSuaves({ incluirFrecuentes: v })} disabled={savingSuaves} />
+                    </div>
                 </div>
                 {/* Por qué el default no es 90: con 90 días Probikes daba 109 nombres. */}
                 <ComoFunciona>
                     <p>
                         Aparte de los vencimientos, Retención te avisa de dos cosas más blandas: la
                         bici que se cargó y <strong>nunca vino al taller</strong> (le toca el primer
-                        service) y el cliente que <strong>vino una vez y no volvió</strong>.
+                        service) y el cliente que <strong>hace rato que no viene</strong>, haya venido
+                        una vez o sea de los de siempre.
                     </p>
                     <p>
                         Se muestran <strong>los 12 que más gastaron</strong>, no todos: una lista de

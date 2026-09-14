@@ -25,8 +25,16 @@ export interface TallerData {
     firma_nombre?: string | null;
     config_notificaciones?: { tareas_habilitado?: boolean; bloquear_finalizacion?: boolean; momento_diagnostico?: 'final' | 'durante' | 'ambos';
         // Avisos suaves (Alejo, 3-sep-2026): primer service y el que no volvió.
-        avisos_suaves?: { habilitado?: boolean; primerServiceDias?: number; noVolvioDias?: number; limite?: number };
+        avisos_suaves?: { habilitado?: boolean; primerServiceDias?: number; noVolvioDias?: number; limite?: number; incluirFrecuentes?: boolean };
     } | null;
+    // Componentes y plazos del diagnóstico + lo que se agenda al vender una bici
+    // (Leira, 14-sep-2026). Se lee siempre por `configMantenimiento()`.
+    config_mantenimiento?: {
+        componentes?: { nombre: string; meses: number | null }[] | null;
+        postventa?: { habilitado?: boolean; ajusteMeses?: number; primerServiceMeses?: number };
+    } | null;
+    // Cómo se ve la app en ESTE taller (14-sep-2026). Hoy solo el número de orden grande de Leira.
+    config_vista?: { numero_orden_grande?: boolean } | null;
     [key: string]: any;
 }
 

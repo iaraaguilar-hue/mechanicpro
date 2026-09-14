@@ -22,7 +22,7 @@ import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthChec
 import { estadoDeEspera } from "@/lib/avisoDeLaOrden";
 import { resolveOrdenWebhookUrl, resolveEntregadoWebhookUrl } from "@/lib/ordenWebhook";
 import { claveProducto, buscarProductos } from "@/lib/buscadorProductos";
-import { instanteAR, diaCalendario } from "@/lib/fechaAR";
+import { instanteAR, diaCalendario, ZONA_AR } from "@/lib/fechaAR";
 import { ETIQUETAS_NOTAS } from "@/lib/notasServicio";
 import {
     chequearOrdenParaERP,
@@ -38,6 +38,9 @@ import { avancesActivos, trabajosPendientes, tareasActivas, bloqueoFinalizacionA
 import { tourBloqueaCierreDialog } from "@/components/OnboardingTour";
 import SegundoParDeOjos from "@/components/SegundoParDeOjos";
 import { EtiquetaService } from '@/components/EtiquetaService';
+import { FiltroDeColumna, type OpcionFiltro, type Direccion } from '@/components/FiltroDeColumna';
+import { grupoDeEstado, ETIQUETA_DE_GRUPO } from '@/components/StatusBadge';
+import { hoyAR } from '@/lib/mantenimiento';
 
 // 🚩 Las fechas se formatean en UN SOLO lugar: `lib/fechaAR.ts`. Ahí está
 // explicado por qué los INSTANTES (fecha_ingreso, fecha_finalizacion,
@@ -64,6 +67,87 @@ interface DashboardJob {
     /** false = el POST de la orden de venta al ERP no llegó. */
     webhook_erp_ok?: boolean | null;
     webhook_erp_detalle?: string | null;
+}
+
+// ─────────────────────────────────────────────────────────────
+// ORDENAR Y FILTRAR LA MESA DE TRABAJO, como en Excel (14-sep-2026).
+//
+// Pedido de Ariel Leira (Leira Bikes): "que se pueda acomodar por fecha de
+// entrega" y "filtrar la columna de entrega como en Excel". Iara: "todo lo demás
+// de los filtros prefiero que sea para todos". Hasta hoy la mesa ordenaba de una
+// sola forma (entrega más cercana primero) y no filtraba nada.
+// ─────────────────────────────────────────────────────────────
+type ColFiltro = 'estado' | 'ingreso' | 'entrega' | 'cliente' | 'service';
+type ColOrden = 'entrega' | 'ingreso' | 'cliente';
+
+const CLAVE_ORDEN = 'mp_taller_activo_orden';
+const SIN_FILTROS: Record<ColFiltro, Set<string> | null> = { estado: null, ingreso: null, entrega: null, cliente: null, service: null };
+const SIN_FECHA = '__sin_fecha__';
+
+/** El día de Argentina de un instante: `fecha_ingreso` se guarda con hora. */
+const diaDeInstante = (iso?: string) => iso
+    ? new Intl.DateTimeFormat('en-CA', { timeZone: ZONA_AR, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso))
+    : SIN_FECHA;
+
+const VALOR: Record<ColFiltro, (j: DashboardJob) => string> = {
+    estado: j => grupoDeEstado(j.status),
+    ingreso: j => diaDeInstante(j.date_in),
+    // `fecha_entrega` es un día de calendario (la fecha prometida): se usa tal cual.
+    entrega: j => j.date_out ? j.date_out.slice(0, 10) : SIN_FECHA,
+    cliente: j => j.client_name,
+    service: j => j.service_type || 'OTRO',
+};
+
+function diaSiguiente(dia: string): string {
+    const [y, m, d] = dia.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+}
+
+function etiquetaDeDia(v: string, hoy: string, conRelativo: boolean): string {
+    if (v === SIN_FECHA) return '(Sin fecha)';
+    const base = diaCalendario(v);
+    if (!conRelativo) return base;
+    if (v < hoy) return `${base} · vencida`;
+    if (v === hoy) return `${base} · hoy`;
+    if (v === diaSiguiente(hoy)) return `${base} · mañana`;
+    return base;
+}
+
+function opcionesDeFiltro(jobs: DashboardJob[], hoy: string): Record<ColFiltro, OpcionFiltro[]> {
+    const contar = (col: ColFiltro, etiqueta: (v: string) => string, orden: (a: string, b: string) => number) => {
+        const n = new Map<string, number>();
+        for (const j of jobs) { const v = VALOR[col](j); n.set(v, (n.get(v) ?? 0) + 1); }
+        return [...n.entries()].sort(([a], [b]) => orden(a, b)).map(([valor, cantidad]) => ({ valor, etiqueta: etiqueta(valor), cantidad }));
+    };
+    const porFecha = (a: string, b: string) => (a === SIN_FECHA ? 1 : b === SIN_FECHA ? -1 : a.localeCompare(b));
+    const alfabetico = (a: string, b: string) => a.localeCompare(b, 'es');
+    const ordenDeEstado = ['en_curso', 'finalizado', 'entregado'];
+    return {
+        estado: contar('estado', v => ETIQUETA_DE_GRUPO[v as keyof typeof ETIQUETA_DE_GRUPO] ?? v,
+            (a, b) => ordenDeEstado.indexOf(a) - ordenDeEstado.indexOf(b)),
+        ingreso: contar('ingreso', v => etiquetaDeDia(v, hoy, false), porFecha),
+        entrega: contar('entrega', v => etiquetaDeDia(v, hoy, true), porFecha),
+        cliente: contar('cliente', v => v, alfabetico),
+        service: contar('service', v => v, alfabetico),
+    };
+}
+
+function ordenarJobs(jobs: DashboardJob[], col: ColOrden, dir: Direccion): DashboardJob[] {
+    const signo = dir === 'asc' ? 1 : -1;
+    const clave = (j: DashboardJob) => col === 'entrega'
+        ? (j.date_out?.slice(0, 10) ?? null)
+        : col === 'ingreso' ? (j.date_in ?? null) : (j.client_name || null);
+    return [...jobs].sort((a, b) => {
+        const ka = clave(a), kb = clave(b);
+        // Sin fecha va SIEMPRE al final, se ordene para donde se ordene: es la que
+        // no tiene compromiso, no la más urgente ni la menos.
+        if (!ka && !kb) return 0;
+        if (!ka) return 1;
+        if (!kb) return -1;
+        const c = col === 'cliente' ? ka.localeCompare(kb, 'es') : ka < kb ? -1 : ka > kb ? 1 : 0;
+        // A igual valor, la que entró primero.
+        return c * signo || (a.date_in ?? '').localeCompare(b.date_in ?? '');
+    });
 }
 
 export default function Workshop() {
@@ -116,12 +200,52 @@ export default function Workshop() {
                 };
             });
 
-        return mapped.sort((a: any, b: any) => {
-            if (!a.date_out) return 1;
-            if (!b.date_out) return -1;
-            return new Date(a.date_out).getTime() - new Date(b.date_out).getTime();
-        });
+        return mapped;
     }, [servicios, bicicletas, clientes]);
+
+    // El orden se recuerda en este navegador: es una costumbre de quien mira. Los
+    // filtros NO: un filtro olvidado de ayer esconde la bici que entró hoy, y en la
+    // mesa de trabajo eso es una bici que nadie ve.
+    const [orden, setOrden] = useState<{ col: ColOrden; dir: Direccion }>(() => {
+        try {
+            const g = JSON.parse(localStorage.getItem(CLAVE_ORDEN) || 'null');
+            if (g && ['entrega', 'ingreso', 'cliente'].includes(g.col) && ['asc', 'desc'].includes(g.dir)) return g;
+        } catch { /* sin almacenamiento: el orden de siempre */ }
+        return { col: 'entrega', dir: 'asc' };
+    });
+    const ordenar = (col: ColOrden, dir: Direccion) => {
+        setOrden({ col, dir });
+        try { localStorage.setItem(CLAVE_ORDEN, JSON.stringify({ col, dir })); } catch { /* no se recuerda, no pasa nada */ }
+    };
+    const [filtros, setFiltros] = useState<Record<ColFiltro, Set<string> | null>>(SIN_FILTROS);
+    const filtrar = (col: ColFiltro) => (sel: Set<string> | null) => setFiltros(f => ({ ...f, [col]: sel }));
+    const hayFiltros = Object.values(filtros).some(Boolean);
+
+    const hoy = hoyAR();
+    const opciones = useMemo(() => opcionesDeFiltro(jobs, hoy), [jobs, hoy]);
+    const visibles = useMemo(() => {
+        const pasa = (job: DashboardJob) => (Object.keys(filtros) as ColFiltro[])
+            .every(col => !filtros[col] || filtros[col]!.has(VALOR[col](job)));
+        return ordenarJobs(jobs.filter(pasa), orden.col, orden.dir);
+    }, [jobs, filtros, orden]);
+
+    const ETIQUETAS = {
+        entrega: { asc: 'La más cercana primero', desc: 'La más lejana primero' },
+        ingreso: { asc: 'La que entró primero', desc: 'La que entró último' },
+        cliente: { asc: 'De la A a la Z', desc: 'De la Z a la A' },
+    };
+    const filtro = (col: ColFiltro, titulo: string, variante: 'encabezado' | 'pastilla') => (
+        <FiltroDeColumna
+            titulo={titulo}
+            variante={variante}
+            opciones={opciones[col]}
+            seleccion={filtros[col]}
+            onCambiar={filtrar(col)}
+            {...(col === 'entrega' || col === 'ingreso' || col === 'cliente'
+                ? { orden: orden.col === col ? orden.dir : null, onOrdenar: (d: Direccion) => ordenar(col, d), etiquetasOrden: ETIQUETAS[col] }
+                : {})}
+        />
+    );
 
     // Acceso rápido desde la campana (Tarea F): /?openService=<id> abre la
     // orden puntual para completar sus tareas. Se limpia el query param al abrir.
@@ -279,12 +403,31 @@ export default function Workshop() {
                 </Card>
             </div>
 
+            {hayFiltros && (
+                <div className="flex items-center justify-between gap-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+                    <span>Mostrando <strong>{visibles.length}</strong> de {jobs.length}</span>
+                    <button type="button" className="text-xs font-semibold text-primary hover:underline" onClick={() => setFiltros(SIN_FILTROS)}>
+                        Quitar filtros
+                    </button>
+                </div>
+            )}
+
             {/* ── MOBILE: Compact horizontal cards (hidden on md+) ── */}
             <div data-tour="mesa-trabajo" className="block md:hidden">
+                {jobs.length > 0 && (
+                    <div className="-mx-1 mb-2 flex gap-2 overflow-x-auto px-1 pb-2">
+                        {filtro('entrega', 'Entrega', 'pastilla')}
+                        {filtro('cliente', 'Cliente', 'pastilla')}
+                        {filtro('estado', 'Estado', 'pastilla')}
+                        {filtro('service', 'Service', 'pastilla')}
+                    </div>
+                )}
                 {jobs.length === 0 ? (
                     <p className="text-center text-muted-foreground py-12">No hay bicicletas en el taller.</p>
+                ) : visibles.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-12">Ninguna bici coincide con los filtros.</p>
                 ) : (
-                    jobs.map((job) => (
+                    visibles.map((job) => (
                         <MobileJobCard
                             key={job.service_id}
                             job={job}
@@ -302,17 +445,17 @@ export default function Workshop() {
                 <Table>
                     <TableHeader>
                         <TableRow className="bg-muted/50 hover:bg-muted/50">
-                            <TableHead className="w-[100px]">Estado</TableHead>
-                            <TableHead>Ingreso</TableHead>
-                            <TableHead>Entrega</TableHead>
-                            <TableHead>Cliente</TableHead>
+                            <TableHead className="w-[100px]">{filtro('estado', 'Estado', 'encabezado')}</TableHead>
+                            <TableHead>{filtro('ingreso', 'Ingreso', 'encabezado')}</TableHead>
+                            <TableHead>{filtro('entrega', 'Entrega', 'encabezado')}</TableHead>
+                            <TableHead>{filtro('cliente', 'Cliente', 'encabezado')}</TableHead>
                             <TableHead>Bicicleta</TableHead>
-                            <TableHead>Service</TableHead>
+                            <TableHead>{filtro('service', 'Service', 'encabezado')}</TableHead>
                             <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {jobs.map((job) => (
+                        {visibles.map((job) => (
                             <JobRow
                                 key={job.service_id}
                                 job={job}
@@ -322,10 +465,10 @@ export default function Workshop() {
                                 onReopen={() => handleReopen(job)}
                             />
                         ))}
-                        {jobs.length === 0 && (
+                        {visibles.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
-                                    No hay bicicletas en el taller.
+                                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                                    {jobs.length === 0 ? 'No hay bicicletas en el taller.' : 'Ninguna bici coincide con los filtros.'}
                                 </TableCell>
                             </TableRow>
                         )}
@@ -421,6 +564,9 @@ function MobileJobCard({ job, onClick, onFinalize, onDeliver, onReopen }: { job:
     const mostrarEtapas = avancesActivos(taller);
     const mostrarTareas = tareasActivas(taller);
     const isReady = (job.status || '').toLowerCase() === 'ready';
+    // Leira, 14-sep-2026: "va a usar mucho el número de orden". Solo en el taller
+    // que lo prendió (Configuración → Número de orden grande).
+    const ordenGrande = taller?.config_vista?.numero_orden_grande === true;
     return (
         <div
             onClick={onClick}
@@ -429,7 +575,9 @@ function MobileJobCard({ job, onClick, onFinalize, onDeliver, onReopen }: { job:
             <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-1 flex-1 min-w-0 pr-3">
                     <div className="flex items-center gap-2">
-                        <span className="bg-slate-100 text-slate-600 text-[11px] font-bold px-1.5 py-0.5 rounded-md">
+                        <span className={ordenGrande
+                            ? "bg-primary/10 text-primary text-lg font-black leading-none px-2 py-1 rounded-md tabular-nums"
+                            : "bg-slate-100 text-slate-600 text-[11px] font-bold px-1.5 py-0.5 rounded-md"}>
                             #{job.numero_orden ? String(job.numero_orden).padStart(4, '0') : job.service_id.slice(-4)}
                         </span>
                         <h3 className="font-semibold text-slate-800 text-sm truncate">{job.client_name}</h3>
@@ -652,10 +800,18 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                     {(mostrarEtapas || mostrarTareas) && <EtapasChecklist serviceId={job.service_id} />}
                 </TableCell>
                 <TableCell className="font-medium text-muted-foreground w-28">
-                    <div className="flex flex-col gap-1">
-                        <span className="text-slate-900 font-semibold">{instanteAR(job.date_in)}</span>
-                        <span className="text-[10px] text-primary font-bold mt-1" title={job.service_id}>{formatOrdenNumber(job.numero_orden, job.service_id)}</span>
-                    </div>
+                    {taller?.config_vista?.numero_orden_grande === true ? (
+                        // Leira, 14-sep-2026: el número va primero y grande; la fecha, abajo.
+                        <div className="flex flex-col gap-1">
+                            <span className="text-2xl font-black leading-none text-primary tabular-nums" title={job.service_id}>{formatOrdenNumber(job.numero_orden, job.service_id)}</span>
+                            <span className="text-xs text-slate-600 font-semibold">{instanteAR(job.date_in)}</span>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col gap-1">
+                            <span className="text-slate-900 font-semibold">{instanteAR(job.date_in)}</span>
+                            <span className="text-[10px] text-primary font-bold mt-1" title={job.service_id}>{formatOrdenNumber(job.numero_orden, job.service_id)}</span>
+                        </div>
+                    )}
                 </TableCell>
                 <TableCell className="font-medium p-0 m-0 align-top pt-4">
                     {job.date_out ? (

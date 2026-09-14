@@ -640,10 +640,15 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                 });
                 // Diagnóstico durante el service → crea recordatorios de Retención
                 // (mismo formato que al finalizar). Solo si la preferencia lo permite.
-                if (verDiagnostico && healthCheckData.length > 0 && bike?.id && taller_id) {
+                //
+                // 🔴 14-sep-2026: miraba `bike`, que llega null cuando la orden se abre
+                // desde el Taller Activo (que es casi siempre). El diagnóstico se tildaba,
+                // se guardaba la orden, y los avisos no se creaban sin decir nada. Es la
+                // misma bici que se muestra arriba: `biciMostrada`.
+                if (verDiagnostico && healthCheckData.length > 0 && biciMostrada?.id && taller_id) {
                     await upsertRecordatorios(healthCheckData.map(item => ({
                         taller_id,
-                        bicicleta_id: bike.id,
+                        bicicleta_id: biciMostrada.id,
                         componente: item.component,
                         fecha_vencimiento: item.dueDate,
                         fecha_asignacion: new Date().toISOString(),
@@ -733,7 +738,13 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                     <div>
                         <p className="text-sm font-semibold">
                             {nombreCliente}
-                            {numeroOrden && <span className="ml-2 font-mono text-xs text-orange-700">{numeroOrden}</span>}
+                            {numeroOrden && (
+                                <span className={taller?.config_vista?.numero_orden_grande === true
+                                    ? "ml-2 font-mono text-xl font-black text-orange-700 align-middle"
+                                    : "ml-2 font-mono text-xs text-orange-700"}>
+                                    {numeroOrden}
+                                </span>
+                            )}
                         </p>
                         <p className="font-bold">{[biciMostrada?.marca, biciMostrada?.modelo].filter(Boolean).join(' ')}</p>
                     </div>

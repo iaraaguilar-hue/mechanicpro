@@ -26,6 +26,14 @@
 // ritmo. Los dos no se pisan: uno mira al que ya tiene costumbre, éstos al que
 // nunca la formó.
 //
+// 🔴 14-sep-2026, Iara (por Leira): "los avisos de vale una llamada quiero que
+// sean para los clientes activos también". Hasta hoy el que tenía 3+ visitas
+// quedaba afuera porque lo miraba `clientesEnFuga` — pero esa sección es de
+// Pro/Expert y muestra 5 nombres: en Sport, y en todos los que no entraban en
+// esos 5, el cliente frecuente que dejó de venir no aparecía en ningún lado. Ahora
+// entra acá también (`incluirFrecuentes`, prendido de fábrica), salvo los que ya
+// están en «Se está yendo», para no mostrar a la misma persona dos veces.
+//
 // SON SUAVES DE VERDAD, y eso son decisiones de diseño y no adjetivos:
 //   · Van en su propia sección, NO mezclados con los vencimientos ni en la campana.
 //     Un aviso opcional que tapa uno urgente deja de ser opcional.
@@ -48,6 +56,8 @@ export interface AvisoSuave {
     bicicletaModelo: string;
     /** Días desde que se cargó la bici (primer_service) o desde la última visita. */
     dias: number;
+    /** Cuántas veces vino. Con 3 o más es un cliente que viene seguido. */
+    visitas: number;
     /** Lo que gastó, para poder ordenar. 0 si nunca pasó por caja. */
     gastado: number;
     /** La frase que el mecánico lee. Dice el porqué, no solo el qué. */
@@ -62,6 +72,8 @@ export interface ConfigAvisosSuaves {
     noVolvioDias: number;
     /** Cuántos mostrar. Una lista larga no se acciona. */
     limite: number;
+    /** También el que viene seguido (3+ visitas) y dejó de venir. */
+    incluirFrecuentes: boolean;
 }
 
 export const CONFIG_SUAVES_DEFAULT: ConfigAvisosSuaves = {
@@ -74,6 +86,7 @@ export const CONFIG_SUAVES_DEFAULT: ConfigAvisosSuaves = {
     // nadie llama. Es el default y el taller lo mueve.
     noVolvioDias: 120,
     limite: 12,
+    incluirFrecuentes: true,
 };
 
 interface Entrada {
@@ -81,6 +94,8 @@ interface Entrada {
     bicicletas: { id: string; cliente_id: string; marca?: string | null; modelo?: string | null; fecha_registro?: string | null }[];
     servicios: { id?: string; bicicleta_id?: string | null; fecha_ingreso?: string | null; precio_base?: number | null; servicio_items?: { precio?: number }[]; items_extra?: { precio?: number }[]; alertas_ocultas?: string[] | null }[];
     config: ConfigAvisosSuaves;
+    /** Clientes que ya aparecen en «Se está yendo»: no se repiten acá. */
+    excluirClientes?: Set<string>;
 }
 
 const plata = (n: number) => '$' + Math.round(n).toLocaleString('es-AR');
@@ -100,7 +115,7 @@ export interface ResultadoSuaves {
     enCamino: { cuantas: number; enDias: number | null };
 }
 
-export function construirAvisosSuaves({ clientes, bicicletas, servicios, config }: Entrada): ResultadoSuaves {
+export function construirAvisosSuaves({ clientes, bicicletas, servicios, config, excluirClientes }: Entrada): ResultadoSuaves {
     if (!config.habilitado) return { avisos: [], enCamino: { cuantas: 0, enDias: null } };
 
     const ahora = Date.now();
@@ -151,14 +166,13 @@ export function construirAvisosSuaves({ clientes, bicicletas, servicios, config 
             id: identidad, motivo: 'primer_service',
             clienteId: cli.id, clienteNombre: cli.nombre, clienteTelefono: cli.telefono ?? '',
             bicicletaId: b.id, bicicletaModelo: modelo,
-            dias: d, gastado: gasto.get(cli.id) ?? 0,
+            dias: d, visitas: 0, gastado: gasto.get(cli.id) ?? 0,
             argumento: `Cargaron la ${modelo} hace ${enPalabras(d)} y nunca vino al taller. Si es nueva, le toca el primer service.`,
         });
     }
 
-    // ── 2. NO VOLVIÓ: vino y no apareció más.
-    // Se excluye a propósito al que tiene 3+ visitas: ése ya lo mira
-    // `clientesEnFuga`, que lo hace mejor porque compara contra su propio ritmo.
+    // ── 2. NO VOLVIÓ: vino y no apareció más. Con `incluirFrecuentes`, también el
+    // que venía seguido; el que ya está en «Se está yendo» no se repite.
     const visitas = new Map<string, number>();
     for (const s of servicios) {
         const bici = s.bicicleta_id ? bicis.get(s.bicicleta_id) : null;
@@ -168,7 +182,8 @@ export function construirAvisosSuaves({ clientes, bicicletas, servicios, config 
         const cli = porCliente.get(cid);
         if (!cli) continue;
         const n = visitas.get(cid) ?? 0;
-        if (n >= 3) continue;
+        if (n >= 3 && !config.incluirFrecuentes) continue;
+        if (excluirClientes?.has(cid)) continue;
         const d = Math.round((ahora - cuando) / MS_DIA);
         if (d < config.noVolvioDias) continue;
         const identidad = `suave-novolvio-${cid}`;
@@ -180,10 +195,12 @@ export function construirAvisosSuaves({ clientes, bicicletas, servicios, config 
             clienteId: cid, clienteNombre: cli.nombre, clienteTelefono: cli.telefono ?? '',
             bicicletaId: suya?.id ?? null,
             bicicletaModelo: [suya?.marca, suya?.modelo].filter(Boolean).join(' ') || 'su bici',
-            dias: d, gastado: g,
+            dias: d, visitas: n, gastado: g,
             argumento: n === 1
                 ? `Vino una sola vez, hace ${enPalabras(d)}${g > 0 ? `, y dejó ${plata(g)}` : ''}. Nunca volvió.`
-                : `Vino ${n} veces y hace ${enPalabras(d)} que no aparece${g > 0 ? `. Lleva ${plata(g)}` : ''}.`,
+                : n >= 3
+                    ? `Viene seguido (${n} visitas) y hace ${enPalabras(d)} que no aparece${g > 0 ? `. Lleva ${plata(g)}` : ''}. Le toca pasar por el service.`
+                    : `Vino ${n} veces y hace ${enPalabras(d)} que no aparece${g > 0 ? `. Lleva ${plata(g)}` : ''}.`,
         });
     }
 

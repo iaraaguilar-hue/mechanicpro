@@ -237,20 +237,21 @@ export default function RetentionEngine() {
         [recordatorios, bicicletas, clientes, servicios, carreras, predictivo]
     );
 
-    // Los avisos suaves (Alejo, 3-sep-2026): el primer service de una bici que
-    // nunca vino, y el que vino una o dos veces y no volvió. Complementa a
-    // `fuga`, que solo ve a los que ya tienen ritmo (3+ visitas) — y en un
-    // taller nuevo eso es NADIE.
-    const configSuaves = { ...CONFIG_SUAVES_DEFAULT, ...(taller?.config_notificaciones?.avisos_suaves || {}) };
-    const avisosSuaves = useMemo(
-        () => construirAvisosSuaves({ clientes, bicicletas, servicios, config: configSuaves }),
-        [clientes, bicicletas, servicios, configSuaves.habilitado, configSuaves.primerServiceDias, configSuaves.noVolvioDias, configSuaves.limite]
-    );
-
-    // Idea 6 (Pro/Expert): el que se está yendo, por comportamiento.
+    // Idea 6 (Pro/Expert): el que se está yendo, por comportamiento. Va antes que
+    // los suaves porque los suaves no repiten a quien ya está acá.
     const fuga = useMemo(
         () => predictivo ? clientesEnFuga({ clientes, bicicletas, servicios }) : null,
         [predictivo, clientes, bicicletas, servicios]
+    );
+    const enFuga = useMemo(() => new Set((fuga?.enRiesgo ?? []).map(f => f.clienteId)), [fuga]);
+
+    // Los avisos suaves (Alejo, 3-sep-2026): el primer service de una bici que
+    // nunca vino, y el que no volvió. Desde el 14-sep (Leira) también el que
+    // viene seguido y dejó de venir, salvo que ya esté en «Se está yendo».
+    const configSuaves = { ...CONFIG_SUAVES_DEFAULT, ...(taller?.config_notificaciones?.avisos_suaves || {}) };
+    const avisosSuaves = useMemo(
+        () => construirAvisosSuaves({ clientes, bicicletas, servicios, config: configSuaves, excluirClientes: enFuga }),
+        [clientes, bicicletas, servicios, enFuga, configSuaves.habilitado, configSuaves.primerServiceDias, configSuaves.noVolvioDias, configSuaves.limite, configSuaves.incluirFrecuentes]
     );
 
     if (isHydrating) return <div className="p-8 text-center text-muted-foreground">Cargando motor de retención...</div>;
@@ -422,18 +423,26 @@ function SeccionAvisosSuaves({ resultado }: { resultado: ResultadoSuaves }) {
 
     const contactar = (a: AvisoSuave) => {
         const hola = primerNombre(a.clienteNombre) ? `Hola ${primerNombre(a.clienteNombre)}!` : 'Hola!';
-        // Dos textos distintos porque son dos conversaciones distintas: a uno le
-        // avisás de algo que le sirve, al otro le preguntás qué pasó.
+        // Tres textos porque son tres conversaciones: a uno le avisás de algo que le
+        // sirve, al que viene siempre lo invitás al service, y al que vino una vez le
+        // preguntás qué pasó.
+        //
+        // 🔴 Sin signos de apertura (¿ ¡): en un WhatsApp nadie los escribe, y son de
+        // lo primero que delata un mensaje armado por una máquina.
+        const frecuente = a.motivo === 'no_volvio' && a.visitas >= 3;
+        const laBici = a.bicicletaId && a.bicicletaModelo !== 'su bici' ? `la ${a.bicicletaModelo}` : 'la bici';
         const texto = a.motivo === 'primer_service'
-            ? `${hola} ¿Cómo va? Te escribo por la ${a.bicicletaModelo}. Como es nueva, le corresponde el primer service de asentamiento: se acomodan los cables y los rayos después de las primeras salidas. ¿Querés que la veamos?`
-            : `${hola} ¿Cómo andás? Hace un tiempo que no te vemos por el taller. ¿Cómo viene andando la bici? Cualquier cosa que necesites, acá estamos.`;
+            ? `${hola} Cómo va? Te escribo por la ${a.bicicletaModelo}. Como es nueva, le corresponde el primer service de asentamiento: se acomodan los cables y los rayos después de las primeras salidas. Querés que la veamos?`
+            : frecuente
+                ? `${hola} Cómo andás? Hace un tiempo que no pasás por el taller. Querés traer ${laBici} para un service así la dejamos a punto? Avisame y coordinamos.`
+                : `${hola} Cómo andás? Hace un tiempo que no te vemos por el taller. Cómo viene andando la bici? Cualquier cosa que necesites, acá estamos.`;
         const tel = (a.clienteTelefono || '').replace(/[^0-9]/g, '');
         if (!tel) { window.alert('Este cliente no tiene teléfono cargado.'); return; }
         if (taller_id) {
             registrar({
                 taller_id, cliente_id: a.clienteId, bicicleta_id: a.bicicletaId,
                 componente: a.motivo, canal: 'whatsapp_manual',
-                variante: `v1_${a.motivo}`, texto_enviado: texto,
+                variante: frecuente ? 'v1_no_volvio_frecuente' : `v1_${a.motivo}`, texto_enviado: texto,
             });
         }
         setContactados(prev => ({ ...prev, [a.id]: true }));
@@ -477,7 +486,7 @@ function SeccionAvisosSuaves({ resultado }: { resultado: ResultadoSuaves }) {
                                 </Link>
                             </CardTitle>
                             <span className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">
-                                {a.motivo === 'primer_service' ? 'Primer service' : 'No volvió'}
+                                {a.motivo === 'primer_service' ? 'Primer service' : a.visitas >= 3 ? 'Hace rato que no viene' : 'No volvió'}
                             </span>
                         </CardHeader>
                         <CardContent className="space-y-3">

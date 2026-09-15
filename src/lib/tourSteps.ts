@@ -164,7 +164,7 @@ const BIENVENIDA: PasoTour[] = [
         libre: true,
         titulo: 'La orden ya está en su mesa de trabajo',
         cuerpo:
-            'Cada orden sigue este ciclo: se trabaja, se presiona "Finalizar Service" cuando el trabajo terminó (queda "Lista para entregar"), y "Entregar Bici" cuando el cliente la retira (pasa al Historial). Veamos el paso más importante: la finalización.',
+            'Cada orden sigue este ciclo: se trabaja, se presiona "Finalizar" cuando el trabajo terminó (queda "Lista para entregar"), y "Entregar" cuando el cliente la retira (pasa al Historial). Veamos el paso más importante: la finalización.',
     },
 
     // ═══ Avisarle al cliente sin salir de la orden (8-sep-2026) ═══
@@ -200,7 +200,7 @@ const BIENVENIDA: PasoTour[] = [
         avanza: { aparece: 'finalizar-resumen' },
         titulo: 'Abra la finalización de un service',
         cuerpo:
-            'Presione el botón verde "Finalizar Service" de cualquier orden para conocer el cierre. Tranquilidad: no se guardará nada sin su confirmación.',
+            'Presione el botón verde "Finalizar" de cualquier orden para conocer el cierre. Tranquilidad: no se guardará nada sin su confirmación.',
     },
     {
         id: 'finalizar-resumen',

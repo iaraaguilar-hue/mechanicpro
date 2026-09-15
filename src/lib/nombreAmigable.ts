@@ -51,6 +51,27 @@ export function primerNombre(nombre?: string | null, fallback = ""): string {
     return t.split(" ")[0] || fallback;
 }
 
+// ─────────────────────────────────────────────────────────────
+// CÓMO SE MUESTRA LO QUE EL TALLER CARGÓ EN MINÚSCULA (15-sep-2026).
+// Leira carga todo en minúscula ("carlitos bike", "epic expert evo morada",
+// "specialized") y en el Taller Activo se leía desprolijo. Iara: "estéticamente
+// se ve horrible". Esto es SOLO para mostrar en pantalla: el dato no se toca, y
+// una palabra que ya trae mayúsculas adentro ("SL7", "McDonald") queda como está.
+// ─────────────────────────────────────────────────────────────
+
+const mayusculaInicial = (p: string) => (p === p.toLowerCase() ? p.charAt(0).toUpperCase() + p.slice(1) : p);
+
+/** Nombre de una persona: cada palabra con mayúscula. "romina suppa" → "Romina Suppa". */
+export function nombrePropio(t?: string | null): string {
+    return limpiarEspacios(t ?? "").split(" ").map(mayusculaInicial).join(" ");
+}
+
+/** Un modelo o una marca: solo la primera letra. "epic 8 sw azul" → "Epic 8 sw azul". */
+export function conMayuscula(t?: string | null): string {
+    const s = limpiarEspacios(t ?? "");
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
 /**
  * El nombre con el que el cliente llama a su bici.
  *

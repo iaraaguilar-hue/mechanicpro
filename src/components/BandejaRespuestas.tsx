@@ -225,7 +225,7 @@ export default function BandejaRespuestas() {
                                                 <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] uppercase">Sin definir</Badge>
                                             )}
                                         </div>
-                                        <p className="text-sm text-slate-700 mt-1">“{m.texto || "(sin texto)"}”</p>
+                                        <p className="text-sm text-slate-700 mt-1" data-contenido>“{m.texto || "(sin texto)"}”</p>
                                         {cuantos > 1 && (
                                             <p className="text-[11px] text-slate-500 mt-0.5">
                                                 Es el último de {cuantos} mensajes suyos.

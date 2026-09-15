@@ -986,7 +986,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                                             </p>
                                             <Button
                                                 type="button" size="sm" variant="outline"
-                                                className="h-7 border-amber-300 bg-white text-xs text-amber-900 hover:bg-amber-100"
+                                                className="h-7 border-amber-300 bg-white text-xs text-amber-900 hover:bg-amber-100 hover:text-amber-900"
                                                 onClick={() => updateItem(item.id, 'category', 'part')}
                                             >
                                                 Ponerlo como repuesto
@@ -1365,7 +1365,7 @@ function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, 
                                     <div className="p-2 border-t bg-slate-50">
                                         <Button
                                             variant="outline"
-                                            className="w-full justify-start text-indigo-700 border-indigo-200 hover:bg-indigo-100 font-medium"
+                                            className="w-full justify-start text-indigo-700 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-800 font-medium"
                                             onClick={() => setIsCreating(true)}
                                         >
                                             <Plus className="w-4 h-4 mr-2" />

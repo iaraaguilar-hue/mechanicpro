@@ -10,7 +10,7 @@ import { dispararMensajesAutomaticos } from "@/lib/comprobanteALaNube";
 import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign, PackageSearch, Phone, Bike } from "lucide-react";
+import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign, PackageSearch, Phone, Bike, Send } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { servicioRevenue } from "@/lib/servicioRevenue";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -43,6 +43,7 @@ import { grupoDeEstado, ETIQUETA_DE_GRUPO } from '@/components/StatusBadge';
 import { hoyAR } from '@/lib/mantenimiento';
 import { VentaDeMostrador } from '@/components/VentaDeMostrador';
 import { piezaEnFrase } from '@/lib/piezaSuelta';
+import { nombrePropio, conMayuscula } from '@/lib/nombreAmigable';
 
 // 🚩 Las fechas se formatean en UN SOLO lugar: `lib/fechaAR.ts`. Ahí está
 // explicado por qué los INSTANTES (fecha_ingreso, fecha_finalizacion,
@@ -398,21 +399,23 @@ export default function Workshop() {
                 </div>
             </div>
 
+            {/* 🔴 Las dos tarjetas iban RELLENAS con los colores del taller (15-sep-2026).
+                Con el rojo puro de Leira la de "En proceso" era un bloque rojo que gritaba
+                más que cualquier bici, y su secundario es BLANCO: la otra no se veía.
+                Ahora las dos son blancas y el color del taller es una franja fina. */}
             <div data-tour="contadores" className="grid grid-cols-2 gap-4 w-full">
-                <Card className="bg-primary border-none shadow-md text-primary-foreground">
-                    <CardContent className="p-6 flex flex-col gap-1">
-                        <p className="text-xs font-bold text-primary-foreground/90 uppercase tracking-widest">En Proceso</p>
-                        <div className="flex items-baseline gap-2">
-                            <p className="text-4xl font-black">{enProceso}</p>
-                        </div>
+                <Card className="relative overflow-hidden border bg-card shadow-sm">
+                    <span className="absolute inset-y-0 left-0 w-1 bg-primary" aria-hidden />
+                    <CardContent className="px-5 py-4 flex flex-col gap-1">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">En proceso</p>
+                        <p className="text-3xl font-bold text-slate-900 tabular-nums">{enProceso}</p>
                     </CardContent>
                 </Card>
-                <Card className="bg-secondary border-none shadow-md text-secondary-foreground">
-                    <CardContent className="p-6 flex flex-col gap-1">
-                        <p className="text-xs font-bold text-secondary-foreground/90 uppercase tracking-widest">Listas para Entregar</p>
-                        <div className="flex items-baseline gap-2">
-                            <p className="text-4xl font-black">{paraEntregar.length}</p>
-                        </div>
+                <Card className="relative overflow-hidden border bg-card shadow-sm">
+                    <span className="absolute inset-y-0 left-0 w-1 bg-emerald-500" aria-hidden />
+                    <CardContent className="px-5 py-4 flex flex-col gap-1">
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Listas para entregar</p>
+                        <p className="text-3xl font-bold text-slate-900 tabular-nums">{paraEntregar.length}</p>
                     </CardContent>
                 </Card>
             </div>
@@ -458,7 +461,8 @@ export default function Workshop() {
             <div data-tour="mesa-trabajo" className="hidden md:block rounded-md border bg-card">
                 <Table>
                     <TableHeader>
-                        <TableRow className="bg-muted/50 hover:bg-muted/50">
+                        <TableRow className="bg-muted/50 hover:bg-muted/50 [&>th]:px-3">
+                            <TableHead className="w-24">N° orden</TableHead>
                             <TableHead className="w-[100px]">{filtro('estado', 'Estado', 'encabezado')}</TableHead>
                             <TableHead>{filtro('ingreso', 'Ingreso', 'encabezado')}</TableHead>
                             <TableHead>{filtro('entrega', 'Entrega', 'encabezado')}</TableHead>
@@ -481,7 +485,7 @@ export default function Workshop() {
                         ))}
                         {visibles.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
                                     {jobs.length === 0 ? 'No hay bicicletas en el taller.' : 'Ninguna bici coincide con los filtros.'}
                                 </TableCell>
                             </TableRow>
@@ -529,14 +533,14 @@ export default function Workshop() {
                         if (c.kind === 'deliver') doDeliver(c.job); else doReopen(c.job);
                     }}
                     icon={confirming.kind === 'deliver' ? <PackageCheck className="h-7 w-7" /> : <Undo2 className="h-7 w-7" />}
-                    iconClassName={confirming.kind === 'deliver' ? 'bg-secondary/15 text-secondary' : 'bg-slate-100 text-slate-600'}
+                    iconClassName={confirming.kind === 'deliver' ? 'bg-slate-100 text-slate-900' : 'bg-slate-100 text-slate-600'}
                     title={confirming.kind === 'deliver' ? 'Entregar la bici' : 'Reabrir el service'}
                     description={confirming.kind === 'deliver'
                         ? <>¿<span className="font-semibold text-foreground">{confirming.job.client_name}</span> retiró su <span className="font-semibold text-foreground">{confirming.job.bike_brand} {confirming.job.bike_model}</span>? La orden pasa al historial como <span className="font-semibold text-foreground">Entregada</span>.</>
                         : <>El service de <span className="font-semibold text-foreground">{confirming.job.client_name}</span> vuelve a <span className="font-semibold text-foreground">En curso</span> para seguir trabajándolo.</>}
                     confirmLabel={confirming.kind === 'deliver' ? 'Sí, entregar' : 'Sí, reabrir'}
                     confirmClassName={confirming.kind === 'deliver'
-                        ? 'bg-secondary hover:bg-secondary/90 text-secondary-foreground'
+                        ? 'bg-slate-900 hover:bg-slate-800 text-white'
                         : 'bg-slate-800 hover:bg-slate-700 text-white'}
                 />
             )}
@@ -564,7 +568,7 @@ function ChipDeEspera({ serviceId }: { serviceId: string }) {
     return (
         <span
             title={espera.que ? `Se le preguntó: ${espera.que}` : undefined}
-            className={`mt-1 inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full w-fit whitespace-nowrap ${espera.hayQueLlamar
+            className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full w-fit whitespace-nowrap ${espera.hayQueLlamar
                 ? 'bg-amber-100 text-amber-800 border border-amber-300'
                 : 'bg-slate-100 text-slate-600 border border-slate-200'}`}
         >
@@ -592,15 +596,15 @@ function MobileJobCard({ job, onClick, onFinalize, onDeliver, onReopen }: { job:
                 <div className="flex flex-col gap-1 flex-1 min-w-0 pr-3">
                     <div className="flex items-center gap-2">
                         <span className={ordenGrande
-                            ? "bg-primary/10 text-primary text-lg font-black leading-none px-2 py-1 rounded-md tabular-nums"
+                            ? "text-lg font-bold leading-none text-slate-900 tabular-nums"
                             : "bg-slate-100 text-slate-600 text-[11px] font-bold px-1.5 py-0.5 rounded-md"}>
                             #{job.numero_orden ? String(job.numero_orden).padStart(4, '0') : job.service_id.slice(-4)}
                         </span>
-                        <h3 className="font-semibold text-slate-800 text-sm truncate">{job.client_name}</h3>
+                        <h3 className="font-semibold text-slate-800 text-sm truncate">{nombrePropio(job.client_name)}</h3>
                     </div>
                     <div className="flex items-center gap-1.5 text-xs text-slate-500">
                         <Wrench size={12} className="flex-shrink-0" />
-                        <span className="truncate">{job.bike_brand} {job.bike_model}</span>
+                        <span className="truncate">{conMayuscula(job.bike_brand)} {conMayuscula(job.bike_model)}</span>
                     </div>
                     {job.pieza && (
                         <span className="w-fit text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
@@ -650,7 +654,7 @@ function MobileJobCard({ job, onClick, onFinalize, onDeliver, onReopen }: { job:
                     </button>
                     <button
                         onClick={(e) => { e.stopPropagation(); onDeliver(); }}
-                        className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-secondary-foreground bg-secondary hover:bg-secondary/90 active:bg-secondary/90 rounded-lg transition-colors"
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 active:bg-slate-800 rounded-lg transition-colors"
                     >
                         <PackageCheck size={16} /> Entregar Bici
                     </button>
@@ -797,74 +801,90 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
         }
     };
 
-    const esOtro = (job.service_type || "OTRO").toUpperCase() === "OTRO";
+    // 🔴 LA MESA DE TRABAJO SE VEÍA HORRIBLE (Iara, 15-sep-2026, mirando la de
+    // Leira). Todo gritaba a la vez: el número de orden en rojo gigante, el service
+    // en pastillas rojas, el total en verde, tres botones apilados por fila y la
+    // fecha de entrega flotando arriba. Regla desde hoy: el color del taller va en
+    // UNA sola cosa por pantalla (el botón de Recibir Bici). En la fila, jerarquía
+    // por tamaño y peso; el color queda para lo que es una señal (vencida, no
+    // contesta, finalizar).
     const serviceBadge = (
         <EtiquetaService
             nombre={job.service_type || "OTRO"}
             crudo
-            variant={esOtro ? "secondary" : "default"}
-            className={esOtro ? "text-muted-foreground" : "bg-primary hover:bg-primary/90 text-primary-foreground border-none"}
+            variant="outline"
+            className="border-slate-200 bg-slate-50 text-slate-700 font-semibold text-[11px] tracking-wide hover:bg-slate-50"
         />
     );
+    const ordenGrande = taller?.config_vista?.numero_orden_grande === true;
+    const entregaDia = job.date_out ? job.date_out.slice(0, 10) : null;
+    const hoy = hoyAR();
+    const vencida = !!entregaDia && !isReady && entregaDia < hoy;
+    const esHoy = !!entregaDia && entregaDia === hoy;
 
     return (
         <>
-            <TableRow className="hover:bg-muted/30 transition-colors cursor-pointer" onClick={onClick}>
+            <TableRow className="hover:bg-slate-50/70 transition-colors cursor-pointer [&>td]:px-3 [&>td]:py-3" onClick={onClick}>
+                {/* El número en su propia columna: iba debajo del título "Ingreso".
+                    Grande en el taller que lo pidió (Leira), pero en gris oscuro. */}
+                <TableCell className="w-24">
+                    <span
+                        className={ordenGrande
+                            ? "text-xl font-bold leading-none text-slate-900 tabular-nums"
+                            : "text-sm font-semibold text-slate-700 tabular-nums"}
+                        title={job.service_id}
+                    >
+                        {formatOrdenNumber(job.numero_orden, job.service_id)}
+                    </span>
+                </TableCell>
                 <TableCell>
-                    {statusBadge}
-                    {/* El POST de la orden de venta no llegó al ERP. Es un dato, no una
-                        suposición: lo registra doFinalize con lo que contestó el servidor.
-                        Sin esto, una orden de venta que no se generó no deja rastro. */}
-                    {job.webhook_erp_ok === false && (
-                        <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-red-600" title={job.webhook_erp_detalle || ''}>
-                            <PackageSearch className="h-3 w-3" /> LA ORDEN DE VENTA NO SALIÓ
+                    <div className="flex flex-col items-start gap-1">
+                        {/* El estado y la barra de tareas en un mismo renglón cuando entran; si no, abajo. La
+                            celda apilada de a tres o cuatro era la que estiraba la fila (15-sep-2026). */}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                            {statusBadge}
+                            {(mostrarEtapas || mostrarTareas) && <EtapasChecklist serviceId={job.service_id} />}
                         </div>
-                    )}
-                    <ChipDeEspera serviceId={job.service_id} />
-                    {(mostrarEtapas || mostrarTareas) && <EtapasChecklist serviceId={job.service_id} />}
+                        {/* El POST de la orden de venta no llegó al ERP. Es un dato, no una
+                            suposición: lo registra doFinalize con lo que contestó el servidor.
+                            Sin esto, una orden de venta que no se generó no deja rastro. */}
+                        {job.webhook_erp_ok === false && (
+                            <div className="flex items-center gap-1 text-[10px] font-bold text-red-600" title={job.webhook_erp_detalle || ''}>
+                                <PackageSearch className="h-3 w-3" /> LA ORDEN DE VENTA NO SALIÓ
+                            </div>
+                        )}
+                        <ChipDeEspera serviceId={job.service_id} />
+                    </div>
                 </TableCell>
-                <TableCell className="font-medium text-muted-foreground w-28">
-                    {taller?.config_vista?.numero_orden_grande === true ? (
-                        // Leira, 14-sep-2026: el número va primero y grande; la fecha, abajo.
-                        <div className="flex flex-col gap-1">
-                            <span className="text-2xl font-black leading-none text-primary tabular-nums" title={job.service_id}>{formatOrdenNumber(job.numero_orden, job.service_id)}</span>
-                            <span className="text-xs text-slate-600 font-semibold">{instanteAR(job.date_in)}</span>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col gap-1">
-                            <span className="text-slate-900 font-semibold">{instanteAR(job.date_in)}</span>
-                            <span className="text-[10px] text-primary font-bold mt-1" title={job.service_id}>{formatOrdenNumber(job.numero_orden, job.service_id)}</span>
-                        </div>
-                    )}
-                </TableCell>
-                <TableCell className="font-medium p-0 m-0 align-top pt-4">
+                <TableCell className="text-sm text-slate-600 whitespace-nowrap tabular-nums">{instanteAR(job.date_in)}</TableCell>
+                <TableCell className="whitespace-nowrap">
                     {job.date_out ? (
                         <div className="flex flex-col">
                             {/* fecha_entrega es la fecha PROMETIDA y se muestra tal cual se
                                 eligió (ver lib/fechaAR.ts). El rótulo evita que se lea como
                                 "ya se entregó": la bici sigue en el taller. */}
-                            <span className="text-slate-600 font-semibold text-sm whitespace-nowrap">
+                            <span className={`text-sm font-medium tabular-nums ${vencida ? 'text-red-600' : 'text-slate-900'}`}>
                                 {diaCalendario(job.date_out)}
-                                {horaCorta(job.hora_out) && <span className="ml-1.5 text-slate-500">{horaCorta(job.hora_out)}</span>}
+                                {horaCorta(job.hora_out) && <span className="ml-1.5 font-normal text-slate-500">{horaCorta(job.hora_out)}</span>}
                             </span>
-                            <span className="text-[10px] text-slate-500 leading-tight">estimada</span>
+                            <span className={`text-xs ${vencida ? 'text-red-600' : esHoy ? 'font-medium text-amber-700' : 'text-slate-500'}`}>
+                                {vencida ? 'vencida' : esHoy ? 'hoy' : 'estimada'}
+                            </span>
                         </div>
                     ) : (
-                        <span className="text-slate-500 italic text-sm">-</span>
+                        <span className="text-sm text-slate-400">-</span>
                     )}
                 </TableCell>
                 <TableCell>
                     <div className="flex flex-col">
-                        <span className="font-bold text-base">{job.client_name}</span>
-                        <div className="flex items-center text-xs text-muted-foreground mt-1">
-                            Total: <span className="text-green-600 font-bold ml-1">$ {(job.total_price || 0).toLocaleString("es-AR")}</span>
-                        </div>
+                        <span className="max-w-[12rem] truncate text-sm font-semibold text-slate-900" title={nombrePropio(job.client_name)}>{nombrePropio(job.client_name)}</span>
+                        <span className="text-xs text-slate-500 tabular-nums">$ {(job.total_price || 0).toLocaleString("es-AR")}</span>
                     </div>
                 </TableCell>
                 <TableCell>
-                    <div className="flex flex-col">
-                        <span className="font-semibold">{job.bike_model}</span>
-                        <span className="text-xs text-muted-foreground">{job.bike_brand}</span>
+                    <div className="flex flex-col items-start">
+                        <span className="text-sm font-medium text-slate-800">{conMayuscula(job.bike_model)}</span>
+                        <span className="text-xs text-slate-500">{conMayuscula(job.bike_brand)}</span>
                         {job.pieza && (
                             <span className="mt-1 w-fit text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
                                 Solo {piezaEnFrase(job.pieza)}
@@ -874,12 +894,13 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                 </TableCell>
                 <TableCell>{serviceBadge}</TableCell>
                 <TableCell className="text-right">
-                    <div className="flex flex-wrap justify-end gap-2">
+                    {/* Un solo renglón: antes eran tres botones apilados por fila. */}
+                    <div className="flex flex-nowrap items-center justify-end gap-1.5">
                         {job.client_phone && (
                             <Button
-                                size="sm"
-                                variant="outline"
-                                className="bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-700 border-green-200 h-9 px-2"
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 text-green-600 hover:bg-green-50 hover:text-green-700"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     let cleanedPhone = job.client_phone!.replace(/\D/g, '');
@@ -893,11 +914,19 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                                 title="Abrir el chat con el cliente"
                                 aria-label="Abrir el chat de WhatsApp con el cliente"
                             >
-                                <MessageCircle className="h-5 w-5" />
+                                <MessageCircle className="h-4 w-4" />
                             </Button>
                         )}
-                        <Button variant="outline" size="sm" className="h-9" onClick={(e) => { e.stopPropagation(); onClick(); }}>
-                            <Pencil className="h-4 w-4 mr-2" /> Editar
+                        {/* La fila entera ya abre la orden: el lápiz es un atajo, no un botón más. */}
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                            onClick={(e) => { e.stopPropagation(); onClick(); }}
+                            title="Editar la orden"
+                            aria-label="Editar la orden"
+                        >
+                            <Pencil className="h-4 w-4" />
                         </Button>
                         {job.status !== 'delivered' && (
                             <>
@@ -908,47 +937,53 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                                     seguía desarmada (14-sep-2026). */}
                                 {WHATSAPP_CONFIGURADO && isReady && (
                                 <Button
-                                    size="sm"
+                                    size="icon"
                                     variant="outline"
-                                    className="border-green-500 text-green-600 hover:bg-green-50 h-9 px-2 gap-2"
+                                    className="h-8 w-8 border-green-300 text-green-700 hover:bg-green-50 hover:text-green-800"
                                     onClick={notifyCustomer}
                                     disabled={isLoading}
-                                    title="Avisar que está lista por WhatsApp"
+                                    title="Avisarle que está lista (le manda el comprobante por WhatsApp)"
+                                    aria-label="Avisarle que está lista por WhatsApp"
                                 >
-                                    {isLoading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-                                    Avisar por WhatsApp
+                                    {isLoading ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                                 </Button>
                                 )}
                                 {/* Los DOS pasos siempre a la vista: primero Finalizar, después Entregar.
-                                    Si se finalizó por error, el slot se convierte en "Reabrir". */}
+                                    Si se finalizó por error, "Reabrir" queda como atajo al lado. */}
                                 {isReady ? (
                                     <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="border-slate-300 text-slate-600 hover:bg-slate-100 h-9 gap-2"
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-8 w-8 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
                                         onClick={(e) => { e.stopPropagation(); onReopen(); }}
-                                        title="¿Se finalizó por error? Vuelve a En curso"
+                                        title="Reabrir: se finalizó por error y vuelve a En curso"
+                                        aria-label="Reabrir el service"
                                     >
-                                        <Undo2 className="h-4 w-4" /> Reabrir
+                                        <Undo2 className="h-4 w-4" />
                                     </Button>
                                 ) : (
                                     <Button
                                         size="sm"
-                                        className="bg-green-600 hover:bg-green-700 text-white h-9 gap-2"
+                                        className="h-8 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
                                         onClick={handleFinish}
                                         title="El mecánico terminó el trabajo"
                                     >
-                                        <CheckCircle className="h-4 w-4" /> Finalizar Service
+                                        <CheckCircle className="h-4 w-4" /> Finalizar
                                     </Button>
                                 )}
+                                {/* Color FIJO y no el secundario del taller: en Leira el secundario
+                                    es blanco y el botón era texto gris suelto (15-sep-2026). */}
                                 <Button
                                     size="sm"
-                                    className="bg-secondary hover:bg-secondary/90 text-secondary-foreground h-9 gap-2 disabled:opacity-40"
+                                    variant={isReady ? "default" : "outline"}
+                                    className={isReady
+                                        ? "h-8 gap-1.5 bg-slate-900 hover:bg-slate-800 text-white"
+                                        : "h-8 gap-1.5 border-dashed text-slate-500 disabled:opacity-100"}
                                     onClick={(e) => { e.stopPropagation(); onDeliver(); }}
                                     disabled={!isReady}
                                     title={isReady ? "El cliente retiró la bici: pasa al historial" : "Primero finalizá el service"}
                                 >
-                                    <PackageCheck className="h-4 w-4" /> Entregar Bici
+                                    <PackageCheck className="h-4 w-4" /> Entregar
                                 </Button>
                             </>
                         )}

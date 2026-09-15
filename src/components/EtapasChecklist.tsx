@@ -94,7 +94,7 @@ export function EtapasChecklist({ serviceId }: { serviceId: string }) {
             <Popover open={open} onOpenChange={setOpen}>
                 <PopoverTrigger asChild>
                     <button
-                        className={`flex items-center gap-1.5 mt-1 px-2 py-1 rounded-md border text-[11px] font-semibold transition-colors ${completo
+                        className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-[11px] font-semibold transition-colors ${completo
                             ? 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100'
                             : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
                         title="Tareas del service"

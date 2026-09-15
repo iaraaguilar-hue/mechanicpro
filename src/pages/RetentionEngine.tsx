@@ -599,7 +599,7 @@ function SeccionAvisosSuaves({ resultado, extra = [], onResuelto }: { resultado:
                             </span>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                            <p className="text-sm text-slate-700 leading-snug">{a.argumento}</p>
+                            <p className="text-sm text-slate-700 leading-snug" data-contenido>{a.argumento}</p>
                             {/* Sin teléfono no hay WhatsApp que mandar, y ofrecerlo igual
                                 para que después salte un cartel de error es peor que decirlo.
                                 Pasa con los que entraron solos desde una venta del ERP:
@@ -659,9 +659,13 @@ function SeccionFuga({ fuga }: { fuga: { enRiesgo: ClienteEnFuga[]; conBase: num
                 <User className="h-6 w-6" />
                 <h2 className="text-xl font-bold">Se está yendo</h2>
             </div>
-            <p className="text-xs text-muted-foreground -mt-1">
+            {/* La aclaración de los que no tienen ritmo va al pasar el mouse: es ayuda, no
+                dato, y a la vista pasaba la pantalla del techo de lectura (15-sep-2026). */}
+            <p
+                className="text-xs text-muted-foreground -mt-1"
+                title={fuga.sinBase > 0 ? `${fuga.sinBase} no llegan a 3 visitas en 2 años, así que su ritmo no se puede leer (y no se adivina).` : undefined}
+            >
                 Leído del ritmo real de visitas de {fuga.conBase} clientes con historial suficiente.
-                {fuga.sinBase > 0 && <> {fuga.sinBase} no llegan a 3 visitas en 2 años, así que su ritmo no se puede leer (y no se adivina).</>}
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {fuga.enRiesgo.map(c => (
@@ -678,7 +682,7 @@ function SeccionFuga({ fuga }: { fuga: { enRiesgo: ClienteEnFuga[]; conBase: num
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                            <p className="text-sm text-slate-700">{c.argumento}</p>
+                            <p className="text-sm text-slate-700" data-contenido>{c.argumento}</p>
                             <Button
                                 className={`w-full font-semibold text-white ${contactados[c.clienteId] ? 'bg-slate-400 hover:bg-slate-400' : 'bg-green-600 hover:bg-green-700'}`}
                                 disabled={contactados[c.clienteId]}

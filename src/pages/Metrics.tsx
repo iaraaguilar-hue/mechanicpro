@@ -371,11 +371,13 @@ export default function Metrics() {
                         <div className="pt-1">
                             <div className="flex justify-between text-xs font-bold mb-1">
                                 <span className="text-primary">{stats.laborPerc}% MO</span>
-                                <span className="text-secondary">{stats.partsPerc}% REP</span>
+                                {/* Gris fijo y no el secundario del taller: en Leira el
+                                    secundario es blanco y los repuestos no se veían (15-sep-2026). */}
+                                <span className="text-slate-600">{stats.partsPerc}% REP</span>
                             </div>
-                            <div className="h-3 w-full bg-secondary/20 rounded-full overflow-hidden flex">
+                            <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden flex">
                                 <div className="bg-primary h-full transition-all duration-1000" style={{ width: `${stats.laborPerc}%` }} />
-                                <div className="bg-secondary h-full transition-all duration-1000" style={{ width: `${stats.partsPerc}%` }} />
+                                <div className="bg-slate-400 h-full transition-all duration-1000" style={{ width: `${stats.partsPerc}%` }} />
                             </div>
                         </div>
                     </div>

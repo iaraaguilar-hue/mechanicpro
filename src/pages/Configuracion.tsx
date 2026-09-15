@@ -875,14 +875,14 @@ function TabMenuServices({ taller, taller_id, puedeEditar, avisar }: {
                                             <TableCell className="whitespace-nowrap">
                                                 <div className="flex items-center justify-end gap-1">
                                                     <Button
-                                                        variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:bg-green-50"
+                                                        variant="ghost" size="icon" className="h-8 w-8 text-green-600 hover:bg-green-50 hover:text-green-700"
                                                         onClick={() => handleUpdate(servicio.id)}
                                                         disabled={working}
                                                     >
                                                         <Check size={16} />
                                                     </Button>
                                                     <Button
-                                                        variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:bg-slate-50"
+                                                        variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:bg-slate-50 hover:text-slate-700"
                                                         onClick={() => setEditandoId(null)}
                                                         disabled={working}
                                                     >

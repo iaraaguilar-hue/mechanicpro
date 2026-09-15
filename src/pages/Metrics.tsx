@@ -699,6 +699,13 @@ function getCategoryIcon(cat: string) {
 // candado de "orden en $0" de Workshop. Si acá se sumara distinto, el taller
 // vería dos números y no sabría cuál creer.
 // ═════════════════════════════════════════════════════════════
+/** `u:<id>` si lo hizo un usuario del sistema, `n:<nombre>` si es un nombre suelto, '' si no se registró. */
+const claveDelMecanico = (s: any): string => {
+    if (s?.mecanico_id) return `u:${s.mecanico_id}`;
+    const libre = String(s?.mecanico_nombre ?? '').trim();
+    return libre ? `n:${libre}` : '';
+};
+
 export function PorMecanico({ servicios, tallerId }: { servicios: any[]; tallerId: string | null }) {
     const [gente, setGente] = useState<Record<string, string>>({});
 
@@ -713,17 +720,29 @@ export function PorMecanico({ servicios, tallerId }: { servicios: any[]; tallerI
     const filas = useMemo(() => {
         const acc: Record<string, { services: number; labor: number; parts: number }> = {};
         for (const s of servicios) {
-            if (!s.mecanico_id) continue;          // sin registrar, no se inventa
+            // Dos formas de quedar registrado: con usuario propio (`mecanico_id`) o
+            // con el nombre suelto que se eligió al finalizar (`mecanico_nombre`,
+            // 15-sep-2026). Sin ninguna de las dos, no se inventa.
+            const clave = claveDelMecanico(s);
+            if (!clave) continue;
             const { labor, parts } = servicioRevenue(s);
-            const a = acc[s.mecanico_id] ?? (acc[s.mecanico_id] = { services: 0, labor: 0, parts: 0 });
+            const a = acc[clave] ?? (acc[clave] = { services: 0, labor: 0, parts: 0 });
             a.services += 1; a.labor += labor; a.parts += parts;
         }
         return Object.entries(acc)
-            .map(([id, v]) => ({ id, nombre: gente[id] ?? 'Alguien que ya no está', ...v }))
+            .map(([clave, v]) => ({
+                id: clave,
+                // El que tiene usuario se muestra con el nombre que tiene HOY en el
+                // sistema; el nombre suelto, tal cual lo escribieron.
+                nombre: clave.startsWith('u:')
+                    ? (gente[clave.slice(2)] ?? 'Alguien que ya no está')
+                    : clave.slice(2),
+                ...v,
+            }))
             .sort((x, y) => y.labor - x.labor);
     }, [servicios, gente]);
 
-    const sinRegistrar = servicios.filter((s: any) => !s.mecanico_id).length;
+    const sinRegistrar = servicios.filter((s: any) => !claveDelMecanico(s)).length;
     const fmt = (n: number) => '$' + Math.round(n).toLocaleString('es-AR');
 
     return (

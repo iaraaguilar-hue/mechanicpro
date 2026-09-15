@@ -1025,8 +1025,36 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
     // frenar a alguien con las manos sucias.
     const registrarMecanico = taller?.config_mecanicos?.habilitado === true;
     const miUserId = useAuthStore(s => s.session?.user?.id ?? null);
+    const rolUsuario = useAuthStore(s => s.rol);
+    const setTaller = useAuthStore(s => s.setTaller);
     const [gente, setGente] = useState<{ id: string; nombre: string; rol: string }[]>([]);
-    const [mecanicoId, setMecanicoId] = useState<string>(service?.mecanico_id || miUserId || '');
+
+    // ── Los que NO tienen usuario propio (15-sep-2026, pedido de Ariel).
+    // En un taller de tres personas con un solo login, la lista de usuarios tiene
+    // un solo nombre y no hay nada para elegir. Estos los carga el taller a mano
+    // en Configuración → Preferencias y son texto libre: cualquier nombre o apodo.
+    const nombresDelTaller = useMemo(() => {
+        // El que YA tiene usuario no aparece dos veces: si el mismo nombre se
+        // pudiera elegir por las dos vías, en Métricas terminaría partido en dos
+        // filas con la mitad de los services cada una.
+        const conUsuario = new Set(gente.map(g => (g.nombre ?? '').trim().toLowerCase()));
+        const lista = (Array.isArray(taller?.config_mecanicos?.nombres) ? taller!.config_mecanicos!.nombres! : [])
+            .map(n => String(n).trim()).filter(n => n && !conUsuario.has(n.toLowerCase()));
+        // El nombre con el que ya quedó esta orden va igual, aunque después lo
+        // hayan sacado de la lista: si no, al reabrirla se perdería.
+        const guardado = (service?.mecanico_nombre ?? '').trim();
+        return guardado && !lista.some(n => n.toLowerCase() === guardado.toLowerCase())
+            ? [...lista, guardado] : lista;
+    }, [taller, gente, service?.mecanico_nombre]);
+
+    // Una sola llave para el selector: '' (sin registrar), `u:<id>` (un usuario),
+    // `n:<nombre>` (uno de la lista del taller) o `__otro__` (escribirlo ahora).
+    const [quienLoHizo, setQuienLoHizo] = useState<string>(
+        service?.mecanico_id ? `u:${service.mecanico_id}`
+            : (service?.mecanico_nombre ?? '').trim() ? `n:${(service!.mecanico_nombre ?? '').trim()}`
+                : miUserId ? `u:${miUserId}` : ''
+    );
+    const [otroNombre, setOtroNombre] = useState('');
 
     useEffect(() => {
         if (!registrarMecanico || !isOpen || !taller_id) return;
@@ -1254,15 +1282,44 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
             const wasJustCompleted = currentStatus !== 'ready' && currentStatus !== 'delivered';
 
             if (wasJustCompleted) {
+                // Quién lo hizo: o un usuario del sistema (`mecanico_id`) o un
+                // nombre suelto (`mecanico_nombre`). Son excluyentes: al elegir uno
+                // se limpia el otro, para que la orden no quede con dos respuestas.
+                const nombreLibre = quienLoHizo === '__otro__'
+                    ? otroNombre.trim().replace(/\s+/g, ' ').slice(0, 40)
+                    : quienLoHizo.startsWith('n:') ? quienLoHizo.slice(2) : '';
+                // Solo si el taller lo pidió, y "Sin registrar" no pisa un dato
+                // viejo con null.
+                const patchQuienLoHizo = !registrarMecanico ? {}
+                    : quienLoHizo.startsWith('u:') ? { mecanico_id: quienLoHizo.slice(2), mecanico_nombre: null }
+                        : nombreLibre ? { mecanico_id: null, mecanico_nombre: nombreLibre }
+                            : {};
+
                 // 1. UPDATE a Supabase para cambiar el estado
                 const fechaFinalizacion = new Date().toISOString();
                 await updateServicio(job.service_id, {
                     estado: 'ready',
                     fecha_finalizacion: fechaFinalizacion,
-                    // Solo si el taller lo pidió: si no, se deja como estaba y no
-                    // se pisa un dato viejo con null.
-                    ...(registrarMecanico && mecanicoId ? { mecanico_id: mecanicoId } : {}),
+                    ...patchQuienLoHizo,
                 });
+
+                // Un nombre escrito a mano se suma a la lista del taller para no
+                // volver a escribirlo mañana. Best-effort a propósito: `talleres`
+                // solo lo puede escribir el admin (RLS), y si esto falla no pasa
+                // nada — la orden ya quedó registrada con ese nombre.
+                if (nombreLibre && quienLoHizo === '__otro__' && taller
+                    && rolUsuario?.toLowerCase()?.trim() === 'admin') {
+                    const lista = (Array.isArray(taller.config_mecanicos?.nombres) ? taller.config_mecanicos!.nombres! : [])
+                        .map(n => String(n).trim()).filter(Boolean);
+                    if (!lista.some(n => n.toLowerCase() === nombreLibre.toLowerCase())) {
+                        const config_mecanicos = {
+                            ...(taller.config_mecanicos || { habilitado: true }),
+                            nombres: [...lista, nombreLibre],
+                        };
+                        const { error } = await supabase.from('talleres').update({ config_mecanicos }).eq('id', taller.id);
+                        if (!error) setTaller({ ...taller, config_mecanicos } as any);
+                    }
+                }
 
                 // El aviso de "ya está lista" con el comprobante, si el taller lo
                 // dejó prendido. Sin `await` a propósito: el mecánico ya terminó
@@ -1506,16 +1563,40 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                             <label className="text-sm font-semibold mb-1.5 block">¿Quién lo hizo?</label>
                             <select
                                 className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                                value={mecanicoId}
-                                onChange={(e) => setMecanicoId(e.target.value)}
+                                value={quienLoHizo}
+                                onChange={(e) => setQuienLoHizo(e.target.value)}
                             >
                                 <option value="">Sin registrar</option>
                                 {gente.map((g) => (
-                                    <option key={g.id} value={g.id}>{g.nombre}</option>
+                                    <option key={g.id} value={`u:${g.id}`}>{g.nombre}</option>
                                 ))}
+                                {nombresDelTaller.map((n) => (
+                                    <option key={`n:${n}`} value={`n:${n}`}>{n}</option>
+                                ))}
+                                <option value="__otro__">Otro… (escribir el nombre)</option>
                             </select>
+                            {quienLoHizo === '__otro__' && (
+                                <>
+                                    <input
+                                        autoFocus
+                                        value={otroNombre}
+                                        onChange={(e) => setOtroNombre(e.target.value)}
+                                        maxLength={40}
+                                        placeholder="El nombre de quien lo hizo"
+                                        className="mt-2 w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                    />
+                                    {/* Elegir "Otro…" y no escribir nada no puede terminar en un
+                                        dato que desaparece sin avisar. */}
+                                    {!otroNombre.trim() && (
+                                        <p className="text-[11px] text-amber-700 mt-1">
+                                            Escribí el nombre. Si lo dejás vacío, la orden queda sin registrar.
+                                        </p>
+                                    )}
+                                </>
+                            )}
                             <p className="text-[11px] text-muted-foreground mt-1">
-                                Viene puesto el que está usando la app. Cambialo si lo hizo otro.
+                                Viene puesto el que está usando la app. Cambialo si lo hizo otro: va
+                                cualquier nombre, esté cargado o no.
                             </p>
                         </div>
                     )}

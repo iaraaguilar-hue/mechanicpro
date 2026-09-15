@@ -171,6 +171,12 @@ export interface SupabaseService {
     bicicleta_id: string;
     /** Quién hizo el trabajo. Se elige al finalizar, si el taller lo tiene prendido. */
     mecanico_id?: string | null;
+    /**
+     * Quién lo hizo cuando esa persona NO tiene usuario en el sistema: el nombre
+     * en texto libre (15-sep-2026). Excluyente con `mecanico_id`: si se eligió un
+     * usuario se guarda el id y esta queda en null, y al revés.
+     */
+    mecanico_nombre?: string | null;
     /** Si trajo SOLO una pieza de su bici (rueda, tija…). NULL = la bici entera. 14-sep-2026. */
     pieza?: string | null;
     numero_orden?: number;

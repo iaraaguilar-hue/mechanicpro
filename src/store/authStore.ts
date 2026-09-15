@@ -12,7 +12,12 @@ export interface TallerData {
     plan_actual?: string;
     config_avances?: { habilitado: boolean; etapas: string[] } | null;
     // Opt-in de registrar quién hizo cada service (3-sep-2026). NULL/ausente = apagado.
-    config_mecanicos?: { habilitado: boolean } | null;
+    /**
+     * Quién hizo cada service. `habilitado` prende el selector al finalizar;
+     * `nombres` es la gente del taller que NO tiene usuario propio (texto
+     * libre, lo carga el admin en Preferencias). 15-sep-2026.
+     */
+    config_mecanicos?: { habilitado: boolean; nombres?: string[] } | null;
     // Filtros del alta automática de bicis vendidas (3-sep-2026).
     config_altas_erp?: { provincias?: string[]; max_bicis_por_venta?: number } | null;
     // Cuántas horas se espera una respuesta del cliente antes de que la orden

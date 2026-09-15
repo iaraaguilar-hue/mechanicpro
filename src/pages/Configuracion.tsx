@@ -1179,6 +1179,17 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     const [mecanicosHab, setMecanicosHab] = useState(taller.config_mecanicos?.habilitado === true);
     const [savingMec, setSavingMec] = useState(false);
 
+    // ── La gente del taller que no tiene usuario propio (15-sep-2026).
+    // Pedido de Ariel (Leira) por Iara: en el taller trabajan tres y hay un
+    // solo login, así que el selector de «¿Quién lo hizo?» mostraba un solo
+    // nombre. Acá el taller escribe los que faltan —cualquier nombre, un
+    // apodo, «el de los frenos»— y al finalizar aparecen en la lista.
+    const nombresGuardados = (t: TallerData) =>
+        (Array.isArray(t.config_mecanicos?.nombres) ? t.config_mecanicos!.nombres! : [])
+            .map(n => String(n).trim()).filter(Boolean);
+    const [nombresMec, setNombresMec] = useState<string[]>(() => nombresGuardados(taller));
+    const [nuevoMec, setNuevoMec] = useState('');
+
     // ── Los dos interruptores que vivían en «Mi Taller» (14-sep-2026). Ahí
     // dependían del botón «Guardar» de otra tarjeta; acá se guardan al tocarlos,
     // como todo lo de esta pestaña, y vuelven atrás si el guardado falla.
@@ -1219,6 +1230,28 @@ function TabPreferencias({ taller, setTaller, avisar }: {
         } finally {
             setSavingMec(false);
         }
+    };
+
+    const guardarNombresMec = async (lista: string[]) => {
+        const anterior = nombresMec;
+        setNombresMec(lista);
+        setSavingMec(true);
+        const config_mecanicos = { ...(taller.config_mecanicos || {}), habilitado: mecanicosHab, nombres: lista };
+        const { error } = await supabase.from('talleres').update({ config_mecanicos }).eq('id', taller.id);
+        setSavingMec(false);
+        if (error) { setNombresMec(anterior); avisar('error', 'No se pudo guardar: ' + error.message); return; }
+        setTaller({ ...taller, config_mecanicos: config_mecanicos as any });
+    };
+
+    const agregarNombreMec = () => {
+        // Un nombre es un nombre: se recortan los espacios de más y nada más. No
+        // se corrige la mayúscula ni se valida contra nada — «Juanchi» y «el de
+        // los frenos» son los dos respuestas válidas a quién lo hizo.
+        const n = nuevoMec.trim().replace(/\s+/g, ' ').slice(0, 40);
+        if (!n) return;
+        setNuevoMec('');
+        if (nombresMec.some(x => x.toLowerCase() === n.toLowerCase())) return;   // ya estaba
+        void guardarNombresMec([...nombresMec, n]);
     };
 
     const guardarAvances = async (valor: boolean) => {
@@ -1341,6 +1374,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
             <CardHeader className="pb-3">
                 <CardTitle className="text-lg flex items-center gap-2">
                     <Users className="h-5 w-5" /> Quién hizo cada service
+                    <NuevoBadge feature="nombres-del-equipo" />
                 </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col gap-3">
@@ -1352,6 +1386,61 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                         disabled={savingMec}
                     />
                 </div>
+
+                {/* ── Los nombres de la gente sin usuario propio (15-sep-2026) ──
+                    Sin esto, el selector del final solo ofrece a los que tienen
+                    login, y un taller de tres personas con un solo login no tiene
+                    nada que elegir: siempre sale el que está usando la app. */}
+                {mecanicosHab && (
+                    <div className="space-y-2" data-ajuste="nombres_mecanicos">
+                        <p className="text-sm font-semibold">Los nombres que vas a poder elegir</p>
+                        <p className="text-xs text-muted-foreground">
+                            Los que entran con su propio usuario ya aparecen solos. Acá agregás a los
+                            que no tienen: va cualquier nombre o apodo, como lo digan en el taller.
+                        </p>
+
+                        {nombresMec.length > 0 && (
+                            <div className="space-y-1.5">
+                                {nombresMec.map((n, i) => (
+                                    <div key={n} className="flex items-center gap-2 p-2 rounded-lg border bg-muted/20">
+                                        <span className="flex-1 min-w-0 text-sm truncate">{n}</span>
+                                        <button
+                                            type="button"
+                                            disabled={savingMec || !esAdminPref}
+                                            onClick={() => guardarNombresMec(nombresMec.filter((_, j) => j !== i))}
+                                            className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-40"
+                                            title="Sacar de la lista"
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div className="flex gap-2">
+                            <Input
+                                value={nuevoMec}
+                                onChange={e => setNuevoMec(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); agregarNombreMec(); } }}
+                                placeholder="Agregar un nombre"
+                                maxLength={40}
+                                disabled={!esAdminPref}
+                                className="h-9"
+                            />
+                            <Button type="button" variant="outline" size="sm" className="h-9"
+                                onClick={agregarNombreMec}
+                                disabled={!nuevoMec.trim() || savingMec || !esAdminPref}>
+                                Agregar
+                            </Button>
+                        </div>
+
+                        {!esAdminPref && (
+                            <p className="text-xs text-muted-foreground">Esto lo cambia el administrador del taller.</p>
+                        )}
+                    </div>
+                )}
+
                 {/* Lo que sigue evita el reclamo del primer día: se prende, se abre
                     Métricas y está vacío. No es un bug, es que el dato empieza hoy. */}
                 <ComoFunciona>
@@ -1359,6 +1448,12 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                         Si en el taller trabaja más de una persona, al finalizar cada service elegís
                         quién lo hizo. Después, en Métricas, ves cuánto generó cada uno en mano de
                         obra y en repuestos, por separado.
+                    </p>
+                    <p>
+                        No hace falta que cada uno tenga su usuario: alcanza con que el nombre esté
+                        en esta lista. Y si al cerrar una orden lo hizo alguien que no está —un
+                        reemplazo, el que vino a dar una mano—, se elige <strong>«Otro…»</strong> y
+                        se escribe ahí mismo.
                     </p>
                     <p>
                         Se cuenta <strong>desde que lo prendés</strong>: los services que ya cerraste

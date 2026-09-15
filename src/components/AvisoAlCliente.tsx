@@ -44,6 +44,10 @@ import {
 
 interface Props {
     serviceId: string;
+    /** false = vive en su propia pestaña de la orden, que ya dice qué es. */
+    conTitulo?: boolean;
+    /** Cuántos renglones tiene lo que se habló, para el rótulo de la pestaña. */
+    onCantidad?: (n: number) => void;
 }
 
 /** Un renglón de la línea de tiempo, venga de donde venga. */
@@ -88,7 +92,7 @@ interface PlantillaPropia {
     evento: string;
 }
 
-export default function AvisoAlCliente({ serviceId }: Props) {
+export default function AvisoAlCliente({ serviceId, conTitulo = true, onCantidad }: Props) {
     const taller = useAuthStore(s => s.taller);
     const taller_id = useAuthStore(s => s.taller_id);
     const usuario_id = useAuthStore(s => s.session?.user?.id);
@@ -112,6 +116,7 @@ export default function AvisoAlCliente({ serviceId }: Props) {
     const [resultadoLlamada, setResultadoLlamada] = useState<ContactoOrden['resultado']>('atendio');
     const [textoLlamada, setTextoLlamada] = useState('');
     const [guardandoLlamada, setGuardandoLlamada] = useState(false);
+    const [verTodasLasIdeas, setVerTodasLasIdeas] = useState(false);
 
     // ── LOS MENSAJES PROPIOS DEL TALLER (14-sep-2026, Leira): "plantillas
     // personalizadas para poder mandarles mensaje al cliente mientras están
@@ -268,7 +273,8 @@ export default function AvisoAlCliente({ serviceId }: Props) {
 
         filas.sort((a, b) => Date.parse(b.cuando) - Date.parse(a.cuando));
         setMensajes(filas);
-    }, [serviceId, telefono, servicio?.fecha_ingreso, leerContactos]);
+        onCantidad?.(filas.length);
+    }, [serviceId, telefono, servicio?.fecha_ingreso, leerContactos, onCantidad]);
 
     useEffect(() => { void cargar(); }, [cargar]);
 
@@ -449,10 +455,12 @@ export default function AvisoAlCliente({ serviceId }: Props) {
 
     return (
         <div data-tour="aviso-al-cliente" className="space-y-3">
-            <Label className="text-lg font-semibold flex items-center gap-2">
-                <MessageSquare className="h-5 w-5 text-primary" />
-                Avisarle al cliente
-            </Label>
+            {conTitulo && (
+                <Label className="text-lg font-semibold flex items-center gap-2">
+                    <MessageSquare className="h-5 w-5 text-primary" />
+                    Avisarle al cliente
+                </Label>
+            )}
 
             {/* ── La orden está esperando: lo primero que se tiene que ver ── */}
             {espera.esperando && (
@@ -596,14 +604,24 @@ export default function AvisoAlCliente({ serviceId }: Props) {
                     )
                 ) : (
                     <>
-                        <p className="text-xs text-muted-foreground">
-                            {clase === 'consulta'
-                                ? 'Encontraste algo y necesitás un sí para seguir. La orden queda esperando la respuesta.'
-                                : 'Le contás en qué anda la bici. No espera respuesta y no frena nada.'}
-                        </p>
+                        {/* Solo lo que no se deduce del botón: que la consulta deja la orden frenada. */}
+                        {clase === 'consulta' && (
+                            <p className="text-xs text-muted-foreground">La orden queda esperando su respuesta.</p>
+                        )}
 
+                        {/* Tres ideas a la vista y el resto a un toque: la lista entera eran
+                            cinco renglones de frases antes de poder escribir (14-sep-2026). */}
                         <div className="flex flex-wrap gap-1.5">
-                            {sugerencias.map(f => (
+                            {!verTodasLasIdeas && sugerencias.length > 3 && (
+                                <button
+                                    type="button"
+                                    onClick={() => setVerTodasLasIdeas(true)}
+                                    className="order-last text-xs px-2.5 py-1.5 rounded-full border border-dashed border-slate-300 text-slate-500 hover:bg-slate-50 transition-colors"
+                                >
+                                    Más ideas ({sugerencias.length - 3})
+                                </button>
+                            )}
+                            {(verTodasLasIdeas ? sugerencias : sugerencias.slice(0, 3)).map(f => (
                                 <button
                                     key={f}
                                     type="button"

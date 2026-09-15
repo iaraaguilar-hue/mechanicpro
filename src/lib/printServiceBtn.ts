@@ -112,7 +112,7 @@ export const printServiceReport = async (
   const entrega = entregaMostrable(
     job.fecha_entregado ?? job.date_delivered,
     job.fecha_entrega ?? job.date_out,
-    { largo: true },
+    { largo: true, hora: job.hora_entrega ?? job.hora_out },
   );
   const dateOutStr = entrega ? entrega.texto : null;
   const dateOutLabel = entrega ? entrega.etiqueta : null;

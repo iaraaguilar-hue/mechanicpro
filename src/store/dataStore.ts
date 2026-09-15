@@ -205,6 +205,8 @@ export interface SupabaseService {
     /** Cuándo se destrabó: contestó por WhatsApp, o el mecánico lo llamó. */
     respondio_at?: string | null;
     fecha_entrega?: string | null;
+    /** Hora estimada de entrega ("18:00:00"). Acompaña a fecha_entrega (14-sep-2026). */
+    hora_entrega?: string | null;
     fecha_finalizacion?: string | null;
     fecha_entregado?: string | null;
     webhook_erp_disparado?: boolean;

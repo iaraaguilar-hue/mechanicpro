@@ -3,7 +3,8 @@ import { useDataStore, type SupabaseClient, type SupabaseBike } from "@/store/da
 import { useAuthStore } from "@/store/authStore";
 import { supabase } from "@/lib/supabase";
 import { formatOrdenNumber } from "@/lib/formatId";
-import { diaParaInput } from "@/lib/fechaAR";
+import { diaParaInput, horaCorta } from "@/lib/fechaAR";
+import { estadoDeEspera } from "@/lib/avisoDeLaOrden";
 import { ETIQUETAS_NOTAS } from "@/lib/notasServicio";
 import { SuccessModal } from "@/components/SuccessModal";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Search, User, Bike as BikeIcon, Plus, CheckCircle, Wrench, Pencil, Trash2, ArrowLeft, Flag, Calendar, ChevronDown, Lock } from "lucide-react";
+import { Search, User, Bike as BikeIcon, Plus, CheckCircle, Wrench, Pencil, Trash2, ArrowLeft, Flag, Calendar, ChevronDown, Lock, MessageSquare, ClipboardCheck } from "lucide-react";
 import { AddClientDialog } from "@/components/AddClientDialog";
 import { AddBikeDialog } from "@/components/AddBikeDialog";
 import { EditBikeDialog } from "@/components/EditBikeDialog";
@@ -430,7 +431,23 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
     const [isSaving, setIsSaving] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
     const [fechaEntrega, setFechaEntrega] = useState("");
+    // La hora estimada va en el mismo renglón que la fecha (14-sep-2026).
+    const [horaEntrega, setHoraEntrega] = useState("");
     const [selectedCarreraId, setSelectedCarreraId] = useState<string | null>(null);
+
+    // 🔴 LA ORDEN ESTABA DEMASIADO CARGADA (Iara, 14-sep-2026): "siento que al
+    // momento de crear el service tenemos demasiada cargada esa pantalla (…) lo
+    // hace bastante incómodo". Dos arreglos:
+    //   1. En una orden que ya existe, lo que se habla con el cliente vive en su
+    //      propia pestaña. Antes estaba al fondo, debajo de todo el formulario:
+    //      para mandar un mensaje había que bajar por la orden entera.
+    //   2. Lo que casi nunca se usa (nota interna, carrera, diagnóstico) queda
+    //      plegado detrás de un renglón, y se abre solo si ya tiene algo.
+    const [pestana, setPestana] = useState<'orden' | 'mensajes'>('orden');
+    const [cantidadMensajes, setCantidadMensajes] = useState(0);
+    const [notaInternaAbierta, setNotaInternaAbierta] = useState(false);
+    const [carreraAbierta, setCarreraAbierta] = useState(false);
+    const [diagnosticoAbierto, setDiagnosticoAbierto] = useState(false);
     // Tareas libres "A realizar" cargadas en el mismo paso (Tarea G).
     const [tareasExtra, setTareasExtra] = useState<TareaService[]>([]);
     // Diagnóstico durante el service (Tarea G-pref): avisos de mantenimiento
@@ -459,6 +476,8 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
     // ¿Se puede registrar diagnóstico DURANTE el service? (preferencia del taller)
     const momentoDiag = taller?.config_notificaciones?.momento_diagnostico || 'final';
     const verDiagnostico = !!serviceId && (momentoDiag === 'durante' || momentoDiag === 'ambos');
+    // El mismo cálculo que usa el panel de mensajes: el punto de la pestaña no puede decir otra cosa.
+    const esperaOrden = estadoDeEspera(servicioAbierto, Number((taller as any)?.horas_para_llamar ?? 3));
 
 
     // Qué trajo: la bici entera ('') o solo una pieza (Leira, 14-sep-2026).
@@ -512,6 +531,10 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
         } else {
             setFechaEntrega("");
         }
+        setHoraEntrega(horaCorta(existing.hora_entrega));
+        // Lo plegado se abre solo si ya tiene algo: si no, el dato quedaría escondido.
+        if ((existing.notas_internas || '').trim()) setNotaInternaAbierta(true);
+        if (existing.carrera_id) setCarreraAbierta(true);
 
         setSelectedCarreraId(existing.carrera_id || null);
         setTareasExtra((existing.tareas_extra as any) || []);
@@ -643,6 +666,8 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                     items_extra: supabaseItems,
                     precio_total: totalPrice,
                     fecha_entrega: fechaEntrega || null,
+                    // Sin fecha, una hora sola no promete nada: no se guarda.
+                    hora_entrega: fechaEntrega && horaEntrega ? horaEntrega : null,
                     carrera_id: selectedCarreraId || null,
                     tareas_extra: tareasExtra,
                     pieza: pieza.trim() || null,
@@ -679,6 +704,8 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                     items_extra: supabaseItems,
                     precio_total: totalPrice,
                     fecha_entrega: fechaEntrega || null,
+                    // Sin fecha, una hora sola no promete nada: no se guarda.
+                    hora_entrega: fechaEntrega && horaEntrega ? horaEntrega : null,
                     carrera_id: selectedCarreraId || null,
                     tareas_extra: tareasExtra,
                     pieza: pieza.trim() || null,
@@ -705,6 +732,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                         setExtraItems([]);
                         setServiceType("");
                         setFechaEntrega("");
+                        setHoraEntrega("");
                         setSelectedCarreraId(null);
                         setTareasExtra([]);
                         setHealthCheckData([]);
@@ -763,10 +791,49 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                     </div>
                     {!serviceId && <Button variant="ghost" size="sm" onClick={onBack} className="hover:bg-primary/10 text-primary">Cambiar Bici</Button>}
                 </div>
+
+                {/* Las dos pestañas de una orden que ya existe. Al crearla no hay
+                    pestañas: todavía no hay a quién escribirle por esta orden. */}
+                {serviceId && (
+                    <div role="tablist" className="mt-3 grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1">
+                        {([
+                            { clave: 'orden', etiqueta: 'La orden', corta: 'La orden' },
+                            // En el celular no entra «Mensajes al cliente»: se cortaba en «Mensajes al clie…».
+                            { clave: 'mensajes', etiqueta: 'Mensajes al cliente', corta: 'Mensajes' },
+                        ] as const).map(t => (
+                            <button
+                                key={t.clave}
+                                type="button"
+                                role="tab"
+                                aria-selected={pestana === t.clave}
+                                data-pestana={t.clave}
+                                onClick={() => setPestana(t.clave)}
+                                className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-2 text-sm font-semibold transition-colors ${pestana === t.clave
+                                    ? 'bg-white text-slate-900 shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-800'}`}
+                            >
+                                {t.clave === 'orden' ? <Wrench className="h-4 w-4 shrink-0" /> : <MessageSquare className="h-4 w-4 shrink-0" />}
+                                <span className="truncate">
+                                    <span className="sm:hidden">{t.corta}</span>
+                                    <span className="hidden sm:inline">{t.etiqueta}</span>
+                                    {t.clave === 'mensajes' && cantidadMensajes > 0 && ` (${cantidadMensajes})`}
+                                </span>
+                                {/* Si la orden espera una respuesta, se ve sin entrar a la pestaña. */}
+                                {t.clave === 'mensajes' && esperaOrden.esperando && (
+                                    <span
+                                        className={`h-2 w-2 shrink-0 rounded-full ${esperaOrden.hayQueLlamar ? 'bg-amber-500' : 'bg-slate-400'}`}
+                                        title={esperaOrden.hayQueLlamar ? 'No contesta: toca llamarlo' : 'Esperando su respuesta'}
+                                    />
+                                )}
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Scrollable Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className={pestana === 'orden' ? 'space-y-6' : 'hidden'}>
                 {/* La orden dictada (idea 1): precarga el formulario, no lo pisa.
                     Si el navegador no tiene reconocimiento de voz, no aparece. */}
                 <DictadoOrden
@@ -778,8 +845,9 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                     le trajo la rueda sola, aunque se sepa que ese cliente tiene una bici".
                     La orden sigue siendo de su bici (la pieza es de esa bici). */}
                 <div>
-                    <Label className="text-lg font-semibold mb-2 block">Qué trajo</Label>
-                    <div className="flex flex-wrap gap-2">
+                    {/* Un solo renglón: casi siempre es la bici entera y no merece un bloque. */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-sm font-semibold text-slate-700 mr-1">Qué trajo</span>
                         {[{ valor: '', etiqueta: 'La bici entera' }, ...PIEZAS_COMUNES].map(o => {
                             const activo = !piezaOtra && pieza === o.valor;
                             return (
@@ -787,7 +855,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                                     key={o.valor || 'entera'}
                                     type="button"
                                     onClick={() => { setPiezaOtra(false); setPieza(o.valor); }}
-                                    className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${activo
+                                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${activo
                                         ? 'bg-primary text-primary-foreground border-primary'
                                         : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
                                 >
@@ -798,7 +866,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                         <button
                             type="button"
                             onClick={() => { setPiezaOtra(true); if (PIEZAS_COMUNES.some(p => p.valor === pieza)) setPieza(''); }}
-                            className={`text-sm px-3 py-1.5 rounded-full border transition-colors ${piezaOtra
+                            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${piezaOtra
                                 ? 'bg-primary text-primary-foreground border-primary'
                                 : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}
                         >
@@ -813,17 +881,11 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                             className="mt-2 max-w-xs"
                         />
                     )}
-                    {pieza.trim() && (
-                        <p className="text-xs text-muted-foreground mt-1.5">
-                            Queda anotado que trajo solo {piezaEnFrase(pieza)}
-                            {biciMostrada ? `, de su ${[biciMostrada.marca, biciMostrada.modelo].filter(Boolean).join(' ')}` : ''}.
-                        </p>
-                    )}
                 </div>
 
                 <div data-tour="service-tipo">
-                    <Label className="text-lg font-semibold mb-3 block">Tipo de Service</Label>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    <Label className="text-base font-semibold mb-2 block">Tipo de Service</Label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                         {catalogoServicios.length > 0 ? (
                             catalogoServicios.map(cat => (
                                 <ServiceOption
@@ -947,87 +1009,151 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                     onChange={setTareasExtra}
                 />
 
-                {/* Total & Notes */}
-                <div className="flex justify-between items-center pt-4 border-t border-dashed">
-                    <span className="text-xl font-bold">Total Estimado</span>
-                    <span className="text-3xl font-black text-primary">$ {totalPrice.toLocaleString("es-AR")}</span>
+                {/* Entrega y total en una misma franja. La hora va en el MISMO renglón
+                    que la fecha (Iara, 14-sep-2026: "que no ocupe más espacio"). */}
+                <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 pt-4 border-t border-dashed">
+                    <div className="space-y-1.5">
+                        <Label>Entrega estimada <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+                        <div className="flex gap-2">
+                            <Input
+                                type="date"
+                                aria-label="Fecha estimada de entrega"
+                                className="w-40 sm:w-44 text-base"
+                                value={fechaEntrega}
+                                onChange={(e) => { setFechaEntrega(e.target.value); if (!e.target.value) setHoraEntrega(""); }}
+                            />
+                            <Input
+                                type="time"
+                                aria-label="Hora estimada de entrega"
+                                className="w-32 text-base"
+                                value={horaEntrega}
+                                disabled={!fechaEntrega}
+                                title={fechaEntrega ? undefined : "Primero elegí el día"}
+                                onChange={(e) => setHoraEntrega(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    {/* En el celular el total baja abajo de la entrega: va en un renglón, rótulo a la izquierda y monto a la derecha. */}
+                    <div className="flex w-full items-baseline justify-between gap-3 sm:block sm:w-auto sm:text-right">
+                        <span className="block text-sm font-semibold text-slate-500">Total estimado</span>
+                        <span className="text-3xl font-black text-primary">$ {totalPrice.toLocaleString("es-AR")}</span>
+                    </div>
                 </div>
 
                 <div className="space-y-4">
-                    <div className="space-y-2">
-                        <Label>Fecha Estimada de Entrega (Opcional)</Label>
-                        <Input
-                            type="date"
-                            className="w-full text-lg"
-                            value={fechaEntrega}
-                            onChange={(e) => setFechaEntrega(e.target.value)}
-                        />
-                    </div>
-
                     {/* Las notas van partidas en dos desde el 20-ago-2026: lo que se
                         lleva impreso el cliente y lo que es del taller. El rótulo de
-                        cada una dice adónde va, que es lo único que evita el error. */}
-                    <div className="space-y-2">
-                        <Label>{ETIQUETAS_NOTAS.cliente}</Label>
-                        <p className="text-sm text-muted-foreground -mt-1">{ETIQUETAS_NOTAS.clienteAyuda}</p>
+                        cada una dice adónde va, que es lo único que evita el error:
+                        por eso el destino va pegado al rótulo y no en un renglón aparte. */}
+                    <div className="space-y-1.5">
+                        <Label>
+                            {ETIQUETAS_NOTAS.cliente}
+                            <span className="font-normal text-muted-foreground"> · salen en el comprobante</span>
+                        </Label>
                         <Textarea
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
-                            rows={3}
-                            placeholder={ETIQUETAS_NOTAS.clientePlaceholder}
-                            className="text-lg"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label className="flex items-center gap-2">
-                            <Lock className="h-3.5 w-3.5 text-slate-500" /> {ETIQUETAS_NOTAS.interna}
-                        </Label>
-                        <p className="text-sm text-muted-foreground -mt-1">{ETIQUETAS_NOTAS.internaAyuda}</p>
-                        <Textarea
-                            value={notasInternas}
-                            onChange={(e) => setNotasInternas(e.target.value)}
                             rows={2}
-                            placeholder={ETIQUETAS_NOTAS.internaPlaceholder}
-                            className="text-lg bg-slate-50"
+                            placeholder={ETIQUETAS_NOTAS.clientePlaceholder}
+                            className="text-base"
                         />
                     </div>
 
-                    <div data-tour="service-carrera">
-                        <CarreraSelector
-                            selectedId={selectedCarreraId}
-                            onSelect={setSelectedCarreraId}
-                        />
-                    </div>
+                    {notaInternaAbierta && (
+                        <div className="space-y-1.5">
+                            <Label className="flex items-center gap-2">
+                                <Lock className="h-3.5 w-3.5 text-slate-500" /> {ETIQUETAS_NOTAS.interna}
+                                <span className="font-normal text-muted-foreground">· no salen del taller</span>
+                            </Label>
+                            <Textarea
+                                value={notasInternas}
+                                onChange={(e) => setNotasInternas(e.target.value)}
+                                rows={2}
+                                placeholder={ETIQUETAS_NOTAS.internaPlaceholder}
+                                className="text-base bg-slate-50"
+                            />
+                        </div>
+                    )}
+
+                    {/* Lo que casi nunca se usa, en un renglón: se abre al tocarlo. */}
+                    {(!notaInternaAbierta || !carreraAbierta) && (
+                        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                            {!notaInternaAbierta && (
+                                <button
+                                    type="button"
+                                    onClick={() => setNotaInternaAbierta(true)}
+                                    className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
+                                >
+                                    <Lock className="h-3.5 w-3.5" /> Nota interna
+                                </button>
+                            )}
+                            {!carreraAbierta && (
+                                <button
+                                    type="button"
+                                    data-tour="service-carrera"
+                                    onClick={() => setCarreraAbierta(true)}
+                                    className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
+                                >
+                                    <Flag className="h-3.5 w-3.5" /> Se prepara para una carrera
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {carreraAbierta && (
+                        <div data-tour="service-carrera">
+                            <CarreraSelector
+                                selectedId={selectedCarreraId}
+                                onSelect={setSelectedCarreraId}
+                            />
+                        </div>
+                    )}
                 </div>
 
-                {/* ── Avisarle al cliente (8-sep-2026, pedido de Leira) ──
-                    Solo en una orden que YA existe: mientras se está cargando el
-                    ingreso todavía no hay a qué colgarle el mensaje ni el
-                    registro, y el cliente está enfrente. */}
-                {serviceId && (
-                    <div className="pt-2 border-t">
-                        <AvisoAlCliente serviceId={serviceId} />
-                    </div>
-                )}
-
-                {/* Diagnóstico durante el service (preferencia del taller, Tarea G-pref) */}
+                {/* Diagnóstico durante el service (preferencia del taller, Tarea G-pref).
+                    Plegado: es una grilla larga que se usa en algunas órdenes, no en
+                    todas. Se esconde con CSS y NO se desmonta, para no perder lo marcado. */}
                 {verDiagnostico && (
-                    <div data-tour="service-diagnostico" className="space-y-2">
-                        <Label className="text-lg font-semibold flex items-center gap-2">
-                            Diagnóstico de mantenimiento
+                    <div data-tour="service-diagnostico" className="rounded-lg border border-slate-200">
+                        <button
+                            type="button"
+                            onClick={() => setDiagnosticoAbierto(v => !v)}
+                            aria-expanded={diagnosticoAbierto}
+                            className="flex w-full items-center gap-2 px-3 py-2.5 text-left"
+                        >
+                            <ClipboardCheck className="h-4 w-4 shrink-0 text-primary" />
+                            <span className="font-semibold text-slate-800">Diagnóstico de mantenimiento</span>
                             <NuevoBadge feature="registro-diagnostico" />
-                        </Label>
-                        <p className="text-sm text-muted-foreground">
-                            Registrá ahora lo que veas mientras trabajás. Se guarda como aviso a futuro en Retención.
-                        </p>
-                        <HealthCheckWidget onChange={setHealthCheckData} />
+                            {healthCheckData.length > 0 && (
+                                <span className="text-xs font-semibold text-primary">
+                                    {healthCheckData.length} marcado{healthCheckData.length === 1 ? '' : 's'}
+                                </span>
+                            )}
+                            <ChevronDown className={`ml-auto h-4 w-4 text-slate-400 transition-transform ${diagnosticoAbierto ? 'rotate-180' : ''}`} />
+                        </button>
+                        <div className={diagnosticoAbierto ? 'space-y-2 border-t px-3 pb-3 pt-2' : 'hidden'}>
+                            <p className="text-sm text-muted-foreground">Lo que veas mientras trabajás queda como aviso a futuro en Retención.</p>
+                            <HealthCheckWidget onChange={setHealthCheckData} />
+                        </div>
                     </div>
                 )}
+              </div>
+
+              {/* ── Mensajes al cliente (8-sep-2026, pedido de Leira) ──
+                  Solo en una orden que YA existe: mientras se está cargando el
+                  ingreso todavía no hay a qué colgarle el mensaje ni el registro,
+                  y el cliente está enfrente. Vive en su pestaña desde el 14-sep:
+                  se esconde con CSS y no se desmonta, así un mensaje a medio
+                  escribir no se pierde al pasar a la orden y volver. */}
+              {serviceId && (
+                  <div className={pestana === 'mensajes' ? '' : 'hidden'}>
+                      <AvisoAlCliente serviceId={serviceId} conTitulo={false} onCantidad={setCantidadMensajes} />
+                  </div>
+              )}
             </div>
 
-            {/* Footer */}
-            <div data-tour="service-confirmar" className="p-6 border-t bg-muted/10 z-10">
+            {/* Footer. En la pestaña de mensajes no va: ahí cada mensaje se manda con su botón. */}
+            <div data-tour="service-confirmar" className={`px-6 py-4 border-t bg-muted/10 z-10 ${pestana === 'mensajes' ? 'hidden' : ''}`}>
                 <Button size="lg" className="w-full text-lg h-12 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmit} disabled={isSaving}>
                     {isSaving ? "Guardando..." : (serviceId ? "GUARDAR CAMBIOS" : "CONFIRMAR INGRESO")}
                 </Button>
@@ -1040,11 +1166,14 @@ function ServiceOption({ selected, onClick, title, desc }: { selected: boolean, 
     return (
         <div
             onClick={onClick}
-            className={`cursor-pointer border-2 rounded-xl p-4 text-center transition-all flex flex-col items-center justify-center ${selected ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"}`}
+            className={`cursor-pointer border-2 rounded-lg px-2 py-2.5 text-center transition-all flex flex-col items-center justify-center ${selected ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"}`}
         >
-            <div className={`font-black text-xl mb-1 ${selected ? "text-primary" : "text-foreground"}`}>{(title || "OTRO").toUpperCase()}</div>
-            <div className="text-xs text-muted-foreground uppercase tracking-wider">{desc}</div>
-            {selected && <div className="mt-2 text-primary"><CheckCircle size={16} fill="currentColor" className="text-white" /></div>}
+            {/* Más chica desde el 14-sep-2026: la grilla de services ocupaba media pantalla. */}
+            <div className={`flex items-center gap-1 font-black text-base leading-tight ${selected ? "text-primary" : "text-foreground"}`}>
+                {selected && <CheckCircle size={14} className="shrink-0" />}
+                {(title || "OTRO").toUpperCase()}
+            </div>
+            <div className="mt-0.5 text-xs text-muted-foreground tracking-wide">{desc}</div>
         </div>
     );
 }
@@ -1150,10 +1279,10 @@ function CarreraSelector({ selectedId, onSelect }: { selectedId: string | null, 
     };
 
     return (
-        <div className="space-y-2 border-t border-dashed pt-4 mt-4 flex flex-col items-start w-full">
-            <Label className="flex items-center gap-2 text-indigo-700 font-semibold mb-2">
+        <div className="space-y-2 flex flex-col items-start w-full">
+            <Label className="flex items-center gap-2 text-indigo-700 font-semibold">
                 <Flag className="w-4 h-4" />
-                🏁 ¿Se prepara para una carrera o evento? (Opcional)
+                Carrera o evento
             </Label>
 
             <Popover open={isOpen} onOpenChange={setIsOpen}>

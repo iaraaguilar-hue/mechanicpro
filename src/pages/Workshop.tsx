@@ -22,7 +22,7 @@ import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthChec
 import { estadoDeEspera } from "@/lib/avisoDeLaOrden";
 import { resolveOrdenWebhookUrl, resolveEntregadoWebhookUrl } from "@/lib/ordenWebhook";
 import { claveProducto, buscarProductos } from "@/lib/buscadorProductos";
-import { instanteAR, diaCalendario, ZONA_AR } from "@/lib/fechaAR";
+import { instanteAR, diaCalendario, horaCorta, ZONA_AR } from "@/lib/fechaAR";
 import { ETIQUETAS_NOTAS } from "@/lib/notasServicio";
 import {
     chequearOrdenParaERP,
@@ -64,6 +64,8 @@ interface DashboardJob {
     client_name: string;
     client_phone?: string;
     date_out?: string;
+    /** Hora estimada de entrega ("18:00:00"), si la pusieron. */
+    hora_out?: string | null;
     total_price?: number;
     bicicleta_id: string;
     /** Si trajo solo una pieza (rueda, tija…). Leira, 14-sep-2026. */
@@ -138,8 +140,9 @@ function opcionesDeFiltro(jobs: DashboardJob[], hoy: string): Record<ColFiltro, 
 
 function ordenarJobs(jobs: DashboardJob[], col: ColOrden, dir: Direccion): DashboardJob[] {
     const signo = dir === 'asc' ? 1 : -1;
+    // A igual día manda la hora prometida; la que no tiene hora va al final de ese día.
     const clave = (j: DashboardJob) => col === 'entrega'
-        ? (j.date_out?.slice(0, 10) ?? null)
+        ? (j.date_out ? `${j.date_out.slice(0, 10)} ${horaCorta(j.hora_out) || '24:00'}` : null)
         : col === 'ingreso' ? (j.date_in ?? null) : (j.client_name || null);
     return [...jobs].sort((a, b) => {
         const ka = clave(a), kb = clave(b);
@@ -199,6 +202,7 @@ export default function Workshop() {
                     client_name: client?.nombre || "Desconocido",
                     client_phone: client?.telefono || "",
                     date_out: s.fecha_entrega ?? undefined,
+                    hora_out: s.hora_entrega ?? null,
                     total_price: s.precio_total,
                     bicicleta_id: s.bicicleta_id,
                     webhook_erp_ok: s.webhook_erp_ok ?? null,
@@ -611,7 +615,9 @@ function MobileJobCard({ job, onClick, onFinalize, onDeliver, onReopen }: { job:
                         <StatusBadge status={job.status} />
                         <span className="text-xs text-slate-500 flex items-center gap-1">
                             <Clock size={10} />
-                            {job.date_out ? `Entrega ${diaCalendario(job.date_out)}` : instanteAR(job.date_in)}
+                            {job.date_out
+                                ? `Entrega ${diaCalendario(job.date_out)}${horaCorta(job.hora_out) ? ` ${horaCorta(job.hora_out)}` : ''}`
+                                : instanteAR(job.date_in)}
                         </span>
                     </div>
                     <ChevronRight size={18} className="text-slate-300" />
@@ -706,6 +712,7 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                 service_type: serviceData.tipo_servicio,
                 date_in: serviceData.fecha_ingreso,
                 date_out: serviceData.fecha_entrega,
+                hora_out: serviceData.hora_entrega,
                 // La fecha REAL de entrega (el botón Entregar). El comprobante
                 // prefiere esta sobre la prometida. Ver lib/fechaAR.ts.
                 date_delivered: serviceData.fecha_entregado,
@@ -836,7 +843,10 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                             {/* fecha_entrega es la fecha PROMETIDA y se muestra tal cual se
                                 eligió (ver lib/fechaAR.ts). El rótulo evita que se lea como
                                 "ya se entregó": la bici sigue en el taller. */}
-                            <span className="text-slate-600 font-semibold text-sm whitespace-nowrap">{diaCalendario(job.date_out)}</span>
+                            <span className="text-slate-600 font-semibold text-sm whitespace-nowrap">
+                                {diaCalendario(job.date_out)}
+                                {horaCorta(job.hora_out) && <span className="ml-1.5 text-slate-500">{horaCorta(job.hora_out)}</span>}
+                            </span>
                             <span className="text-[10px] text-slate-500 leading-tight">estimada</span>
                         </div>
                     ) : (
@@ -1355,6 +1365,7 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                     service_type: service.tipo_servicio as any,
                     date_in: service.fecha_ingreso,
                     date_out: service.fecha_entrega,
+                    hora_out: service.hora_entrega,
                     date_delivered: service.fecha_entregado,
                     basePrice: service.precio_base,
                     totalPrice: service.precio_total,

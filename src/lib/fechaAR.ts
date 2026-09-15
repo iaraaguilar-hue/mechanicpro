@@ -175,7 +175,7 @@ export interface EntregaMostrable {
 export function entregaMostrable(
     fechaEntregado: string | null | undefined,
     fechaPrometida: string | null | undefined,
-    { largo = false }: { largo?: boolean } = {},
+    { largo = false, hora }: { largo?: boolean; hora?: string | null } = {},
 ): EntregaMostrable | null {
     if (fechaEntregado) {
         return {
@@ -185,11 +185,24 @@ export function entregaMostrable(
         };
     }
     if (fechaPrometida) {
+        // La hora prometida solo acompaña a la fecha prometida: a una entrega real
+        // no se le pega, porque esa ya trae su propio momento.
+        const h = horaCorta(hora);
         return {
-            texto: largo ? diaCalendarioLargo(fechaPrometida) : diaCalendario(fechaPrometida),
+            texto: (largo ? diaCalendarioLargo(fechaPrometida) : diaCalendario(fechaPrometida)) + (h ? ` ${h} hs` : ''),
             real: false,
             etiqueta: 'Entrega estimada',
         };
     }
     return null;
+}
+
+/**
+ * `hora_entrega` → `18:00`. Postgres la devuelve como `18:00:00` y el
+ * `<input type="time">` como `18:00`. Es una hora de reloj de Argentina sin
+ * zona: se muestra tal cual, nunca se convierte (14-sep-2026).
+ */
+export function horaCorta(hora: string | null | undefined): string {
+    const m = /^(\d{1,2}):(\d{2})/.exec(String(hora ?? '').trim());
+    return m ? `${m[1].padStart(2, '0')}:${m[2]}` : '';
 }

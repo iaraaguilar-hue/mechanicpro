@@ -8,7 +8,7 @@
 import {
     instanteAR, instanteARLargo, instanteARConHora,
     diaCalendario, diaCalendarioLargo, diaParaInput,
-    entregaMostrable,
+    entregaMostrable, horaCorta,
 } from './fechaAR';
 
 let ok = 0, fail = 0;
@@ -94,6 +94,20 @@ eq('input con basura', diaParaInput('cualquier cosa'), '');
     const e = entregaMostrable('2026-08-18T22:10:56.811Z', null, { largo: true });
     eq('formato largo para el PDF', e?.texto, '18/08/2026');
 }
+
+// ── LA HORA ESTIMADA (14-sep-2026): acompaña a la prometida, nunca a la real ──
+{
+    const e = entregaMostrable(null, '2026-08-10T00:00:00+00:00', { largo: true, hora: '18:00:00' });
+    eq('prometida con hora', e?.texto, '10/08/2026 18:00 hs');
+    const r = entregaMostrable('2026-08-18T22:10:56.811Z', '2026-08-10T00:00:00+00:00', { hora: '18:00:00' });
+    eq('entregada: la hora prometida no se le pega', r?.texto, '18/08/26');
+    const s = entregaMostrable(null, '2026-08-10T00:00:00+00:00', { hora: null });
+    eq('prometida sin hora queda como antes', s?.texto, '10/08/26');
+}
+eq('horaCorta de Postgres', horaCorta('09:30:00'), '09:30');
+eq('horaCorta del input', horaCorta('18:05'), '18:05');
+eq('horaCorta vacía', horaCorta(null), '');
+eq('horaCorta con basura', horaCorta('a la tarde'), '');
 eq('sin ninguna de las dos no inventa nada', entregaMostrable(null, null), null);
 
 console.log(`\n${fail === 0 ? '✅' : '❌'} fechaAR: ${ok} ok, ${fail} fallaron`);

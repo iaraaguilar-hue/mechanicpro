@@ -18,6 +18,12 @@ export interface TallerData {
      * libre, lo carga el admin en Preferencias). 15-sep-2026.
      */
     config_mecanicos?: { habilitado: boolean; nombres?: string[] } | null;
+    /**
+     * Preferencias del panel de Métricas. `ocultas_mecanico` son los IDs de los
+     * paneles que el rol `mecanico` no ve, elegidos por el admin desde la propia
+     * pantalla de Métricas (15-sep-2026). Vacío o null = ve todo.
+     */
+    config_metricas?: { ocultas_mecanico?: string[] } | null;
     // Filtros del alta automática de bicis vendidas (3-sep-2026).
     config_altas_erp?: { provincias?: string[]; max_bicis_por_venta?: number } | null;
     // Cuántas horas se espera una respuesta del cliente antes de que la orden

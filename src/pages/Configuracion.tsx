@@ -1,5 +1,5 @@
 import { useState, useEffect, type ReactNode } from 'react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore, type TallerData } from '@/store/authStore';
 import { tieneFeature } from '@/lib/planFeatures';
@@ -1200,6 +1200,9 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     const [paradasMecanico, setParadasMecanico] = useState((taller as any).bicis_paradas_ve_mecanico === true);
     const rolPref = useAuthStore(s => s.rol);
     const esAdminPref = rolPref?.toLowerCase()?.trim() === 'admin';
+    const irA = useNavigate();
+    // El Sport trae un solo usuario: no hay a quién esconderle una métrica.
+    const hayEquipo = (taller.plan_actual || 'Sport') !== 'Sport';
 
     const guardarInterruptor = async (
         columna: 'ia_presupuesto_activa' | 'bicis_paradas_ve_mecanico',
@@ -1778,8 +1781,9 @@ function TabPreferencias({ taller, setTaller, avisar }: {
             ADMIN de cada taller. Default apagado: la lista trae clientes con su
             gasto. El candado real está en RLS + en la Edge Function; este switch es
             la llave del admin. Vivía en "Mi Taller" hasta el 14-sep-2026. */}
-        {tieneFeature(taller, 'bicis_paradas') && (
+        {(tieneFeature(taller, 'bicis_paradas') || (hayEquipo && esAdminPref)) && (
         <SeccionPreferencias titulo="Tu equipo">
+        {tieneFeature(taller, 'bicis_paradas') && (
         <Card className="flex flex-col" data-ajuste="bicis_paradas_mecanico">
             <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
@@ -1808,6 +1812,38 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                 </ComoFunciona>
             </CardContent>
         </Card>
+        )}
+
+        {/* ── Qué ve el mecánico en Métricas (15-sep-2026) ──
+            El ajuste se hace EN Métricas, mirando los paneles. Esta tarjeta existe
+            para que el que lo busca en Configuración —donde se busca todo— lo
+            encuentre, en vez de concluir que no se puede. */}
+        {hayEquipo && esAdminPref && (
+        <Card className="flex flex-col" data-ajuste="vista_metricas">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                    <Eye className="h-4 w-4 text-primary" />
+                    Qué ve el mecánico en Métricas
+                    <NuevoBadge feature="vista-metricas-mecanico" />
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col gap-3">
+                <p className="text-sm text-muted-foreground">
+                    Se elige en la propia pantalla de Métricas: tocás «Elegir qué ve el mecánico»,
+                    los paneles se ponen a temblar y apagás con el ojo los que no querés que vea.
+                </p>
+                <Button type="button" variant="outline" size="sm" className="h-9 w-fit" onClick={() => irA('/metrics')}>
+                    Ir a Métricas
+                </Button>
+                <ComoFunciona>
+                    <p>
+                        Ordena el panel, no es un candado: los precios de cada orden los sigue viendo
+                        porque los necesita para trabajar.
+                    </p>
+                </ComoFunciona>
+            </CardContent>
+        </Card>
+        )}
         </SeccionPreferencias>
         )}
 

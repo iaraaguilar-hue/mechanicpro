@@ -1,6 +1,7 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, createContext, useContext, type ReactNode } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase';
 import { useDataStore } from '@/store/dataStore';
@@ -27,7 +28,9 @@ import {
     Loader2,
     Lock,
     Layers,
-    Bike
+    Bike,
+    Eye,
+    EyeOff
 } from 'lucide-react';
 import { ComoFunciona } from '@/components/ComoFunciona';
 
@@ -123,10 +126,109 @@ export function getSemanticCategory(rawDesc: string): string {
 // función para que la comparación de tendencia sea honesta.
 export { servicioRevenue };
 
+// ═════════════════════════════════════════════════════════════
+// QUÉ VE EL MECÁNICO EN MÉTRICAS (15-sep-2026)
+//
+// Pedido de Iara, con la forma incluida: *"como la pantalla de inicio del
+// iPhone, cuando querés eliminar una aplicación y empiezan todas a temblar"*.
+// El admin toca «Elegir qué ve el mecánico», los paneles tiemblan, y con el
+// ojo de la esquina apaga los que no quiere que vea su empleado.
+//
+// Por qué acá y no en Configuración: se elige MIRANDO el panel. Una lista de
+// nombres en otra pantalla obliga a adivinar cuál es «Mix Facturación».
+//
+// ⚠️ Esconde, no bloquea. Los números se calculan en el navegador con órdenes
+// que el mecánico igual puede leer —las necesita para trabajar—. Es prolijidad
+// del panel, no un candado. Está dicho con todas las letras en la pantalla.
+// ═════════════════════════════════════════════════════════════
+type VistaMecanico = {
+    editando: boolean;
+    esMecanico: boolean;
+    ocultas: string[];
+    alternar: (id: string) => void;
+};
+
+const CtxVistaMecanico = createContext<VistaMecanico>({
+    editando: false, esMecanico: false, ocultas: [], alternar: () => {},
+});
+
+function Ocultable({ id, children }: { id: string; children: ReactNode }) {
+    const { editando, esMecanico, ocultas, alternar } = useContext(CtxVistaMecanico);
+    const oculta = ocultas.includes(id);
+
+    // Para el mecánico, lo apagado no existe: no hay hueco ni cartel de "no
+    // podés ver esto", que es peor que no mostrarlo.
+    if (!editando) return esMecanico && oculta ? null : <>{children}</>;
+
+    // Modo edición (solo lo ve el admin): lo apagado sigue a la vista, apagado,
+    // para poder volver a prenderlo. Igual que el iPhone.
+    return (
+        <div className={`relative motion-safe:animate-tiritar ${oculta ? 'opacity-40 grayscale' : ''}`}>
+            {/* El panel no se puede usar mientras se elige: el único clic que
+                importa acá es el del ojo. */}
+            <div className="pointer-events-none select-none">{children}</div>
+            <button
+                type="button"
+                onClick={() => alternar(id)}
+                aria-label={oculta ? 'Mostrárselo al mecánico' : 'Ocultárselo al mecánico'}
+                title={oculta ? 'No lo ve el mecánico — tocá para mostrárselo' : 'Lo ve el mecánico — tocá para ocultárselo'}
+                className={`absolute -top-2 -right-2 z-10 h-8 w-8 rounded-full border shadow-sm flex items-center justify-center transition-colors ${
+                    oculta
+                        ? 'bg-slate-700 border-slate-700 text-white hover:bg-slate-600'
+                        : 'bg-white border-slate-300 text-slate-600 hover:text-slate-900 hover:border-slate-400'
+                }`}
+            >
+                {oculta ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+        </div>
+    );
+}
+
 export default function Metrics() {
     const tallerId = useAuthStore(s => s.taller_id);
     const taller = useAuthStore(s => s.taller);
     const planActual: string = taller?.plan_actual || 'Sport';
+
+    // ── Qué de este panel ve el mecánico (15-sep-2026). Ver el bloque de arriba.
+    const rolUsuario = useAuthStore(s => s.rol);
+    const setTaller = useAuthStore(s => s.setTaller);
+    const rolNorm = rolUsuario?.toLowerCase()?.trim();
+    const esMecanico = rolNorm === 'mecanico';
+    const esAdmin = rolNorm === 'admin';
+    // El Sport trae un solo usuario: no hay mecánico a quién esconderle nada.
+    const puedeElegirVista = esAdmin && (taller?.plan_actual || 'Sport') !== 'Sport';
+    const [editandoVista, setEditandoVista] = useState(false);
+
+    // Sale del taller y no de un estado propio: así no hay dos verdades que
+    // sincronizar cuando el taller termina de cargar o lo cambia otra pantalla.
+    const ocultas = useMemo(
+        () => (Array.isArray(taller?.config_metricas?.ocultas_mecanico)
+            ? taller!.config_metricas!.ocultas_mecanico!.map(String) : []),
+        [taller],
+    );
+
+    const guardarOcultas = async (lista: string[]) => {
+        if (!taller || !tallerId) return;
+        const antes = ocultas;
+        const config_metricas = { ...(taller.config_metricas || {}), ocultas_mecanico: lista };
+        setTaller({ ...taller, config_metricas } as any);          // optimista: el ojo cambia al toque
+        const { error } = await supabase.from('talleres').update({ config_metricas }).eq('id', tallerId);
+        if (error) {
+            setTaller({ ...taller, config_metricas: { ...(taller.config_metricas || {}), ocultas_mecanico: antes } } as any);
+            alert('No se pudo guardar: ' + error.message);
+        }
+    };
+
+    const vistaMecanico: VistaMecanico = {
+        // Que el modo edición sea SOLO del admin se decide acá, en un lugar, y no
+        // en cada panel.
+        editando: editandoVista && puedeElegirVista,
+        esMecanico,
+        ocultas,
+        alternar: (id: string) => void guardarOcultas(
+            ocultas.includes(id) ? ocultas.filter(x => x !== id) : [...ocultas, id],
+        ),
+    };
 
     const today = new Date();
     const [dateStart, setDateStart] = useState<string>(
@@ -336,6 +438,18 @@ export default function Metrics() {
                 </h1>
                 <p className="text-muted-foreground">Análisis financiero y operativo del taller.</p>
             </div>
+            <div className="flex flex-wrap items-center gap-2">
+            {puedeElegirVista && (
+                <Button
+                    type="button"
+                    variant={editandoVista ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-9"
+                    onClick={() => setEditandoVista(v => !v)}
+                >
+                    {editandoVista ? 'Listo' : <><Eye className="h-4 w-4 mr-1.5" /> Elegir qué ve el mecánico</>}
+                </Button>
+            )}
             <Card className="p-1 px-4 flex items-center gap-4 bg-muted/50 border-none">
                 <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-muted-foreground" />
@@ -348,17 +462,43 @@ export default function Metrics() {
                     <Input type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} className="bg-white h-8 w-fit text-xs" />
                 </div>
             </Card>
+            </div>
         </div>
     );
+
+    // La franja que explica el modo edición. Dice también lo que NO hace: un
+    // taller que cree que esto es un candado se lleva una sorpresa fea.
+    const franjaEdicion = vistaMecanico.editando ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 space-y-1">
+            <p>
+                Tocá el <strong>ojo</strong> de cada panel para apagarle al mecánico lo que no querés
+                que vea. Vos los seguís viendo todos.
+                {ocultas.length > 0 && (
+                    <button
+                        type="button"
+                        onClick={() => void guardarOcultas([])}
+                        className="ml-2 font-semibold underline hover:no-underline"
+                    >
+                        Que vea todo de nuevo
+                    </button>
+                )}
+            </p>
+            <p className="text-xs text-amber-800/90">
+                Ordena el panel, no es un candado: los precios de cada orden los sigue viendo porque
+                los necesita para trabajar.
+            </p>
+        </div>
+    ) : null;
 
     // ─── Shared KPI cards ─────────────────────────────────────────────────────
     const kpiCards = (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            <KPICard title="Facturación Total" value={`$ ${stats.revenue.toLocaleString('es-AR')}`} icon={<DollarSign className="w-5 h-5 text-green-600" />} trend={revenueGrowth?.label ?? null} trendUp={revenueGrowth?.isUp ?? null} className="bg-green-50 border-green-100" />
-            <KPICard title="Mano de Obra" value={`$ ${stats.labor.toLocaleString('es-AR')}`} icon={<Wrench className="w-5 h-5 text-primary" />} sublabel={`${stats.count} Servicios realizados`} />
-            <KPICard title="Venta Repuestos" value={`$ ${stats.parts.toLocaleString('es-AR')}`} icon={<Package className="w-5 h-5 text-secondary" />} sublabel={`${stats.partsCount} Productos vendidos`} />
-            <KPICard title="Ticket Promedio" value={`$ ${stats.avgTicket.toLocaleString('es-AR')}`} icon={<Ticket className="w-5 h-5 text-primary" />} sublabel="Por orden de servicio" />
-            <KPICard title="Bicis Atendidas" value={stats.bikesCount.toString()} icon={<TrendingUp className="w-5 h-5 text-purple-600" />} sublabel="En el período seleccionado" />
+            <Ocultable id="kpi_facturacion"><KPICard title="Facturación Total" value={`$ ${stats.revenue.toLocaleString('es-AR')}`} icon={<DollarSign className="w-5 h-5 text-green-600" />} trend={revenueGrowth?.label ?? null} trendUp={revenueGrowth?.isUp ?? null} className="bg-green-50 border-green-100" /></Ocultable>
+            <Ocultable id="kpi_mano_obra"><KPICard title="Mano de Obra" value={`$ ${stats.labor.toLocaleString('es-AR')}`} icon={<Wrench className="w-5 h-5 text-primary" />} sublabel={`${stats.count} Servicios realizados`} /></Ocultable>
+            <Ocultable id="kpi_repuestos"><KPICard title="Venta Repuestos" value={`$ ${stats.parts.toLocaleString('es-AR')}`} icon={<Package className="w-5 h-5 text-secondary" />} sublabel={`${stats.partsCount} Productos vendidos`} /></Ocultable>
+            <Ocultable id="kpi_ticket"><KPICard title="Ticket Promedio" value={`$ ${stats.avgTicket.toLocaleString('es-AR')}`} icon={<Ticket className="w-5 h-5 text-primary" />} sublabel="Por orden de servicio" /></Ocultable>
+            <Ocultable id="kpi_bicis"><KPICard title="Bicis Atendidas" value={stats.bikesCount.toString()} icon={<TrendingUp className="w-5 h-5 text-purple-600" />} sublabel="En el período seleccionado" /></Ocultable>
+            <Ocultable id="kpi_mix">
             <Card className="hover:shadow-md transition-shadow">
                 <CardContent className="p-6">
                     <div className="flex justify-between items-start mb-2">
@@ -383,6 +523,7 @@ export default function Metrics() {
                     </div>
                 </CardContent>
             </Card>
+            </Ocultable>
         </div>
     );
 
@@ -390,6 +531,7 @@ export default function Metrics() {
     const analysisPanels = (
         <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* 1. STOCK RANKING */}
+            <Ocultable id="stock">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
                 <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-2">
@@ -417,8 +559,10 @@ export default function Metrics() {
                     )}
                 </div>
             </div>
+            </Ocultable>
 
             {/* 2. REPAIR TRENDS */}
+            <Ocultable id="tendencias">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
                 <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-2">
@@ -448,8 +592,10 @@ export default function Metrics() {
                     <div className="mt-6 pt-4 border-t text-xs text-muted-foreground text-center">* Agrupación automática basada en descripción de items.</div>
                 </div>
             </div>
+            </Ocultable>
 
             {/* 3. SERVICE DISTRIBUTION */}
+            <Ocultable id="services">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
                 <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-2">
@@ -481,8 +627,10 @@ export default function Metrics() {
                     )}
                 </div>
             </div>
+            </Ocultable>
 
             {/* 4. BRAND DISTRIBUTION */}
+            <Ocultable id="marcas">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
                 <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-2">
@@ -511,8 +659,10 @@ export default function Metrics() {
                     )}
                 </div>
             </div>
+            </Ocultable>
 
             {/* 5. MODEL DISTRIBUTION */}
+            <Ocultable id="modelos">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
                 <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-2">
@@ -541,8 +691,10 @@ export default function Metrics() {
                     )}
                 </div>
             </div>
+            </Ocultable>
 
             {/* 6. CATEGORY DISTRIBUTION */}
+            <Ocultable id="segmento">
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full flex flex-col">
                 <div className="flex items-center justify-between mb-5">
                     <div className="flex items-center gap-2">
@@ -571,12 +723,14 @@ export default function Metrics() {
                     )}
                 </div>
             </div>
+            </Ocultable>
         </div>
     );
 
     // ─── Plan: Sport → BasicMetrics ───────────────────────────────────────────
     if (planActual === 'Sport') {
         return (
+            <CtxVistaMecanico.Provider value={vistaMecanico}>
             <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
                 {header}
                 {kpiCards}
@@ -586,48 +740,63 @@ export default function Metrics() {
                     Actualiza al plan <strong className="mx-1">Pro</strong> o <strong className="mx-1">Expert</strong> para desbloquear análisis de tendencias, distribución de marcas e inteligencia de equipo.
                 </div>
             </div>
+            </CtxVistaMecanico.Provider>
         );
     }
 
     // ─── Plan: Pro → OperationalMetrics ──────────────────────────────────────
     if (planActual === 'Pro') {
         return (
+            <CtxVistaMecanico.Provider value={vistaMecanico}>
             <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
                 {header}
+                {franjaEdicion}
                 {kpiCards}
-                <PanelSugerencias />
+                <Ocultable id="sugerencias"><PanelSugerencias /></Ocultable>
                 {taller?.config_mecanicos?.habilitado && (
-                    <PorMecanico servicios={filteredServicios} tallerId={tallerId} />
+                    <Ocultable id="por_mecanico">
+                        <PorMecanico servicios={filteredServicios} tallerId={tallerId} />
+                    </Ocultable>
                 )}
                 {analysisPanels}
             </div>
+            </CtxVistaMecanico.Provider>
         );
     }
 
     // ─── Plan: Expert → ExpertMetrics ────────────────────────────────────────
     return (
+        <CtxVistaMecanico.Provider value={vistaMecanico}>
         <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
             {header}
+            {franjaEdicion}
             {kpiCards}
             {/* Lo primero del Expert: cuánto tiene que vender para no perder
                 plata. Va arriba de todo porque es LA pregunta del dueño, no una
                 métrica más (pedido de Iara, 10-sep-2026). Solo Expert: es lo que
                 la web vende como "BI avanzado". */}
+            {/* Sin Ocultable a propósito: el punto de equilibrio ya es del admin
+                y nada más (PuntoDeEquilibrio.tsx). No hay nada que elegir. */}
             <PuntoDeEquilibrio stats={stats} dateStart={dateStart} dateEnd={dateEnd} />
-            <PanelSugerencias />
+            <Ocultable id="sugerencias"><PanelSugerencias /></Ocultable>
             {taller?.config_mecanicos?.habilitado && (
-                <PorMecanico servicios={filteredServicios} tallerId={tallerId} />
+                <Ocultable id="por_mecanico">
+                    <PorMecanico servicios={filteredServicios} tallerId={tallerId} />
+                </Ocultable>
             )}
             {analysisPanels}
-            <ExpertMetrics
-                tallerId={tallerId || ''}
-                dateStart={dateStart}
-                dateEnd={dateEnd}
-                stats={stats}
-                servicios={filteredServicios}
-                isLoading={isLoading}
-            />
+            <Ocultable id="avanzado">
+                <ExpertMetrics
+                    tallerId={tallerId || ''}
+                    dateStart={dateStart}
+                    dateEnd={dateEnd}
+                    stats={stats}
+                    servicios={filteredServicios}
+                    isLoading={isLoading}
+                />
+            </Ocultable>
         </div>
+        </CtxVistaMecanico.Provider>
     );
 }
 

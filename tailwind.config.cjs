@@ -89,11 +89,19 @@ module.exports = {
 				'accordion-up': {
 					from: { height: 'var(--radix-accordion-content-height)' },
 					to: { height: '0' }
+				},
+				// El temblorcito de las apps del iPhone cuando se mantienen
+				// apretadas: dice "esto se puede tocar" sin un solo cartel.
+				// Muy chico a propósito — el panel se tiene que seguir leyendo.
+				tiritar: {
+					'0%, 100%': { transform: 'rotate(-0.35deg)' },
+					'50%': { transform: 'rotate(0.35deg)' }
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				tiritar: 'tiritar 0.22s ease-in-out infinite'
 			}
 		}
 	},

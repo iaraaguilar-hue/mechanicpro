@@ -65,6 +65,7 @@ export const AJUSTES: Ajuste[] = [
     { id: 'postventa', titulo: 'Después de vender una bici (ajuste y primer service)', tab: 'preferencias', palabras: 'venta vendi vendida mostrador bici nueva ajuste primer service meses despues de la compra aviso mensaje agendar' },
     { id: 'horas', titulo: 'Cuánto esperar al cliente antes de llamarlo', tab: 'preferencias', palabras: 'horas esperar respuesta llamar plazo no contesta' },
     { id: 'altas_erp', titulo: 'La bici vendida entra sola', tab: 'preferencias', palabras: 'erp contabilium venta vendida alta provincias bici nueva cliente nuevo factura' },
+    { id: 'vista_metricas', titulo: 'Qué ve el mecánico en Métricas', tab: 'preferencias', palabras: 'metricas facturacion ingresos esconder ocultar que ve el mecanico permisos plata sueldos panel ojo', soloAdmin: true },
     { id: 'bicis_paradas_mecanico', titulo: 'El mecánico también ve Bicis paradas', tab: 'preferencias', palabras: 'permisos permiso mecanico ver bicis paradas stock acceso', requiere: 'bicis_paradas', soloAdmin: true },
     { id: 'ocultos', titulo: 'Productos ocultos del buscador de repuestos', tab: 'preferencias', palabras: 'repuestos buscador ocultos no sugerir productos volver a mostrar' },
     { id: 'recorrido', titulo: 'Ver el recorrido de bienvenida', tab: 'preferencias', palabras: 'tutorial ayuda recorrido capacitar aprender como se usa empleado nuevo' },

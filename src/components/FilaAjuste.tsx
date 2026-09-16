@@ -2,11 +2,11 @@
 // LA FILA DE AJUSTE — el molde único de Configuración (16-sep-2026).
 //
 // De dónde sale (Iara, mirando Preferencias de Leira):
-//   «en el número de orden (…) a la derecha no hay ninguna opción para hacer. Y
+//   "en el número de orden (…) a la derecha no hay ninguna opción para hacer. Y
 //   me da mucho toque que no ocupen los mismos espacios todas las opciones. O
-//   sea, está demasiado desordenado. Es como que lo pusiste así nomás.»
-//   «el segundo par de ojos está bien pero tiene mucho espacio en blanco
-//   comparado con lo que tiene a la derecha.»
+//   sea, está demasiado desordenado. Es como que lo pusiste así nomás."
+//   "el segundo par de ojos está bien pero tiene mucho espacio en blanco
+//   comparado con lo que tiene a la derecha."
 //
 // EL DEFECTO, dicho en una línea: cada ajuste era una tarjeta suelta en una
 // grilla de dos columnas. Una tarjeta de un interruptor y otra de once
@@ -47,13 +47,13 @@ export function FilaAjuste({
     id: string;
     icono: LucideIcon;
     titulo: ReactNode;
-    /** Una línea, la que evita tener que abrir «Cómo funciona» para saber qué es. */
+    /** Una línea, la que evita tener que abrir "Cómo funciona" para saber qué es. */
     resumen?: ReactNode;
     /** Lo que se toca: el interruptor, los botones, el select. Va al riel derecho. */
     control?: ReactNode;
     /** Un cartel que tiene que verse sin abrir nada (el plan que no lo incluye). */
     aviso?: ReactNode;
-    /** Lo que cuelga del ajuste: sub-interruptores, «Cómo funciona», ejemplos. */
+    /** Lo que cuelga del ajuste: sub-interruptores, "Cómo funciona", ejemplos. */
     children?: ReactNode;
     className?: string;
 }) {

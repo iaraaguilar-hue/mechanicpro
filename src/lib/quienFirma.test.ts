@@ -1,6 +1,6 @@
 // Tests de quién firma cada service (el que tiene login y el que no).
 //   ./node_modules/.bin/esbuild src/lib/quienFirma.test.ts --bundle --platform=node --format=cjs --outfile=/tmp/t2.cjs && node /tmp/t2.cjs
-import { quienFirmaPatch, llaveDelFirmante, nombreDelFirmante } from './quienFirma';
+import { quienFirmaPatch, llaveDelFirmante, nombreDelFirmante, limpiarNombreFirmante, OTRO_FIRMANTE } from './quienFirma';
 
 let ok = 0, fail = 0;
 const eq = (nombre: string, a: unknown, b: unknown) => {
@@ -16,6 +16,11 @@ eq('el que no tiene usuario escribe el nombre y limpia el id',
     quienFirmaPatch('n:Leandro'), { mecanico_id: null, mecanico_nombre: 'Leandro' });
 // Vacío = "sin registrar": no se pisa lo que ya estaba guardado con null.
 eq('sin elegir a nadie no se toca ninguna columna', quienFirmaPatch(''), {});
+
+eq('"Otro…" con un nombre escrito lo guarda como nombre suelto',
+    quienFirmaPatch(OTRO_FIRMANTE, '  Juan   Carlos '), { mecanico_id: null, mecanico_nombre: 'Juan Carlos' });
+eq('"Otro…" sin escribir nada no registra a nadie', quienFirmaPatch(OTRO_FIRMANTE, '   '), {});
+eq('un nombre larguísimo se corta en 40', limpiarNombreFirmante('a'.repeat(60)).length, 40);
 
 eq('agrupa por usuario', llaveDelFirmante({ mecanico_id: UUID }), `u:${UUID}`);
 eq('agrupa por nombre', llaveDelFirmante({ mecanico_nombre: 'Leandro' }), 'n:Leandro');

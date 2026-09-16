@@ -1,10 +1,10 @@
 // ─────────────────────────────────────────────────────────────
 // CADA CUÁNTO SE REPITE UN SERVICE DEL MENÚ (Iara, 16-sep-2026).
 //
-//   «no sé si hay directamente poder poner, tipo, si el mecánico quiere, cada
+//   "no sé si hay directamente poder poner, tipo, si el mecánico quiere, cada
 //   cuánto se le tiene que avisar a la persona de que ese service lo tiene que
 //   volver a hacer. Tipo, si hace un lavado de lubricación, cada cuánto le tiene
-//   que avisar que lo tiene que volver a hacer.»
+//   que avisar que lo tiene que volver a hacer."
 //
 // El diagnóstico ya sabe hacer esto con los COMPONENTES (la cadena a los 6
 // meses). Lo que faltaba es lo mismo para el TRABAJO: un lavado y lubricación no
@@ -16,8 +16,8 @@
 // paralelo habría que enseñárselo a las tres cosas.
 //
 // 🔴 El match es por nombre EXACTO (sin tildes y sin distinguir mayúsculas), no
-// por parecido. Un match difuso entre «Service Completo» y «Service Completo
-// Premium» le agenda al cliente un aviso que nadie pidió, y eso sale por
+// por parecido. Un match difuso entre "Service Completo" y "Service Completo
+// Premium" le agenda al cliente un aviso que nadie pidió, y eso sale por
 // WhatsApp: el costo de errar es mucho más alto que el de no cazar un caso.
 // ─────────────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ const normalizar = (s: string) =>
 /**
  * Suma meses a una fecha sin correrse de mes.
  * `setMonth` sobre un 31 de enero + 1 mes da 3 de marzo; acá da 28/29 de febrero,
- * que es lo que una persona entiende por «de acá a un mes».
+ * que es lo que una persona entiende por "de acá a un mes".
  */
 export function sumarMeses(desde: Date, meses: number): Date {
     const d = new Date(desde.getTime());
@@ -62,7 +62,7 @@ export function diaISO(d: Date): string {
  * Qué avisos deja agendados esta orden, mirando el service base y las manos de
  * obra contra los services del menú que el taller marcó como repetibles.
  *
- * Los repuestos quedan afuera a propósito: «Cadena Shimano 11v» es una pieza, y
+ * Los repuestos quedan afuera a propósito: "Cadena Shimano 11v" es una pieza, y
  * lo que se repite es el trabajo que la usa.
  */
 export function repeticionesDeLaOrden(

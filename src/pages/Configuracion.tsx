@@ -100,7 +100,7 @@ export default function Configuracion() {
     }
 
     // `/configuracion?ajuste=firma` abre directo en el ajuste: sirve para que otra
-    // pantalla mande al lugar exacto («cargá las formas de pago») y no a una
+    // pantalla mande al lugar exacto ("cargá las formas de pago") y no a una
     // pestaña donde hay que volver a buscar.
     const [params] = useSearchParams();
     useEffect(() => {
@@ -139,7 +139,7 @@ export default function Configuracion() {
                     <Settings className="h-8 w-8 text-primary" />
                     Configuración del Taller
                 </h1>
-                {/* Acá decía «los cambios se aplican al instante», y en Mi Taller no era
+                {/* Acá decía "los cambios se aplican al instante", y en Mi Taller no era
                     cierto: había que apretar Guardar. En su lugar va lo que resuelve la
                     pregunta de verdad, "¿dónde se cambia tal cosa?" (14-sep-2026). */}
                 <BuscadorDeAjustes ajustes={ajustesVisibles} onIr={irAAjuste} />
@@ -159,7 +159,7 @@ export default function Configuracion() {
                         muestra en Sport: un botón que lleva a un cartel de "tu plan
                         no incluye esto" es peor que no tenerlo. */}
                     {verWhatsApp && <TabsTrigger value="whatsapp" data-tour="config-whatsapp" className="flex-shrink-0">WhatsApp</TabsTrigger>}
-                    {/* «Mensajes» y no «Mensajes automáticos» (14-sep-2026): ahora arranca
+                    {/* "Mensajes" y no "Mensajes automáticos" (14-sep-2026): ahora arranca
                         con quién firma y cómo hablás, que valen para TODOS los planes
                         (vivían en Mi Taller, al lado del logo, donde nadie los buscaba).
                         Lo automático sigue siendo del Pro para arriba y en Sport no aparece. */}
@@ -223,8 +223,8 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
         politica_pago: (taller as any).politica_pago || '',
     });
     // Lo que está guardado, para saber si hay cambios sin guardar. Quién firma,
-    // cómo hablás y los interruptores de IA se mudaron el 14-sep-2026 a «Mensajes»
-    // y «Preferencias»: acá quedó solo la marca y el comprobante.
+    // cómo hablás y los interruptores de IA se mudaron el 14-sep-2026 a "Mensajes"
+    // y "Preferencias": acá quedó solo la marca y el comprobante.
     const guardadoEnBase = {
         color_primario: taller.color_primario || '#f25a30',
         color_secundario: taller.color_secundario || '#03adef',
@@ -234,10 +234,10 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
     const sinGuardar = (Object.keys(guardadoEnBase) as (keyof typeof guardadoEnBase)[])
         .some(k => form[k] !== guardadoEnBase[k]);
     // 🔴 LA VISTA PREVIA MOSTRABA UN SERVICE QUE EL TALLER NO TIENE (12-sep-2026).
-    // Decía «Service Completo $ 45.000» fijo, para todos: en un taller con SPORT/PRO/EXPERT
+    // Decía "Service Completo $ 45.000" fijo, para todos: en un taller con SPORT/PRO/EXPERT
     // la previa de SU comprobante mostraba un renglón que su comprobante nunca va a traer.
     // Va el PRIMER service que cargó (el principal de su menú, casi siempre): el más barato
-    // salía «Lavado y lubricación», que es un renglón real pero no es su comprobante típico.
+    // salía "Lavado y lubricación", que es un renglón real pero no es su comprobante típico.
     // El ejemplo fijo queda solo si el menú está vacío.
     const [muestra, setMuestra] = useState<{ nombre: string; precio: number } | null>(null);
     useEffect(() => {
@@ -252,7 +252,7 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
     const [saving, setSaving] = useState(false);
     const [logoError, setLogoError] = useState<string | null>(null);
 
-    // Ya no es un aviso de «puede quedar difícil de leer»: la app calcula sola
+    // Ya no es un aviso de "puede quedar difícil de leer": la app calcula sola
     // la tinta que va encima de cada color (contraste.ts). Esto solo le anticipa
     // al taller qué va a pasar, para que no le parezca un error.
     // Origen: Ariel Leira eligió blanco de secundario y el aviso viejo ni lo
@@ -537,10 +537,10 @@ function TabMiTaller({ taller, setTaller, puedeEditar, avisar }: {
 // ═════════════════════════════════════════════════════════════
 // PESTAÑA MENSAJES — quién firma, cómo hablás, la IA de los mensajes.
 //
-// Vivía en «Mi Taller», entre el logo y los colores: el que quería cambiar la
+// Vivía en "Mi Taller", entre el logo y los colores: el que quería cambiar la
 // firma de los WhatsApp no la iba a buscar al lado del logo (14-sep-2026). Ahora
-// encabeza «Mensajes», que ven todos los planes. Y se guarda sola al salir del
-// campo: antes dependía del botón «Guardar» de otra tarjeta, y cambiar la firma
+// encabeza "Mensajes", que ven todos los planes. Y se guarda sola al salir del
+// campo: antes dependía del botón "Guardar" de otra tarjeta, y cambiar la firma
 // e irse era perderla.
 // ═════════════════════════════════════════════════════════════
 function ComoEscribis({ taller, setTaller, avisar }: {
@@ -1216,8 +1216,8 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     const [mecanicosHab, setMecanicosHab] = useState(taller.config_mecanicos?.habilitado === true);
     const [savingMec, setSavingMec] = useState(false);
 
-    // ── Los dos interruptores que vivían en «Mi Taller» (14-sep-2026). Ahí
-    // dependían del botón «Guardar» de otra tarjeta; acá se guardan al tocarlos,
+    // ── Los dos interruptores que vivían en "Mi Taller" (14-sep-2026). Ahí
+    // dependían del botón "Guardar" de otra tarjeta; acá se guardan al tocarlos,
     // como todo lo de esta pestaña, y vuelven atrás si el guardado falla.
     // El default de ia_presupuesto_activa en la base es true: solo queda apagado si
     // el taller lo apagó. bicis_paradas_ve_mecanico es false: la lista trae
@@ -1282,11 +1282,11 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     };
 
     // ── Los avisos propios del taller (Iara, 16-sep-2026): un service del menú que
-    // se repite cada N meses. «Si hace un lavado de lubricación, cada cuánto le
-    // tiene que avisar que lo tiene que volver a hacer.»
+    // se repite cada N meses. "Si hace un lavado de lubricación, cada cuánto le
+    // tiene que avisar que lo tiene que volver a hacer."
     //
     // El dato vive en `catalogo_servicios.meses_repeticion`, o sea en el service
-    // mismo: se toca desde acá y desde la pestaña «Menú de Services», pero es un
+    // mismo: se toca desde acá y desde la pestaña "Menú de Services", pero es un
     // solo campo. Dos tablas para el mismo dato terminan siempre en dos verdades.
     const [menu, setMenu] = useState<ServicioDelMenu[]>([]);
     const [menuCargado, setMenuCargado] = useState(false);
@@ -1318,13 +1318,13 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     // Hasta hoy la lista de quién firma salía solo de `usuarios`: en un taller de
     // tres, dos no tienen login y el taller no los puede crear. Son nombres y no
     // cuentas a propósito: para firmar una orden no hace falta entrar a nada.
-    const [gente, setGente] = useState<string[]>(taller.config_mecanicos?.gente ?? []);
+    const [gente, setGente] = useState<string[]>(taller.config_mecanicos?.nombres ?? []);
     const [nuevaPersona, setNuevaPersona] = useState('');
 
     const guardarGente = async (lista: string[]) => {
         const antes = gente;
         setGente(lista);
-        const config_mecanicos = { ...(taller.config_mecanicos || { habilitado: false }), gente: lista };
+        const config_mecanicos = { ...(taller.config_mecanicos || { habilitado: false }), nombres: lista };
         const { error } = await supabase.from('talleres').update({ config_mecanicos }).eq('id', taller.id);
         if (error) { setGente(antes); avisar('error', 'No se pudo guardar: ' + error.message); return; }
         setTaller({ ...taller, config_mecanicos: config_mecanicos as any });
@@ -1342,8 +1342,8 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     };
 
     // ── El molde de la pantalla (16-sep-2026, Iara):
-    //   «me da mucho toque que no ocupen los mismos espacios todas las opciones.
-    //   O sea, está demasiado desordenado. Es como que lo pusiste así nomás.»
+    //   "me da mucho toque que no ocupen los mismos espacios todas las opciones.
+    //   O sea, está demasiado desordenado. Es como que lo pusiste así nomás."
     //
     // Antes cada ajuste era una tarjeta suelta en una grilla de dos columnas: una
     // de un interruptor al lado de una de once componentes, la grilla las estira a
@@ -1847,6 +1847,11 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                                 Los que tienen usuario para entrar al sistema ya aparecen solos en la
                                 lista al finalizar. Acá se agregan los que no lo tienen: para firmar una
                                 orden no hace falta que entren a nada.
+                            </p>
+                            <p>
+                                Si aparece alguien que no está en la lista, al finalizar elegís
+                                <strong> Otro</strong> y escribís el nombre en el momento; queda
+                                agregado acá solo.
                             </p>
                             <p>
                                 Se cuenta <strong>desde que lo prendés</strong>: los services que ya

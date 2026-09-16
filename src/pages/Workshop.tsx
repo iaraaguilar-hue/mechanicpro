@@ -24,7 +24,7 @@ import { resolveOrdenWebhookUrl, resolveEntregadoWebhookUrl } from "@/lib/ordenW
 import { claveProducto, buscarProductos } from "@/lib/buscadorProductos";
 import { instanteAR, diaCalendario, horaCorta, ZONA_AR } from "@/lib/fechaAR";
 import { ETIQUETAS_NOTAS } from "@/lib/notasServicio";
-import { quienFirmaPatch } from "@/lib/quienFirma";
+import { quienFirmaPatch, limpiarNombreFirmante, OTRO_FIRMANTE } from "@/lib/quienFirma";
 import { repeticionesDeLaOrden, type ServicioRepetible } from "@/lib/repeticionServices";
 import {
     chequearOrdenParaERP,
@@ -551,7 +551,7 @@ export default function Workshop() {
 }
 
 // ─────────────────────────────────────────────────────────────
-// «ESPERANDO AL CLIENTE» — el chip de la mesa de trabajo (8-sep-2026).
+// "ESPERANDO AL CLIENTE" — el chip de la mesa de trabajo (8-sep-2026).
 //
 // POR QUÉ: hasta hoy una bici frenada porque el cliente no contesta se veía
 // EXACTAMENTE igual que una en la que alguien está trabajando. El dueño del
@@ -932,7 +932,7 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                         </Button>
                         {job.status !== 'delivered' && (
                             <>
-                                {/* Solo cuando la bici YA está lista: el botón dice «avisar que
+                                {/* Solo cuando la bici YA está lista: el botón dice "avisar que
                                     está lista" y manda el comprobante. Antes aparecía también en
                                     las órdenes en curso, al lado del de Finalizar, y un toque de
                                     más le avisaba al cliente que pasara a buscar una bici que
@@ -1028,10 +1028,25 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
     const registrarMecanico = taller?.config_mecanicos?.habilitado === true;
     const miUserId = useAuthStore(s => s.session?.user?.id ?? null);
     const [gente, setGente] = useState<{ id: string; nombre: string; rol: string }[]>([]);
-    // Los del taller que NO tienen usuario (16-sep-2026): los carga el taller en
-    // Configuración. Antes la lista salía solo de `usuarios` y en un taller de
-    // tres aparecía uno, así que "quién firma" no se podía usar de verdad.
-    const nombresSueltos = taller?.config_mecanicos?.gente ?? [];
+    // Los del taller que NO tienen usuario: los carga el taller en Configuración.
+    // Antes la lista salía solo de `usuarios` y en un taller de tres aparecía uno,
+    // así que "quién firma" no se podía usar de verdad.
+    const rolUsuario = useAuthStore(s => s.rol);
+    const setTallerAuth = useAuthStore(s => s.setTaller);
+    const [otroNombre, setOtroNombre] = useState('');
+    const nombresSueltos = useMemo(() => {
+        // El que YA tiene usuario no aparece dos veces: si el mismo nombre se
+        // pudiera elegir por las dos vías, en Métricas terminaría partido en dos
+        // filas con la mitad de los services cada una.
+        const conUsuario = new Set(gente.map(g => (g.nombre ?? '').trim().toLowerCase()));
+        const lista = (taller?.config_mecanicos?.nombres ?? [])
+            .map(n => String(n).trim()).filter(n => n && !conUsuario.has(n.toLowerCase()));
+        // El nombre con el que ya quedó esta orden va igual, aunque después lo
+        // hayan sacado de la lista: si no, al reabrirla se perdería.
+        const guardado = (service?.mecanico_nombre ?? '').trim();
+        return guardado && !lista.some(n => n.toLowerCase() === guardado.toLowerCase())
+            ? [...lista, guardado] : lista;
+    }, [taller, gente, service?.mecanico_nombre]);
     // Una sola caja para las dos clases de persona: `u:<uuid>` el que tiene login,
     // `n:<nombre>` el que no. Sin el prefijo, un nombre y un id conviven en el
     // mismo `value` y no hay forma de saber en qué columna se guarda.
@@ -1292,8 +1307,22 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                     // se pisa un dato viejo con null.
                     // Vacío = "sin registrar": se deja como estaba, no se pisa un
                     // dato viejo con null.
-                    ...(registrarMecanico ? quienFirmaPatch(quienFirma) : {}),
+                    ...(registrarMecanico ? quienFirmaPatch(quienFirma, otroNombre) : {}),
                 });
+
+                // Un nombre escrito a mano se suma a la lista del taller para no
+                // volver a escribirlo mañana. Best-effort a propósito: `talleres`
+                // solo lo puede escribir el admin (RLS), y si esto falla no pasa
+                // nada, la orden ya quedó registrada con ese nombre.
+                const nombreNuevo = quienFirma === OTRO_FIRMANTE ? limpiarNombreFirmante(otroNombre) : '';
+                if (nombreNuevo && taller && rolUsuario?.toLowerCase()?.trim() === 'admin') {
+                    const lista = (taller.config_mecanicos?.nombres ?? []).map(n => String(n).trim()).filter(Boolean);
+                    if (!lista.some(n => n.toLowerCase() === nombreNuevo.toLowerCase())) {
+                        const config_mecanicos = { ...(taller.config_mecanicos || { habilitado: true }), nombres: [...lista, nombreNuevo] };
+                        const { error } = await supabase.from('talleres').update({ config_mecanicos }).eq('id', taller.id);
+                        if (!error) setTallerAuth({ ...taller, config_mecanicos } as any);
+                    }
+                }
 
                 // ── Los services del menú que se repiten (16-sep-2026).
                 // Van acá y no arriba con el diagnóstico porque se agendan cuando el
@@ -1568,9 +1597,30 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                                 {nombresSueltos.map((n) => (
                                     <option key={n} value={`n:${n}`}>{n}</option>
                                 ))}
+                                <option value={OTRO_FIRMANTE}>Otro… (escribir el nombre)</option>
                             </select>
+                            {quienFirma === OTRO_FIRMANTE && (
+                                <>
+                                    <input
+                                        autoFocus
+                                        value={otroNombre}
+                                        onChange={(e) => setOtroNombre(e.target.value)}
+                                        maxLength={40}
+                                        placeholder="El nombre de quien lo hizo"
+                                        className="mt-2 w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                                    />
+                                    {/* Elegir "Otro…" y no escribir nada no puede terminar en un
+                                        dato que desaparece sin avisar. */}
+                                    {!otroNombre.trim() && (
+                                        <p className="text-[11px] text-amber-700 mt-1">
+                                            Escribí el nombre. Si lo dejás vacío, la orden queda sin registrar.
+                                        </p>
+                                    )}
+                                </>
+                            )}
                             <p className="text-[11px] text-muted-foreground mt-1">
-                                Viene puesto el que está usando la app. Cambialo si lo hizo otro.
+                                Viene puesto el que está usando la app. Cambialo si lo hizo otro: va
+                                cualquier nombre, esté cargado o no.
                             </p>
                         </div>
                     )}

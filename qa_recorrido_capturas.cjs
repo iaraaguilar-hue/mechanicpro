@@ -5,7 +5,10 @@
 const { chromium } = require('/Users/iaraaguilar/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core');
 const fs = require('fs');
 const EXEC = '/Users/iaraaguilar/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell';
-const BASE = 'http://localhost:5173/';
+const BASE = process.env.MP_URL || 'http://localhost:5173/';
+// El .env del Demo la llama MP_DEMO_PASSWORD; aca se pedia DEMO_PASS. Acepta los dos.
+const DEMO_PASS = process.env.DEMO_PASS || process.env.MP_DEMO_PASSWORD;
+if (!DEMO_PASS) { console.error('Falta DEMO_PASS (o MP_DEMO_PASSWORD)'); process.exit(2); }
 const OUT = process.env.OUT || require('os').tmpdir() + '/mp_capturas';
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -24,7 +27,7 @@ const INVENTARIO = () => {
 async function login(page) {
     await page.goto(BASE, { waitUntil: 'domcontentloaded' });
     await page.fill('input[type=email]', 'demo@mechanicpro.com.ar');
-    await page.fill('input[type=password]', process.env.DEMO_PASS);
+    await page.fill('input[type=password]', DEMO_PASS);
     await page.click('button[type=submit]');
     await page.waitForFunction(() => !document.body.innerText.includes('INGRESANDO'), { timeout: 45000 });
     await page.evaluate(() => { localStorage.setItem('mechanicpro_tour_v3', 'visto'); });

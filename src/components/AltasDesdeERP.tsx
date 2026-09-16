@@ -70,8 +70,8 @@ export function AltasDesdeERP({ taller, setTaller, avisar }: {
     return (
         <Card className="flex flex-col">
             <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                    <MapPin className="h-5 w-5" /> La bici vendida entra sola
+                <CardTitle className="text-base flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-primary" /> La bici vendida entra sola
                 </CardTitle>
                 <ComoFunciona>
                     <p>

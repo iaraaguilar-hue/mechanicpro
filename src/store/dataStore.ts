@@ -171,6 +171,8 @@ export interface SupabaseService {
     bicicleta_id: string;
     /** Quién hizo el trabajo. Se elige al finalizar, si el taller lo tiene prendido. */
     mecanico_id?: string | null;
+    /** Quién firmó, cuando esa persona no tiene usuario en el sistema (16-sep-2026). */
+    mecanico_nombre?: string | null;
     /** Si trajo SOLO una pieza de su bici (rueda, tija…). NULL = la bici entera. 14-sep-2026. */
     pieza?: string | null;
     numero_orden?: number;

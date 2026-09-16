@@ -24,6 +24,8 @@ import { resolveOrdenWebhookUrl, resolveEntregadoWebhookUrl } from "@/lib/ordenW
 import { claveProducto, buscarProductos } from "@/lib/buscadorProductos";
 import { instanteAR, diaCalendario, horaCorta, ZONA_AR } from "@/lib/fechaAR";
 import { ETIQUETAS_NOTAS } from "@/lib/notasServicio";
+import { quienFirmaPatch } from "@/lib/quienFirma";
+import { repeticionesDeLaOrden, type ServicioRepetible } from "@/lib/repeticionServices";
 import {
     chequearOrdenParaERP,
     clavesAChequear,
@@ -1026,7 +1028,18 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
     const registrarMecanico = taller?.config_mecanicos?.habilitado === true;
     const miUserId = useAuthStore(s => s.session?.user?.id ?? null);
     const [gente, setGente] = useState<{ id: string; nombre: string; rol: string }[]>([]);
-    const [mecanicoId, setMecanicoId] = useState<string>(service?.mecanico_id || miUserId || '');
+    // Los del taller que NO tienen usuario (16-sep-2026): los carga el taller en
+    // Configuración. Antes la lista salía solo de `usuarios` y en un taller de
+    // tres aparecía uno, así que "quién firma" no se podía usar de verdad.
+    const nombresSueltos = taller?.config_mecanicos?.gente ?? [];
+    // Una sola caja para las dos clases de persona: `u:<uuid>` el que tiene login,
+    // `n:<nombre>` el que no. Sin el prefijo, un nombre y un id conviven en el
+    // mismo `value` y no hay forma de saber en qué columna se guarda.
+    const [quienFirma, setQuienFirma] = useState<string>(
+        service?.mecanico_id ? `u:${service.mecanico_id}`
+            : service?.mecanico_nombre ? `n:${service.mecanico_nombre}`
+                : miUserId ? `u:${miUserId}` : ''
+    );
 
     useEffect(() => {
         if (!registrarMecanico || !isOpen || !taller_id) return;
@@ -1039,6 +1052,22 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
             setGente(data ?? []);
         })();
     }, [registrarMecanico, isOpen, taller_id]);
+
+    // ── Los services del menú que se repiten solos (16-sep-2026). Se leen al abrir
+    // la finalización y no en cada tecla: es una lista corta que casi nunca cambia.
+    const [repetibles, setRepetibles] = useState<ServicioRepetible[]>([]);
+    useEffect(() => {
+        if (!isOpen || !taller_id) return;
+        void (async () => {
+            const { data } = await supabase
+                .from('catalogo_servicios').select('nombre, meses_repeticion')
+                .eq('taller_id', taller_id)
+                .not('meses_repeticion', 'is', null);
+            setRepetibles((data ?? [])
+                .filter((s: any) => s.nombre && s.meses_repeticion > 0)
+                .map((s: any) => ({ nombre: s.nombre, meses: s.meses_repeticion })));
+        })();
+    }, [isOpen, taller_id]);
 
     const [notes, setNotes] = useState(service?.notas_mecanico || "");
     // El día en que hay que escribirle para que vuelva, elegido al finalizar.
@@ -1261,8 +1290,30 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                     fecha_finalizacion: fechaFinalizacion,
                     // Solo si el taller lo pidió: si no, se deja como estaba y no
                     // se pisa un dato viejo con null.
-                    ...(registrarMecanico && mecanicoId ? { mecanico_id: mecanicoId } : {}),
+                    // Vacío = "sin registrar": se deja como estaba, no se pisa un
+                    // dato viejo con null.
+                    ...(registrarMecanico ? quienFirmaPatch(quienFirma) : {}),
                 });
+
+                // ── Los services del menú que se repiten (16-sep-2026).
+                // Van acá y no arriba con el diagnóstico porque se agendan cuando el
+                // trabajo QUEDÓ HECHO: un guardado a mitad de camino no agenda nada.
+                // Escriben en `recordatorios`, la misma tabla de los vencimientos, así
+                // que Retención, la campana y el cron de WhatsApp los levantan sin
+                // enterarse de que son nuevos.
+                if (taller_id && service.bicicleta_id && repetibles.length) {
+                    const repes = repeticionesDeLaOrden(service, repetibles);
+                    if (repes.length) {
+                        await upsertRecordatorios(repes.map(r => ({
+                            taller_id,
+                            bicicleta_id: service.bicicleta_id,
+                            componente: r.componente,
+                            fecha_vencimiento: r.fecha,
+                            fecha_asignacion: new Date().toISOString(),
+                            estado: 'Pendiente',
+                        })));
+                    }
+                }
 
                 // El aviso de "ya está lista" con el comprobante, si el taller lo
                 // dejó prendido. Sin `await` a propósito: el mecánico ya terminó
@@ -1503,15 +1554,19 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                     {/* Quién hizo el trabajo. Solo si el taller prendió la preferencia. */}
                     {!isCompleted && registrarMecanico && (
                         <div className="pt-2">
-                            <label className="text-sm font-semibold mb-1.5 block">¿Quién lo hizo?</label>
+                            <label className="text-sm font-semibold mb-1.5 block">Quién lo hizo</label>
                             <select
                                 className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-                                value={mecanicoId}
-                                onChange={(e) => setMecanicoId(e.target.value)}
+                                value={quienFirma}
+                                onChange={(e) => setQuienFirma(e.target.value)}
+                                aria-label="Quién firma este service"
                             >
                                 <option value="">Sin registrar</option>
                                 {gente.map((g) => (
-                                    <option key={g.id} value={g.id}>{g.nombre}</option>
+                                    <option key={g.id} value={`u:${g.id}`}>{g.nombre}</option>
+                                ))}
+                                {nombresSueltos.map((n) => (
+                                    <option key={n} value={`n:${n}`}>{n}</option>
                                 ))}
                             </select>
                             <p className="text-[11px] text-muted-foreground mt-1">

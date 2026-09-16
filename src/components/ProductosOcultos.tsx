@@ -85,8 +85,8 @@ export function ProductosOcultos({ avisar }: { avisar: (tipo: 'ok' | 'error', ms
     return (
         <Card className="flex flex-col">
             <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
-                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-base flex items-center gap-2">
+                    <EyeOff className="h-4 w-4 text-primary" />
                     Productos ocultos del buscador
                 </CardTitle>
                 <ComoFunciona>

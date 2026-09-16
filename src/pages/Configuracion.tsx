@@ -1,4 +1,4 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore, type TallerData } from '@/store/authStore';
@@ -24,6 +24,7 @@ import ConectarWhatsApp from '@/pages/ConectarWhatsApp';
 import { MensajesAutomaticos } from '@/components/MensajesAutomaticos';
 import { AltasDesdeERP } from '@/components/AltasDesdeERP';
 import { ComoFunciona } from '@/components/ComoFunciona';
+import { PanelAjustes, FilaAjuste, SubAjuste, GrupoAjustes } from '@/components/FilaAjuste';
 import { configMantenimiento, COMPONENTES_BASE, PLAZOS_MESES, POSTVENTA_DEFAULT, mesesEnPalabras, comoLeLlegaPostventa, type ComponenteDiagnostico, type ConfigPostventa } from '@/lib/mantenimiento';
 import { tintaSobre, tintaLegible, PISO_TEXTO_GRANDE } from '@/lib/contraste';
 import { BuscadorDeAjustes, AJUSTES, type Ajuste, type PestanaConfig } from '@/components/BuscadorDeAjustes';
@@ -67,7 +68,12 @@ interface ServicioCatalogo {
     descripcion: string;
     precio: number;
     activo?: boolean;
+    /** Cada cuántos meses se repite. NULL = no se repite solo (16-sep-2026). */
+    meses_repeticion?: number | null;
 }
+
+/** Lo que Preferencias necesita del menú para armar los avisos propios. */
+type ServicioDelMenu = Pick<ServicioCatalogo, 'id' | 'nombre' | 'activo' | 'meses_repeticion'>;
 
 export default function Configuracion() {
     const rol = useAuthStore(s => s.rol);
@@ -734,6 +740,16 @@ function TabMenuServices({ taller, taller_id, puedeEditar, avisar }: {
         }
     };
 
+    // ── Cada cuánto se repite este service (Iara, 16-sep-2026). Se guarda al
+    // tocar el select: es un dato de a uno, no hay formulario que confirmar.
+    // El mismo campo se edita desde Preferencias (los avisos propios del taller).
+    const handleRepeticion = async (id: string, meses: number | null) => {
+        const antes = servicios;
+        setServicios(servicios.map(s => (s.id === id ? { ...s, meses_repeticion: meses } : s)));
+        const { error } = await supabase.from('catalogo_servicios').update({ meses_repeticion: meses }).eq('id', id);
+        if (error) { setServicios(antes); avisar('error', 'No se pudo guardar: ' + error.message); }
+    };
+
     const handleToggleActivo = async (servicio: ServicioCatalogo) => {
         const nuevoEstado = servicio.activo === false;
         try {
@@ -819,6 +835,7 @@ function TabMenuServices({ taller, taller_id, puedeEditar, avisar }: {
                             <TableHead>Service</TableHead>
                             <TableHead>Qué incluye</TableHead>
                             <TableHead className="text-right">Precio</TableHead>
+                            <TableHead className="text-center w-40">Se repite</TableHead>
                             <TableHead className="text-center w-24">Activo</TableHead>
                             <TableHead className="w-12"></TableHead>
                         </TableRow>
@@ -826,13 +843,13 @@ function TabMenuServices({ taller, taller_id, puedeEditar, avisar }: {
                     <TableBody>
                         {loading ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="h-32 text-center">
+                                <TableCell colSpan={6} className="h-32 text-center">
                                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mx-auto" />
                                 </TableCell>
                             </TableRow>
                         ) : servicios.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="h-32 text-center text-muted-foreground">
+                                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                                     Todavía no cargaste services. Agregá el primero arriba.
                                 </TableCell>
                             </TableRow>
@@ -872,6 +889,7 @@ function TabMenuServices({ taller, taller_id, puedeEditar, avisar }: {
                                                 />
                                             </TableCell>
                                             <TableCell></TableCell>
+                                            <TableCell></TableCell>
                                             <TableCell className="whitespace-nowrap">
                                                 <div className="flex items-center justify-end gap-1">
                                                     <Button
@@ -901,6 +919,18 @@ function TabMenuServices({ taller, taller_id, puedeEditar, avisar }: {
                                             </TableCell>
                                             <TableCell className="text-right font-mono">
                                                 $ {Number(servicio.precio).toLocaleString('es-AR')}
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <select
+                                                    value={servicio.meses_repeticion ?? ''}
+                                                    disabled={!puedeEditar}
+                                                    onChange={e => handleRepeticion(servicio.id, e.target.value ? Number(e.target.value) : null)}
+                                                    className="h-8 rounded-md border bg-background px-2 text-xs disabled:opacity-60"
+                                                    aria-label={`Cada cuánto se repite ${servicio.nombre}`}
+                                                >
+                                                    <option value="">No se repite</option>
+                                                    {PLAZOS_MESES.map(m => <option key={m} value={m}>cada {mesesEnPalabras(m)}</option>)}
+                                                </select>
                                             </TableCell>
                                             <TableCell className="text-center">
                                                 <Switch
@@ -939,6 +969,13 @@ function TabMenuServices({ taller, taller_id, puedeEditar, avisar }: {
                 <p>
                     Los services no se borran: se desactivan con el switch. Así el historial de órdenes viejas queda intacto.
                     La opción "OTRO" (precio libre) está siempre disponible al crear un service.
+                </p>
+                <p>
+                    <strong>Se repite:</strong> cada vez que una orden incluye ese service, esa bici
+                    queda agendada para dentro del plazo que elijas. El aviso cae entre los
+                    vencimientos de Retención y, con el WhatsApp conectado, sale solo el día que toca.
+                    Sirve para lo que se hace seguido: un lavado y lubricación cada dos meses, por
+                    ejemplo. Lo mismo se edita desde Preferencias.
                 </p>
             </ComoFunciona>
         </div>
@@ -1244,525 +1281,637 @@ function TabPreferencias({ taller, setTaller, avisar }: {
         }
     };
 
-    // Rediseño compacto (pedido Iara 3-ago-2026): las preferencias se leen de
-    // un vistazo — grilla de 2 columnas en desktop, textos cortos, el ejemplo
-    // plegado. La información es la misma; el scroll, la mitad.
+    // ── Los avisos propios del taller (Iara, 16-sep-2026): un service del menú que
+    // se repite cada N meses. «Si hace un lavado de lubricación, cada cuánto le
+    // tiene que avisar que lo tiene que volver a hacer.»
+    //
+    // El dato vive en `catalogo_servicios.meses_repeticion`, o sea en el service
+    // mismo: se toca desde acá y desde la pestaña «Menú de Services», pero es un
+    // solo campo. Dos tablas para el mismo dato terminan siempre en dos verdades.
+    const [menu, setMenu] = useState<ServicioDelMenu[]>([]);
+    const [menuCargado, setMenuCargado] = useState(false);
+    const [nuevoRep, setNuevoRep] = useState<{ id: string; meses: number }>({ id: '', meses: 6 });
+
+    useEffect(() => {
+        void (async () => {
+            const { data } = await supabase
+                .from('catalogo_servicios')
+                .select('id, nombre, activo, meses_repeticion')
+                .eq('taller_id', taller.id)
+                .order('nombre');
+            setMenu((data ?? []) as ServicioDelMenu[]);
+            setMenuCargado(true);
+        })();
+    }, [taller.id]);
+
+    const guardarRepeticion = async (id: string, meses: number | null) => {
+        const antes = menu;
+        setMenu(menu.map(s => (s.id === id ? { ...s, meses_repeticion: meses } : s)));
+        const { error } = await supabase.from('catalogo_servicios').update({ meses_repeticion: meses }).eq('id', id);
+        if (error) { setMenu(antes); avisar('error', 'No se pudo guardar: ' + error.message); }
+    };
+
+    const repetibles = menu.filter(s => (s.meses_repeticion ?? 0) > 0);
+    const sinRepetir = menu.filter(s => s.activo !== false && !((s.meses_repeticion ?? 0) > 0));
+
+    // ── Los del taller que NO tienen usuario en el sistema (16-sep-2026).
+    // Hasta hoy la lista de quién firma salía solo de `usuarios`: en un taller de
+    // tres, dos no tienen login y el taller no los puede crear. Son nombres y no
+    // cuentas a propósito: para firmar una orden no hace falta entrar a nada.
+    const [gente, setGente] = useState<string[]>(taller.config_mecanicos?.gente ?? []);
+    const [nuevaPersona, setNuevaPersona] = useState('');
+
+    const guardarGente = async (lista: string[]) => {
+        const antes = gente;
+        setGente(lista);
+        const config_mecanicos = { ...(taller.config_mecanicos || { habilitado: false }), gente: lista };
+        const { error } = await supabase.from('talleres').update({ config_mecanicos }).eq('id', taller.id);
+        if (error) { setGente(antes); avisar('error', 'No se pudo guardar: ' + error.message); return; }
+        setTaller({ ...taller, config_mecanicos: config_mecanicos as any });
+    };
+
+    const agregarPersona = () => {
+        const nombre = nuevaPersona.trim();
+        if (!nombre) return;
+        if (gente.some(g => g.toLowerCase() === nombre.toLowerCase())) {
+            avisar('error', 'Ese nombre ya está en la lista.');
+            return;
+        }
+        setNuevaPersona('');
+        void guardarGente([...gente, nombre]);
+    };
+
+    // ── El molde de la pantalla (16-sep-2026, Iara):
+    //   «me da mucho toque que no ocupen los mismos espacios todas las opciones.
+    //   O sea, está demasiado desordenado. Es como que lo pusiste así nomás.»
+    //
+    // Antes cada ajuste era una tarjeta suelta en una grilla de dos columnas: una
+    // de un interruptor al lado de una de once componentes, la grilla las estira a
+    // la misma altura y la corta queda medio vacía. Ahora un ajuste es una FILA
+    // dentro del panel de su grupo (todas miden lo mismo por construcción) y los
+    // tres que de verdad necesitan el ancho son su propio panel, con el contenido
+    // repartido en columnas. Ver `components/FilaAjuste.tsx`.
     return (
-        // 14-sep-2026: las 9 tarjetas iban en una sola grilla, en el orden en que se
-        // fueron agregando, y «Preferencias» no dice qué hay adentro. Van agrupadas
-        // por PARA QUÉ sirven, con el grupo escrito arriba: el que busca algo de las
-        // órdenes mira un solo bloque. (Y arriba de todo está el buscador.)
         <div className="space-y-8">
-        <SeccionPreferencias titulo="En cada orden">
-        <Card className="flex flex-col" data-ajuste="checklist">
-            <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                    <ListChecks className="h-4 w-4 text-primary" />
-                    Checklist de trabajos del service
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col gap-3">
-                {!tienePlanChecklist && (
-                    <div className="flex items-center gap-2 p-2.5 rounded-md border border-amber-200 bg-amber-50 text-amber-900 text-xs">
-                        <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-600" />
-                        Disponible en los planes Pro y Expert.
-                    </div>
-                )}
 
-                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
-                    <p className="font-semibold text-sm pr-3">Activar checklist de trabajos</p>
-                    <Switch
-                        checked={habilitado}
-                        onCheckedChange={guardarAvances}
-                        disabled={!tienePlanChecklist || saving}
-                    />
-                </div>
-
-                <ComoFunciona>
-                    <p>
-                        Los trabajos de cada orden aparecen como lista tildable en la Mesa de
-                        Trabajo; al finalizar, la app avisa si quedó algo sin marcar.
-                    </p>
-                    <div>
-                        <p className="text-slate-600 text-xs mb-1.5">Si la orden tiene cargado:</p>
-                        <ul className="space-y-1 text-slate-700 text-xs">
-                            <li className="flex items-center gap-2"><Check size={13} className="text-green-600" /> Service Completo <span className="text-[10px] font-semibold px-1.5 rounded-full bg-primary/10 text-primary">Service</span></li>
-                            <li className="flex items-center gap-2"><Check size={13} className="text-green-600" /> Cambio de cadena <span className="text-[10px] font-semibold px-1.5 rounded-full bg-blue-50 text-blue-600">Mano de obra</span></li>
-                            <li className="flex items-center gap-2"><span className="w-3 h-3 border rounded-sm inline-block" /> Cadena Shimano 11v <span className="text-[10px] font-semibold px-1.5 rounded-full bg-slate-100 text-slate-500">Repuesto</span></li>
-                        </ul>
-                        <p className="text-slate-500 text-[11px] mt-1.5">
-                            …ese es el checklist de esa orden. Se agrega un trabajo → aparece solo en la lista.
-                        </p>
-                    </div>
-                </ComoFunciona>
-            </CardContent>
-        </Card>
-
-        {/* ── Tareas del service (todos los planes) — pedido Cronobikes ── */}
-        <Card className="flex flex-col" data-ajuste="tareas">
-            <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                    <Bell className="h-4 w-4 text-primary" />
-                    Tareas del service
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col gap-3">
-                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
-                    <p className="font-semibold text-sm pr-3">Activar tareas del service</p>
-                    <Switch
-                        checked={tareasHab}
-                        onCheckedChange={v => guardarTareas({ tareas: v })}
-                        disabled={savingTareas}
-                    />
-                </div>
-
-                <div className={`flex items-center justify-between p-3 rounded-lg border transition-opacity ${tareasHab ? 'bg-amber-50/50 border-amber-200' : 'bg-muted/20 opacity-50'}`}>
-                    <div className="pr-3">
-                        <p className="font-semibold text-sm flex items-center gap-1.5">
-                            <Lock className="h-4 w-4 text-amber-600" /> Candado de finalización
-                        </p>
-                        <p className="text-[11px] text-muted-foreground">
-                            No se finaliza hasta tildar todo.
-                        </p>
-                    </div>
-                    <Switch
-                        checked={bloqueo}
-                        onCheckedChange={v => guardarTareas({ bloqueo: v })}
-                        disabled={!tareasHab || savingTareas}
-                    />
-                </div>
-            </CardContent>
-        </Card>
-
-        {/* «Vale una llamada» y «La bici vendida entra sola» se mudaron a «Clientes y seguimiento», más abajo. */}
-
-        {/* ── Quién hizo cada service (opt-in, 3-sep-2026) ── */}
-        <Card className="flex flex-col" data-ajuste="mecanico">
-            <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                    <Users className="h-5 w-5" /> Quién hizo cada service
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col gap-3">
-                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
-                    <p className="font-semibold text-sm pr-3">Registrar el mecánico</p>
-                    <Switch
-                        checked={mecanicosHab}
-                        onCheckedChange={guardarMecanicos}
-                        disabled={savingMec}
-                    />
-                </div>
-                {/* Lo que sigue evita el reclamo del primer día: se prende, se abre
-                    Métricas y está vacío. No es un bug, es que el dato empieza hoy. */}
-                <ComoFunciona>
-                    <p>
-                        Si en el taller trabaja más de una persona, al finalizar cada service elegís
-                        quién lo hizo. Después, en Métricas, ves cuánto generó cada uno en mano de
-                        obra y en repuestos, por separado.
-                    </p>
-                    <p>
-                        Se cuenta <strong>desde que lo prendés</strong>: los services que ya cerraste
-                        no tienen guardado quién los hizo y no se puede saber a esta altura.
-                        {' '}Si trabajás solo, dejalo apagado y te ahorrás un clic en cada orden.
-                    </p>
-                </ComoFunciona>
-            </CardContent>
-        </Card>
-
-        {/* ── Registro del diagnóstico (todos los planes) ── */}
-        <Card className="flex flex-col" data-ajuste="diagnostico">
-            <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                    <HeartPulse className="h-4 w-4 text-primary" />
-                    Registro del diagnóstico
-                    <NuevoBadge feature="registro-diagnostico" />
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col gap-2">
-                {([
-                    { val: 'final', tit: 'Al finalizar el service', desc: 'Al cerrar la orden. Por defecto.' },
-                    { val: 'durante', tit: 'Durante el service', desc: 'Mientras se trabaja en la bici.' },
-                    { val: 'ambos', tit: 'Durante y al finalizar', desc: 'Siempre disponible, con repaso al cerrar.' },
-                ] as const).map(opt => (
-                    <button
-                        key={opt.val}
-                        type="button"
-                        onClick={() => guardarDiag(opt.val)}
-                        disabled={savingDiag}
-                        className={`w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg border transition-colors ${momentoDiag === opt.val ? 'border-primary bg-primary/5' : 'bg-muted/20 hover:border-primary/40'}`}
-                    >
-                        <span className={`w-3.5 h-3.5 rounded-full border-2 shrink-0 ${momentoDiag === opt.val ? 'border-primary bg-primary' : 'border-muted-foreground/40'}`} />
-                        <span className="flex-1 flex items-baseline justify-between gap-2 flex-wrap">
-                            <span className="font-semibold text-sm">{opt.tit}</span>
-                            <span className="text-[11px] text-muted-foreground">{opt.desc}</span>
-                        </span>
-                    </button>
-                ))}
-                <ComoFunciona>
-                    <p>
-                        El diagnóstico genera los avisos de mantenimiento que aparecen en Retención.
-                        Acá elegís en qué momento del service se registra.
-                    </p>
-                </ComoFunciona>
-            </CardContent>
-        </Card>
-
-        {/* ── Segundo par de ojos (vivía en «Mi Taller» hasta el 14-sep-2026) ── */}
-        {tieneFeature(taller, 'segundo_ojos') && (
-        <Card className="flex flex-col" data-ajuste="segundo_ojos">
-            <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                    <Eye className="h-4 w-4 text-primary" />
-                    Segundo par de ojos sobre el presupuesto
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col gap-3">
-                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
-                    <p className="font-semibold text-sm pr-3">Avisar lo que se escapa al finalizar</p>
-                    <Switch
-                        checked={segundoOjos}
-                        onCheckedChange={v => guardarInterruptor('ia_presupuesto_activa', v, setSegundoOjos, segundoOjos,
-                            v ? 'Listo: al finalizar te avisa lo que se está escapando.' : 'Desactivado.')}
-                    />
-                </div>
-                <ComoFunciona>
-                    <p>
-                        Al finalizar una orden, el sistema mira el historial de esa bici y avisa
-                        lo que se está escapando ("la cadena es de hace 14 meses, preguntale").
-                        Sugiere, nunca agrega solo: el mecánico decide.
-                    </p>
-                </ComoFunciona>
-            </CardContent>
-        </Card>
-        )}
-
-        {/* ── Componentes y plazos del diagnóstico (Leira, 14-sep-2026) ── */}
-        <Card className="flex flex-col" data-ajuste="componentes">
-            <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                    <HeartPulse className="h-4 w-4 text-primary" />
-                    Componentes del diagnóstico
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col gap-3">
-                <div className="space-y-1.5">
-                    {componentes.map((c, i) => (
-                        <div key={c.nombre} className="flex items-center gap-2 p-2 rounded-lg border bg-muted/20">
-                            <span className="flex-1 min-w-0 text-sm truncate">{c.nombre}</span>
-                            <select
-                                value={c.meses ?? ''}
-                                disabled={savingComp}
-                                onChange={e => guardarComponentes(componentes.map((x, j) => j === i
-                                    ? { ...x, meses: e.target.value ? Number(e.target.value) : null }
-                                    : x))}
-                                className="h-8 rounded-md border bg-background px-2 text-xs"
-                                title="Plazo sugerido"
-                            >
-                                <option value="">Sin sugerido</option>
-                                {PLAZOS_MESES.map(m => <option key={m} value={m}>{mesesEnPalabras(m)}</option>)}
-                            </select>
-                            <button
-                                type="button"
-                                disabled={savingComp || componentes.length <= 1}
-                                onClick={() => guardarComponentes(componentes.filter((_, j) => j !== i))}
-                                className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-40"
-                                title="Sacar de la lista"
-                            >
-                                <X className="h-4 w-4" />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-                <div className="flex gap-2">
-                    <Input
-                        value={nuevoComponente}
-                        onChange={e => setNuevoComponente(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') agregarComponente(); }}
-                        placeholder="Agregar un componente"
-                        className="h-9"
-                    />
-                    <Button type="button" variant="outline" size="sm" className="h-9" onClick={agregarComponente} disabled={!nuevoComponente.trim() || savingComp}>
-                        Agregar
-                    </Button>
-                </div>
-                <ComoFunciona>
-                    <p>
-                        Es la lista que aparece en el diagnóstico de cada orden. El plazo sugerido se ve
-                        resaltado para tildarlo de un toque, pero no se marca solo: cada bici se mira.
-                    </p>
-                    <button type="button" className="text-xs font-semibold text-primary hover:underline" onClick={() => guardarComponentes(null)}>
-                        Volver a la lista de siempre
-                    </button>
-                </ComoFunciona>
-            </CardContent>
-        </Card>
-
-        {/* ── Número de orden grande (Leira, 14-sep-2026) ── */}
-        <Card className="flex flex-col" data-ajuste="orden_grande">
-            <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                    <Hash className="h-4 w-4 text-primary" />
-                    Número de orden grande
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col gap-3">
-                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
-                    <div className="pr-3">
-                        <p className="font-semibold text-sm">Mostrar el número de orden más grande</p>
-                        <p className="text-[11px] text-muted-foreground">Para los talleres que se manejan por número.</p>
-                    </div>
-                    <Switch checked={ordenGrande} onCheckedChange={guardarOrdenGrande} />
-                </div>
-                <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                    Así se ve:
-                    <span className={ordenGrande ? 'text-2xl font-black text-primary tabular-nums' : 'text-[10px] font-bold text-primary'}>#0042</span>
-                </p>
-            </CardContent>
-        </Card>
-        </SeccionPreferencias>
-
-        <SeccionPreferencias titulo="Clientes y seguimiento">
-        {/* ── Avisos suaves (Alejo, Once a Fondo, 3-sep-2026). Mudada acá el 14-sep. ── */}
-        <Card className="flex flex-col" data-ajuste="avisos_suaves">
-            <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                    <Bell className="h-5 w-5" /> Avisos de "vale una llamada"
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col gap-3">
-                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
-                    <p className="font-semibold text-sm pr-3">Mostrar estos avisos</p>
-                    <Switch checked={suavesHab} onCheckedChange={v => guardarSuaves({ habilitado: v })} disabled={savingSuaves} />
-                </div>
-                <div className={`space-y-3 transition-opacity ${suavesHab ? '' : 'opacity-50 pointer-events-none'}`}>
-                    <div className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-muted/20">
-                        <div>
-                            <p className="text-sm font-medium">Primer service</p>
-                            <p className="text-[11px] text-muted-foreground">Días desde que se cargó una bici que nunca vino.</p>
-                        </div>
-                        <Input
-                            type="number" min={7} max={365} className="w-20 text-center"
-                            value={suavesPS}
-                            onChange={e => setSuavesPS(Number(e.target.value))}
-                            onBlur={() => guardarSuaves({ primerServiceDias: suavesPS })}
+        {/* ═══ EN CADA ORDEN ═══ */}
+        <GrupoAjustes titulo="En cada orden">
+            <PanelAjustes>
+                <FilaAjuste
+                    id="checklist"
+                    icono={ListChecks}
+                    titulo="Checklist de trabajos del service"
+                    resumen="Los trabajos de la orden, tildables."
+                    control={
+                        <Switch
+                            checked={habilitado}
+                            onCheckedChange={guardarAvances}
+                            disabled={!tienePlanChecklist || saving}
                         />
-                    </div>
-                    <div className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-muted/20">
-                        <div>
-                            <p className="text-sm font-medium">No volvió</p>
-                            <p className="text-[11px] text-muted-foreground">Días sin aparecer para preguntarle qué onda.</p>
+                    }
+                    aviso={!tienePlanChecklist && (
+                        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+                            <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                            Disponible en los planes Pro y Expert.
                         </div>
-                        <Input
-                            type="number" min={30} max={730} className="w-20 text-center"
-                            value={suavesNV}
-                            onChange={e => setSuavesNV(Number(e.target.value))}
-                            onBlur={() => guardarSuaves({ noVolvioDias: suavesNV })}
-                        />
-                    </div>
-                    <div className="flex items-center justify-between gap-3 p-3 rounded-lg border bg-muted/20">
-                        <div>
-                            <p className="text-sm font-medium">También los que vienen seguido</p>
-                            <p className="text-[11px] text-muted-foreground">El cliente de siempre que dejó de venir, para invitarlo al service.</p>
-                        </div>
-                        <Switch checked={suavesFrec} onCheckedChange={v => guardarSuaves({ incluirFrecuentes: v })} disabled={savingSuaves} />
-                    </div>
-                </div>
-                {/* Por qué el default no es 90: con 90 días Probikes daba 109 nombres. */}
-                <ComoFunciona>
-                    <p>
-                        Aparte de los vencimientos, Retención te avisa de dos cosas más blandas: la
-                        bici que se cargó y <strong>nunca vino al taller</strong> (le toca el primer
-                        service) y el cliente que <strong>hace rato que no viene</strong>, haya venido
-                        una vez o sea de los de siempre.
-                    </p>
-                    <p>
-                        Se muestran <strong>los 12 que más gastaron</strong>, no todos: una lista de
-                        cien no la llama nadie. Van en su propia sección, abajo de los vencimientos,
-                        para que nunca tapen lo urgente.
-                    </p>
-                </ComoFunciona>
-            </CardContent>
-        </Card>
-
-        {/* ── Después de vender una bici (Leira, 14-sep-2026) ── */}
-        <Card className="flex flex-col" data-ajuste="postventa">
-            <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                    <Bike className="h-4 w-4 text-primary" />
-                    Después de vender una bici
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col gap-3">
-                {([
-                    { clave: 'ajuste', titulo: 'Ajuste', meses: postventa.ajusteMeses, texto: postventa.textoAjuste,
-                      mesesKey: 'ajusteMeses', textoKey: 'textoAjuste' },
-                    { clave: 'primer', titulo: 'Primer service', meses: postventa.primerServiceMeses, texto: postventa.textoPrimerService,
-                      mesesKey: 'primerServiceMeses', textoKey: 'textoPrimerService' },
-                ] as const).map(a => (
-                    <div key={a.clave} className="space-y-2 p-3 rounded-lg border bg-muted/20">
-                        <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-medium">{a.titulo}</p>
-                            <select
-                                value={a.meses}
-                                onChange={e => guardarPostventa({ [a.mesesKey]: Number(e.target.value) } as Partial<ConfigPostventa>)}
-                                className="h-8 rounded-md border bg-background px-2 text-xs"
-                            >
-                                {PLAZOS_MESES.map(m => <option key={m} value={m}>a {mesesEnPalabras(m)} de la venta</option>)}
-                            </select>
-                        </div>
-                        <Input
-                            value={a.texto}
-                            maxLength={80}
-                            onChange={e => setPostventa(p => ({ ...p, [a.textoKey]: e.target.value }))}
-                            onBlur={e => guardarPostventa({ [a.textoKey]: e.target.value } as Partial<ConfigPostventa>)}
-                            className="h-9 text-sm"
-                            placeholder="qué hay que revisar"
-                        />
-                        <p className="text-[11px] text-muted-foreground leading-snug" data-contenido>
-                            Así le llega: "{comoLeLlegaPostventa(a.texto, taller.nombre ?? '')}"
-                        </p>
-                    </div>
-                ))}
-                <ComoFunciona>
-                    <p>
-                        Con <strong>Vendí una bici</strong> (en el Taller Activo y en Clientes) quedan
-                        agendados el ajuste y el primer service. Las fechas se pueden cambiar en el
-                        momento de la venta.
-                    </p>
-                    <p>
-                        Si tenés el WhatsApp conectado, ese día a las 10 le escribimos solos. Si no, o si
-                        el mensaje no sale, te aparece en Retención para escribirle vos. Si la bici ya
-                        pasó por el taller ese mes, no se le manda nada.
-                    </p>
-                </ComoFunciona>
-            </CardContent>
-        </Card>
-
-        {/* ── Cuánto se espera al cliente antes de llamarlo (8-sep-2026) ── */}
-        <Card className="flex flex-col" data-ajuste="horas">
-            <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                    <PhoneCall className="h-4 w-4 text-primary" />
-                    Cuánto esperar al cliente
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col gap-2">
-                <div className="flex flex-wrap gap-2">
-                    {[1, 2, 3, 6, 24].map(h => (
-                        <button
-                            key={h}
-                            type="button"
-                            onClick={() => guardarHoras(h)}
-                            disabled={savingHoras}
-                            className={`px-3 py-2 rounded-lg border text-sm font-semibold transition-colors ${horasLlamar === h ? 'border-primary bg-primary/5 text-primary' : 'bg-muted/20 hover:border-primary/40'}`}
-                        >
-                            {h === 24 ? '1 día' : `${h} h`}
-                        </button>
-                    ))}
-                </div>
-                <ComoFunciona>
-                    <p>
-                        Cuando le preguntás algo desde una orden, la bici queda esperando la
-                        respuesta. Pasado este plazo la orden avisa que conviene levantar el teléfono.
-                    </p>
-                    <p>
-                        Nadie contesta un WhatsApp en cero minutos: el plazo corto sirve para la bici
-                        que está en el banco ahora, el largo para la que puede esperar.
-                    </p>
-                </ComoFunciona>
-            </CardContent>
-        </Card>
-
-        {/* ── La bici vendida entra sola (3-sep-2026) ── */}
-        <div data-ajuste="altas_erp" className="rounded-lg flex flex-col">
-            <AltasDesdeERP taller={taller} setTaller={setTaller} avisar={avisar} />
-        </div>
-        </SeccionPreferencias>
-
-        {/* Decisión de Iara (19-ago): si el mecánico ve Bicis paradas lo decide el
-            ADMIN de cada taller. Default apagado: la lista trae clientes con su
-            gasto. El candado real está en RLS + en la Edge Function; este switch es
-            la llave del admin. Vivía en "Mi Taller" hasta el 14-sep-2026. */}
-        {tieneFeature(taller, 'bicis_paradas') && (
-        <SeccionPreferencias titulo="Tu equipo">
-        <Card className="flex flex-col" data-ajuste="bicis_paradas_mecanico">
-            <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                    <Bike className="h-4 w-4 text-primary" />
-                    Quién ve Bicis paradas
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col gap-3">
-                <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
-                    <p className="font-semibold text-sm pr-3">El mecánico también ve Bicis paradas</p>
-                    <Switch
-                        checked={paradasMecanico}
-                        disabled={!esAdminPref}
-                        onCheckedChange={v => guardarInterruptor('bicis_paradas_ve_mecanico', v, setParadasMecanico, paradasMecanico,
-                            v ? 'Listo: los mecánicos también ven Bicis paradas.' : 'Listo: Bicis paradas la ve solo el administrador.')}
-                    />
-                </div>
-                {!esAdminPref && (
-                    <p className="text-xs text-muted-foreground">Esto lo cambia el administrador del taller.</p>
-                )}
-                <ComoFunciona>
-                    <p>
-                        El panel de bicis paradas muestra clientes con lo que gastaron. Apagado, lo
-                        ve solo el administrador; prendido, también los usuarios mecánicos del taller.
-                    </p>
-                </ComoFunciona>
-            </CardContent>
-        </Card>
-        </SeccionPreferencias>
-        )}
-
-        <SeccionPreferencias titulo="Ayuda y repuestos">
-        {/* ── Recorrido de bienvenida (todos los planes) ── */}
-        <Card className="flex flex-col" data-ajuste="recorrido">
-            <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                    <GraduationCap className="h-4 w-4 text-primary" />
-                    Recorrido de bienvenida
-                </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col">
-                <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => { resetTours(); useTourStore.getState().iniciar('bienvenida'); }}
+                    )}
                 >
-                    <PlayCircle className="h-4 w-4 mr-2" />
-                    Ver el recorrido nuevamente
-                </Button>
-                <ComoFunciona>
-                    <p>
-                        Recorre todas las secciones y, en los pasos clave, la persona opera el
-                        sistema con sus propias manos (recibe una bici, abre una finalización,
-                        explora una ficha). Sirve para capacitar a alguien nuevo del equipo sin
-                        explicarle nada a mano.
-                    </p>
-                </ComoFunciona>
-            </CardContent>
-        </Card>
+                    <ComoFunciona className="mt-0">
+                        <p>
+                            Los trabajos de cada orden aparecen como lista tildable en la Mesa de
+                            Trabajo; al finalizar, la app avisa si quedó algo sin marcar.
+                        </p>
+                        <div>
+                            <p className="mb-1.5 text-xs text-slate-600">Si la orden tiene cargado:</p>
+                            <ul className="space-y-1 text-xs text-slate-700">
+                                <li className="flex items-center gap-2"><Check size={13} className="text-green-600" /> Service Completo <span className="rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">Service</span></li>
+                                <li className="flex items-center gap-2"><Check size={13} className="text-green-600" /> Cambio de cadena <span className="rounded-full bg-blue-50 px-1.5 text-[10px] font-semibold text-blue-600">Mano de obra</span></li>
+                                <li className="flex items-center gap-2"><span className="inline-block h-3 w-3 rounded-sm border" /> Cadena Shimano 11v <span className="rounded-full bg-slate-100 px-1.5 text-[10px] font-semibold text-slate-500">Repuesto</span></li>
+                            </ul>
+                            <p className="mt-1.5 text-[11px] text-slate-500">
+                                …ese es el checklist de esa orden. Se agrega un trabajo y aparece solo en la lista.
+                            </p>
+                        </div>
+                    </ComoFunciona>
+                </FilaAjuste>
 
-        {/* La vuelta atrás del "no sugerir más" del buscador de repuestos.
-            Sin esto, ocultar un producto era una acción de un clic, permanente
-            y sin deshacer. */}
-        <div data-ajuste="ocultos" className="rounded-lg flex flex-col">
-            <ProductosOcultos avisar={avisar} />
-        </div>
-        </SeccionPreferencias>
-        </div>
-    );
-}
+                <FilaAjuste
+                    id="tareas"
+                    icono={Bell}
+                    titulo="Tareas del service"
+                    resumen="Lo que el mecánico se anota."
+                    control={
+                        <Switch
+                            checked={tareasHab}
+                            onCheckedChange={v => guardarTareas({ tareas: v })}
+                            disabled={savingTareas}
+                        />
+                    }
+                >
+                    <SubAjuste
+                        apagado={!tareasHab}
+                        titulo={<span className="flex items-center gap-1.5"><Lock className="h-4 w-4 text-amber-600" /> Candado de finalización</span>}
+                        resumen="No se finaliza hasta tildar todo."
+                        control={
+                            <Switch
+                                checked={bloqueo}
+                                onCheckedChange={v => guardarTareas({ bloqueo: v })}
+                                disabled={!tareasHab || savingTareas}
+                            />
+                        }
+                    />
+                </FilaAjuste>
 
-/** Un grupo de Preferencias, con su nombre arriba. */
-function SeccionPreferencias({ titulo, children }: { titulo: string; children: ReactNode }) {
-    return (
-        <section>
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">{titulo}</h2>
-            <div className="grid gap-4 lg:grid-cols-2">{children}</div>
-        </section>
+                <FilaAjuste
+                    id="diagnostico"
+                    icono={HeartPulse}
+                    titulo={<span className="inline-flex items-center gap-2">Registro del diagnóstico <NuevoBadge feature="registro-diagnostico" /></span>}
+                    resumen="En qué momento del service."
+                    control={
+                        <select
+                            value={momentoDiag}
+                            disabled={savingDiag}
+                            onChange={e => guardarDiag(e.target.value as 'final' | 'durante' | 'ambos')}
+                            className="h-9 rounded-md border bg-background px-2 text-xs"
+                            aria-label="Cuándo se registra el diagnóstico"
+                        >
+                            <option value="final">Al finalizar el service</option>
+                            <option value="durante">Durante el service</option>
+                            <option value="ambos">Durante y al finalizar</option>
+                        </select>
+                    }
+                />
+
+                <FilaAjuste
+                    id="horas"
+                    icono={PhoneCall}
+                    titulo="Cuánto esperar al cliente"
+                    resumen="Sin respuesta, avisa que lo llames."
+                    control={
+                        <select
+                            value={horasLlamar}
+                            disabled={savingHoras}
+                            onChange={e => guardarHoras(Number(e.target.value))}
+                            className="h-9 rounded-md border bg-background px-2 text-xs"
+                            aria-label="Horas antes de llamar al cliente"
+                        >
+                            {[1, 2, 3, 6, 24].map(h => (
+                                <option key={h} value={h}>{h === 24 ? '1 día' : `${h} horas`}</option>
+                            ))}
+                        </select>
+                    }
+                >
+                    <ComoFunciona className="mt-0">
+                        <p>
+                            Nadie contesta un WhatsApp en cero minutos: el plazo corto sirve para la bici
+                            que está en el banco ahora, el largo para la que puede esperar.
+                        </p>
+                    </ComoFunciona>
+                </FilaAjuste>
+
+                {tieneFeature(taller, 'segundo_ojos') && (
+                    <FilaAjuste
+                        id="segundo_ojos"
+                        icono={Eye}
+                        titulo="Segundo par de ojos sobre el presupuesto"
+                        resumen="Avisa lo que se escapa al finalizar."
+                        control={
+                            <Switch
+                                checked={segundoOjos}
+                                onCheckedChange={v => guardarInterruptor('ia_presupuesto_activa', v, setSegundoOjos, segundoOjos,
+                                    v ? 'Listo: al finalizar te avisa lo que se está escapando.' : 'Desactivado.')}
+                            />
+                        }
+                    >
+                        <ComoFunciona className="mt-0">
+                            <p>
+                                Un ejemplo de lo que dice: "la cadena es de hace 14 meses, preguntale".
+                                Aparece al cerrar la orden, y el mecánico decide si lo suma o lo deja pasar.
+                            </p>
+                        </ComoFunciona>
+                    </FilaAjuste>
+                )}
+
+                <FilaAjuste
+                    id="orden_grande"
+                    icono={Hash}
+                    titulo="Número de orden grande"
+                    resumen="Para los que van por número."
+                    control={
+                        <>
+                            <span
+                                className={ordenGrande
+                                    ? 'text-xl font-black tabular-nums text-primary'
+                                    : 'text-[11px] font-bold text-primary'}
+                                data-contenido
+                            >
+                                #0042
+                            </span>
+                            <Switch checked={ordenGrande} onCheckedChange={guardarOrdenGrande} />
+                        </>
+                    }
+                />
+            </PanelAjustes>
+
+            {/* Panel propio: once componentes no entran en un riel. */}
+            <Card data-ajuste="componentes" className="scroll-mt-24">
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                        <HeartPulse className="h-4 w-4 text-primary" />
+                        Componentes del diagnóstico
+                    </CardTitle>
+                    <p className="text-[11px] text-muted-foreground">La lista del diagnóstico y sus plazos.</p>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                        {componentes.map((c, i) => (
+                            <div key={c.nombre} className="flex items-center gap-2 rounded-lg border bg-muted/20 p-2">
+                                <span className="min-w-0 flex-1 truncate text-sm">{c.nombre}</span>
+                                <select
+                                    value={c.meses ?? ''}
+                                    disabled={savingComp}
+                                    onChange={e => guardarComponentes(componentes.map((x, j) => j === i
+                                        ? { ...x, meses: e.target.value ? Number(e.target.value) : null }
+                                        : x))}
+                                    className="h-8 min-w-0 shrink rounded-md border bg-background px-1 text-xs"
+                                    title="Plazo sugerido"
+                                    aria-label={`Plazo sugerido de ${c.nombre}`}
+                                >
+                                    <option value="">Sin sugerido</option>
+                                    {PLAZOS_MESES.map(m => <option key={m} value={m}>{mesesEnPalabras(m)}</option>)}
+                                </select>
+                                <button
+                                    type="button"
+                                    disabled={savingComp || componentes.length <= 1}
+                                    onClick={() => guardarComponentes(componentes.filter((_, j) => j !== i))}
+                                    className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-40"
+                                    title={`Sacar ${c.nombre} de la lista`}
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="flex max-w-md gap-2">
+                        <Input
+                            value={nuevoComponente}
+                            onChange={e => setNuevoComponente(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') agregarComponente(); }}
+                            placeholder="Agregar un componente"
+                            className="h-9"
+                        />
+                        <Button type="button" variant="outline" size="sm" className="h-9" onClick={agregarComponente} disabled={!nuevoComponente.trim() || savingComp}>
+                            Agregar
+                        </Button>
+                    </div>
+                    <ComoFunciona>
+                        <p>
+                            El plazo sugerido se ve resaltado para tildarlo de un toque, pero no se
+                            marca solo: cada bici se mira.
+                        </p>
+                        <button type="button" className="text-xs font-semibold text-primary hover:underline" onClick={() => guardarComponentes(null)}>
+                            Volver a la lista de siempre
+                        </button>
+                    </ComoFunciona>
+                </CardContent>
+            </Card>
+        </GrupoAjustes>
+
+        {/* ═══ CLIENTES Y SEGUIMIENTO ═══ */}
+        <GrupoAjustes titulo="Clientes y seguimiento">
+            <Card data-ajuste="avisos_suaves" className="scroll-mt-24">
+                <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <Bell className="h-4 w-4 text-primary" />
+                                Avisos de "vale una llamada"
+                            </CardTitle>
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">Gente para llamar, en Retención.</p>
+                        </div>
+                        <Switch checked={suavesHab} onCheckedChange={v => guardarSuaves({ habilitado: v })} disabled={savingSuaves} />
+                    </div>
+                </CardHeader>
+                <CardContent className={`grid gap-5 transition-opacity md:grid-cols-2 ${suavesHab ? '' : 'pointer-events-none opacity-50'}`}>
+                    <div className="space-y-2">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Los que arma el sistema</p>
+                        <SubAjuste
+                            titulo="Primer service"
+                            resumen="Días desde que se cargó y no vino."
+                            control={
+                                <Input
+                                    type="number" min={7} max={365} className="w-20 text-center"
+                                    value={suavesPS}
+                                    onChange={e => setSuavesPS(Number(e.target.value))}
+                                    onBlur={() => guardarSuaves({ primerServiceDias: suavesPS })}
+                                    aria-label="Días para el aviso de primer service"
+                                />
+                            }
+                        />
+                        <SubAjuste
+                            titulo="No volvió"
+                            resumen="Días sin aparecer."
+                            control={
+                                <Input
+                                    type="number" min={30} max={730} className="w-20 text-center"
+                                    value={suavesNV}
+                                    onChange={e => setSuavesNV(Number(e.target.value))}
+                                    onBlur={() => guardarSuaves({ noVolvioDias: suavesNV })}
+                                    aria-label="Días sin venir para el aviso"
+                                />
+                            }
+                        />
+                        <SubAjuste
+                            titulo="También los que vienen seguido"
+                            resumen="También el cliente de siempre."
+                            control={<Switch checked={suavesFrec} onCheckedChange={v => guardarSuaves({ incluirFrecuentes: v })} disabled={savingSuaves} />}
+                        />
+                    </div>
+
+                    {/* Iara, 16-sep: "el tema de los avisos de vale una llamada me gustaría
+                        que también los puedan agregar. Tipo, que puedan agregar nuevos." */}
+                    <div className="space-y-2">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Los tuyos: un service que se repite</p>
+                        {repetibles.length > 0 && (
+                            <div className="space-y-2">
+                                {repetibles.map(s => (
+                                    <SubAjuste
+                                        key={s.id}
+                                        titulo={s.nombre}
+                                        control={
+                                            <>
+                                                <select
+                                                    value={s.meses_repeticion as number}
+                                                    onChange={e => guardarRepeticion(s.id, Number(e.target.value))}
+                                                    className="h-8 rounded-md border bg-background px-2 text-xs"
+                                                    aria-label={`Cada cuánto se repite ${s.nombre}`}
+                                                >
+                                                    {PLAZOS_MESES.map(m => <option key={m} value={m}>cada {mesesEnPalabras(m)}</option>)}
+                                                </select>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => guardarRepeticion(s.id, null)}
+                                                    className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                                    title={`Dejar de avisar por ${s.nombre}`}
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </button>
+                                            </>
+                                        }
+                                    />
+                                ))}
+                            </div>
+                        )}
+
+                        {menuCargado && menu.length === 0 ? (
+                            // El vacío también tiene forma: la misma caja que las filas de
+                            // al lado. Un texto suelto al lado de tres cajas se lee como
+                            // media tarjeta en blanco, que es justo lo que se estaba arreglando.
+                            <div className="rounded-lg border border-dashed bg-muted/20 px-3 py-4 text-xs text-muted-foreground">
+                                Todavía no hay services en el menú. Se cargan en Menú de Services.
+                            </div>
+                        ) : (
+                            <div className="flex flex-wrap items-center gap-2">
+                                <select
+                                    value={nuevoRep.id}
+                                    onChange={e => setNuevoRep({ ...nuevoRep, id: e.target.value })}
+                                    className="h-9 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs"
+                                    aria-label="Elegir un service del menú"
+                                >
+                                    <option value="">Elegí un service del menú…</option>
+                                    {sinRepetir.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                                </select>
+                                <select
+                                    value={nuevoRep.meses}
+                                    onChange={e => setNuevoRep({ ...nuevoRep, meses: Number(e.target.value) })}
+                                    className="h-9 rounded-md border bg-background px-2 text-xs"
+                                    aria-label="Cada cuántos meses se repite"
+                                >
+                                    {PLAZOS_MESES.map(m => <option key={m} value={m}>cada {mesesEnPalabras(m)}</option>)}
+                                </select>
+                                <Button
+                                    type="button" variant="outline" size="sm" className="h-9"
+                                    disabled={!nuevoRep.id}
+                                    onClick={() => { void guardarRepeticion(nuevoRep.id, nuevoRep.meses); setNuevoRep({ id: '', meses: 6 }); }}
+                                >
+                                    Agregar
+                                </Button>
+                            </div>
+                        )}
+
+                    </div>
+
+                    <div className="md:col-span-2">
+                        <ComoFunciona>
+                            <p>
+                                <strong>Dónde aparecen:</strong> en Retención, en su propia sección abajo
+                                de los vencimientos, para que nunca tapen lo urgente. No van a la campana
+                                y no se manda nada solo: el aviso es para vos, no para el cliente.
+                            </p>
+                            <p>
+                                <strong>Cada cuánto vuelve el mismo nombre:</strong> una vez. Cuando le
+                                escribís o lo descartás, ese nombre no vuelve a aparecer por el mismo
+                                motivo. Si el cliente vuelve al taller y después pasa otra vez el plazo,
+                                sí: ahí es un caso nuevo.
+                            </p>
+                            <p>
+                                Se muestran <strong>los 12 que más gastaron</strong>, no todos: una lista
+                                de cien no la llama nadie.
+                            </p>
+                            <p>
+                                <strong>Los tuyos</strong> funcionan al revés: son del cliente. Ejemplo,
+                                lavado y lubricación cada 2 meses. Cada vez que una orden lo incluye, esa
+                                bici queda agendada para dentro de 2 meses; el aviso cae entre los
+                                vencimientos de Retención y, con el WhatsApp conectado, sale solo el día
+                                que toca. El mismo plazo se edita en el Menú de Services.
+                            </p>
+                        </ComoFunciona>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <Card data-ajuste="postventa" className="scroll-mt-24">
+                <CardHeader className="pb-3">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                        <Bike className="h-4 w-4 text-primary" />
+                        Después de vender una bici
+                    </CardTitle>
+                    <p className="text-[11px] text-muted-foreground">Lo que se agenda al vender una bici.</p>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                    <div className="grid gap-3 md:grid-cols-2">
+                        {([
+                            { clave: 'ajuste', titulo: 'Ajuste', meses: postventa.ajusteMeses, texto: postventa.textoAjuste,
+                              mesesKey: 'ajusteMeses', textoKey: 'textoAjuste' },
+                            { clave: 'primer', titulo: 'Primer service', meses: postventa.primerServiceMeses, texto: postventa.textoPrimerService,
+                              mesesKey: 'primerServiceMeses', textoKey: 'textoPrimerService' },
+                        ] as const).map(a => (
+                            <div key={a.clave} className="space-y-2 rounded-lg border bg-muted/20 p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                    <p className="text-sm font-medium">{a.titulo}</p>
+                                    <select
+                                        value={a.meses}
+                                        onChange={e => guardarPostventa({ [a.mesesKey]: Number(e.target.value) } as Partial<ConfigPostventa>)}
+                                        className="h-8 rounded-md border bg-background px-2 text-xs"
+                                        aria-label={`Cuándo se avisa el ${a.titulo.toLowerCase()}`}
+                                    >
+                                        {PLAZOS_MESES.map(m => <option key={m} value={m}>a {mesesEnPalabras(m)} de la venta</option>)}
+                                    </select>
+                                </div>
+                                <Input
+                                    value={a.texto}
+                                    maxLength={80}
+                                    onChange={e => setPostventa(p => ({ ...p, [a.textoKey]: e.target.value }))}
+                                    onBlur={e => guardarPostventa({ [a.textoKey]: e.target.value } as Partial<ConfigPostventa>)}
+                                    className="h-9 text-sm"
+                                    placeholder="qué hay que revisar"
+                                    aria-label={`Qué dice el aviso de ${a.titulo.toLowerCase()}`}
+                                />
+                                <p className="text-[11px] leading-snug text-muted-foreground" data-contenido>
+                                    Así le llega: "{comoLeLlegaPostventa(a.texto, taller.nombre ?? '')}"
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                    <ComoFunciona>
+                        <p>
+                            Con <strong>Vendí una bici</strong> (en el Taller Activo y en Clientes) quedan
+                            agendados el ajuste y el primer service. Las fechas se pueden cambiar en el
+                            momento de la venta.
+                        </p>
+                        <p>
+                            Si tenés el WhatsApp conectado, ese día a las 10 le escribimos solos. Si no, o si
+                            el mensaje no sale, te aparece en Retención para escribirle vos. Si la bici ya
+                            pasó por el taller ese mes, no se le manda nada.
+                        </p>
+                    </ComoFunciona>
+                </CardContent>
+            </Card>
+
+            <div data-ajuste="altas_erp" className="scroll-mt-24 rounded-lg">
+                <AltasDesdeERP taller={taller} setTaller={setTaller} avisar={avisar} />
+            </div>
+        </GrupoAjustes>
+
+        {/* ═══ TU EQUIPO ═══ */}
+        <GrupoAjustes titulo="Tu equipo">
+            <PanelAjustes>
+                {/* Iara, 16-sep: "sigue sin estar lo de quién firma el service. No veo
+                    bien cómo ponerlo." Estaba, pero se llamaba "quién hizo cada
+                    service", vivía en el grupo de las órdenes y la lista de gente
+                    salía sola de los usuarios con login. Las tres cosas eran el
+                    defecto: el nombre, el lugar y el hueco de no poder cargar a nadie. */}
+                <FilaAjuste
+                    id="mecanico"
+                    icono={Users}
+                    titulo="Quién firma cada service"
+                    resumen="Quién lo hizo, y cuánto generó."
+                    control={<Switch checked={mecanicosHab} onCheckedChange={guardarMecanicos} disabled={savingMec} />}
+                >
+                    <div className={`space-y-2 transition-opacity ${mecanicosHab ? '' : 'pointer-events-none opacity-50'}`}>
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            Quiénes trabajan en el taller
+                        </p>
+                        {gente.length > 0 && (
+                            <div className="flex flex-wrap gap-2">
+                                {gente.map(n => (
+                                    <span key={n} className="inline-flex items-center gap-1.5 rounded-full border bg-muted/30 py-1 pl-3 pr-1.5 text-sm">
+                                        {n}
+                                        <button
+                                            type="button"
+                                            onClick={() => void guardarGente(gente.filter(g => g !== n))}
+                                            className="rounded-full p-0.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                            title={`Sacar a ${n} de la lista`}
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+                        <div className="flex max-w-sm gap-2">
+                            <Input
+                                value={nuevaPersona}
+                                onChange={e => setNuevaPersona(e.target.value)}
+                                onKeyDown={e => { if (e.key === 'Enter') agregarPersona(); }}
+                                placeholder="Nombre, como lo llaman en el taller"
+                                className="h-9"
+                                aria-label="Agregar a alguien del taller"
+                            />
+                            <Button type="button" variant="outline" size="sm" className="h-9" onClick={agregarPersona} disabled={!nuevaPersona.trim()}>
+                                Agregar
+                            </Button>
+                        </div>
+                        <ComoFunciona className="mt-1">
+                            <p>
+                                Los que tienen usuario para entrar al sistema ya aparecen solos en la
+                                lista al finalizar. Acá se agregan los que no lo tienen: para firmar una
+                                orden no hace falta que entren a nada.
+                            </p>
+                            <p>
+                                Se cuenta <strong>desde que lo prendés</strong>: los services que ya
+                                cerraste no tienen guardado quién los hizo. Si trabajás solo, dejalo
+                                apagado y te ahorrás un clic en cada orden.
+                            </p>
+                        </ComoFunciona>
+                    </div>
+                </FilaAjuste>
+
+                {tieneFeature(taller, 'bicis_paradas') && (
+                    <FilaAjuste
+                        id="bicis_paradas_mecanico"
+                        icono={Bike}
+                        titulo="Quién ve Bicis paradas"
+                        resumen="Trae cuánto gastó cada cliente."
+                        control={
+                            <Switch
+                                checked={paradasMecanico}
+                                disabled={!esAdminPref}
+                                onCheckedChange={v => guardarInterruptor('bicis_paradas_ve_mecanico', v, setParadasMecanico, paradasMecanico,
+                                    v ? 'Listo: los mecánicos también ven Bicis paradas.' : 'Listo: Bicis paradas la ve solo el administrador.')}
+                            />
+                        }
+                        aviso={!esAdminPref && (
+                            <p className="text-xs text-muted-foreground">Lo cambia el administrador.</p>
+                        )}
+                    />
+                )}
+            </PanelAjustes>
+        </GrupoAjustes>
+
+        {/* ═══ AYUDA Y REPUESTOS ═══ */}
+        <GrupoAjustes titulo="Ayuda y repuestos">
+            <PanelAjustes>
+                <FilaAjuste
+                    id="recorrido"
+                    icono={GraduationCap}
+                    titulo="Recorrido de bienvenida"
+                    resumen="Para capacitar a alguien nuevo."
+                    control={
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => { resetTours(); useTourStore.getState().iniciar('bienvenida'); }}
+                        >
+                            <PlayCircle className="mr-2 h-4 w-4" />
+                            Verlo
+                        </Button>
+                    }
+                >
+                    <ComoFunciona className="mt-0">
+                        <p>
+                            Recorre todas las secciones y, en los pasos clave, la persona opera el
+                            sistema con sus propias manos (recibe una bici, abre una finalización,
+                            explora una ficha).
+                        </p>
+                    </ComoFunciona>
+                </FilaAjuste>
+            </PanelAjustes>
+
+            <div data-ajuste="ocultos" className="scroll-mt-24 rounded-lg">
+                <ProductosOcultos avisar={avisar} />
+            </div>
+        </GrupoAjustes>
+        </div>
     );
 }

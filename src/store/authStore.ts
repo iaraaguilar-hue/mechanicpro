@@ -11,8 +11,10 @@ export interface TallerData {
     politica_pago?: string;
     plan_actual?: string;
     config_avances?: { habilitado: boolean; etapas: string[] } | null;
-    // Opt-in de registrar quién hizo cada service (3-sep-2026). NULL/ausente = apagado.
-    config_mecanicos?: { habilitado: boolean } | null;
+    // Opt-in de registrar quién firma cada service (3-sep-2026). NULL/ausente = apagado.
+    // `gente` (16-sep-2026): los del taller que NO tienen usuario en el sistema.
+    // Sin esto la lista salía solo de `usuarios` y un taller de tres mostraba uno.
+    config_mecanicos?: { habilitado: boolean; gente?: string[] } | null;
     // Filtros del alta automática de bicis vendidas (3-sep-2026).
     config_altas_erp?: { provincias?: string[]; max_bicis_por_venta?: number } | null;
     // Cuántas horas se espera una respuesta del cliente antes de que la orden

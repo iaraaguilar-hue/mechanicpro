@@ -10,6 +10,7 @@ import PanelSugerencias from '@/components/PanelSugerencias';
 import { normalizeBikeData, normalizeServiceType } from '@/lib/bikeDataNormalizer';
 import { rankProducts } from '@/lib/productMatcher';
 import { servicioRevenue } from '@/lib/servicioRevenue';
+import { llaveDelFirmante, nombreDelFirmante } from '@/lib/quienFirma';
 import {
     Users,
     BarChart3,
@@ -710,20 +711,24 @@ export function PorMecanico({ servicios, tallerId }: { servicios: any[]; tallerI
         })();
     }, [tallerId]);
 
+    // 16-sep-2026: firma tanto el que tiene usuario (`mecanico_id`) como el que el
+    // taller cargó por nombre (`mecanico_nombre`). Agrupar solo por id dejaba
+    // afuera, y sin decirlo, a la mitad del taller.
     const filas = useMemo(() => {
         const acc: Record<string, { services: number; labor: number; parts: number }> = {};
         for (const s of servicios) {
-            if (!s.mecanico_id) continue;          // sin registrar, no se inventa
+            const llave = llaveDelFirmante(s);
+            if (!llave) continue;                  // sin registrar, no se inventa
             const { labor, parts } = servicioRevenue(s);
-            const a = acc[s.mecanico_id] ?? (acc[s.mecanico_id] = { services: 0, labor: 0, parts: 0 });
+            const a = acc[llave] ?? (acc[llave] = { services: 0, labor: 0, parts: 0 });
             a.services += 1; a.labor += labor; a.parts += parts;
         }
         return Object.entries(acc)
-            .map(([id, v]) => ({ id, nombre: gente[id] ?? 'Alguien que ya no está', ...v }))
+            .map(([llave, v]) => ({ id: llave, nombre: nombreDelFirmante(llave, gente), ...v }))
             .sort((x, y) => y.labor - x.labor);
     }, [servicios, gente]);
 
-    const sinRegistrar = servicios.filter((s: any) => !s.mecanico_id).length;
+    const sinRegistrar = servicios.filter((s: any) => !llaveDelFirmante(s)).length;
     const fmt = (n: number) => '$' + Math.round(n).toLocaleString('es-AR');
 
     return (

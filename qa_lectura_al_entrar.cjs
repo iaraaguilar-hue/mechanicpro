@@ -74,12 +74,16 @@ const SNIFF = () => {
 };
 
 (async () => {
-    if (!process.env.DEMO_PASS) { console.error('Falta DEMO_PASS'); process.exit(2); }
+    // El .env del Demo la llama MP_DEMO_PASSWORD; este script pedia DEMO_PASS.
+    // Costaron dos corridas (14-sep-2026): el campo quedaba vacio y el QA se colgaba
+    // buscando una orden que no existia. Acepta los dos nombres.
+    const DEMO_PASS = process.env.DEMO_PASS || process.env.MP_DEMO_PASSWORD;
+    if (!DEMO_PASS) { console.error('Falta DEMO_PASS (o MP_DEMO_PASSWORD)'); process.exit(2); }
     const b = await chromium.launch({ executablePath: EXEC });
     const page = await b.newPage({ viewport: { width: 1440, height: 1000 } });
     await page.goto(BASE, { waitUntil: 'domcontentloaded' });
     await page.fill('input[type=email]', process.env.DEMO_MAIL || 'demo@mechanicpro.com.ar');
-    await page.fill('input[type=password]', process.env.DEMO_PASS);
+    await page.fill('input[type=password]', DEMO_PASS);
     await page.click('button[type=submit]');
     await page.waitForFunction(() => !document.body.innerText.includes('INGRESANDO'), { timeout: 45000 });
     await page.evaluate(() => localStorage.setItem('mechanicpro_tour_v3', 'visto'));

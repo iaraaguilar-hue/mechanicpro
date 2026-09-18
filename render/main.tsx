@@ -17,7 +17,24 @@ import '../src/index.css';
 
 import ExpertMetrics from '@/components/ExpertMetrics';
 import JobCard from '@/components/JobCard';
+import RespuestaIA from '@/components/RespuestaIA';
 import { serviciosDePrueba, ordenDePrueba, clienteDePrueba } from './datos';
+
+// Las respuestas REALES que recibió Leira Bikes (preguntas_taller, 10 al 17-sep-2026),
+// con los nombres cambiados. Son el material con el que hay que mirar el diseño: si se
+// ve bien con una lista de cinco órdenes a las 11 de la noche, se ve bien.
+const CHARLA_DE_PRUEBA = [
+    {
+        pregunta: 'que bicis faltan hacer',
+        respuesta: 'Faltan hacer **2**, y hay **1 lista para entregar** (3 en el taller):\n\nEn proceso:\n- #19 - Jose Alvarez - la Epic Pro blanca - lavado y lubricación - prometida ayer 15/09 (vencida)\n- #21 - Ariel Rodríguez - la Epic 8 S-Works - actualización software del Turbo Levo - prometida mañana 17/09\n\nLista para entregar:\n- #22 - Ariel Rodríguez - la Epic 8 S-Works - service completo con suspensión delantera',
+        herramientas: 'órdenes',
+    },
+    {
+        pregunta: 'que numero de orden tienen las bicis de jose alvarez',
+        respuesta: 'Jose Alvarez tiene dos órdenes: la **#19** (Epic Pro blanca, lavado y lubricación, en proceso) y la **#3** del 09/09, ya entregada, por $370.000.',
+        herramientas: 'clientes · historial',
+    },
+];
 
 const params = new URLSearchParams(location.search);
 const cual = params.get('c') || 'metrics';
@@ -48,6 +65,31 @@ function Marco({ ancho, children }: { ancho: number; children: React.ReactNode }
 }
 
 function App() {
+    // El chat: se mira con el molde REAL de la pantalla (burbuja de la pregunta,
+    // respuesta sin caja, pie de procedencia). 🚩 Espejo de pages/PreguntaleTaller.tsx.
+    if (cual === 'chat') {
+        return (
+            <Marco ancho={760}>
+                <div className="space-y-5 font-sans">
+                    {CHARLA_DE_PRUEBA.map((t, i) => (
+                        <div key={i} className="group space-y-3 pb-2">
+                            <div className="flex justify-end">
+                                <div className="bg-primary text-primary-foreground rounded-2xl rounded-br-md px-4 py-2.5 text-sm max-w-[85%]">
+                                    {t.pregunta}
+                                </div>
+                            </div>
+                            <div className="pr-4 sm:pr-10">
+                                <RespuestaIA texto={t.respuesta} />
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-4">
+                                    <span className="text-[11px] text-muted-foreground/70">Se apoyó en {t.herramientas}</span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </Marco>
+        );
+    }
     if (cual === 'orden') {
         return (
             <Marco ancho={720}>

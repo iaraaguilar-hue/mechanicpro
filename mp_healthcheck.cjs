@@ -188,6 +188,36 @@ async function main() {
         }
     }
 
+    // 3c-quater. Avisos automáticos que NO le llegaron al cliente (7 días).
+    // 🚩 12 al 17-sep-2026: Leira Bikes tuvo 13 avisos de "tu bici está lista" que
+    // nunca salieron ("no llegó el comprobante desde la app": al bucket `ordenes_trabajo`
+    // le faltaba la política de INSERT y toda subida del navegador rebotaba). Cinco días,
+    // trece clientes sin avisar, y nadie se enteró: el frontend dispara el envío con
+    // `void`, así que el resultado se descarta, y `mensajes_whatsapp` ni se escribe
+    // cuando el fallo es ANTES de llamar a Meta. El chequeo de arriba mira los que Meta
+    // rechazó; este mira los que nunca llegaron a Meta. Lo supimos porque Ariel se lo
+    // dijo a Iara hablando, que es el peor canal de monitoreo que hay.
+    {
+        const desde = new Date(Date.now() - 7 * 24 * 3600000).toISOString();
+        const { data: fallados, error } = await db.from('automatizaciones_wa_disparos')
+            .select('taller_id, resultado, detalle').eq('resultado', 'fallo').gte('creado_at', desde);
+        if (error) {
+            add('avisos_automaticos_7d', 'OMITIDO', `no pude leer automatizaciones_wa_disparos (${error.message})`);
+        } else if (!fallados.length) {
+            add('avisos_automaticos_7d', 'OK', 'ningún aviso automático falló en 7 días');
+        } else {
+            const nombres = Object.fromEntries((talleres || []).map(t => [t.id, t.nombre || t.id]));
+            const por = {};
+            for (const f of fallados) {
+                const k = `${nombres[f.taller_id] || f.taller_id}: ${f.detalle || 'sin detalle'}`;
+                por[k] = (por[k] || 0) + 1;
+            }
+            add('avisos_automaticos_7d', 'FALLA',
+                `${fallados.length} aviso(s) que el cliente NUNCA recibió — `
+                + Object.entries(por).map(([k, n]) => `${k} (${n})`).join(' · '));
+        }
+    }
+
     // 3d. Fugas cross-tenant: filas sin taller_id (RLS no las protege)
     for (const t of ['clientes', 'bicicletas', 'servicios', 'recordatorios']) {
         const { count } = await db.from(t).select('*', { count: 'exact', head: true }).is('taller_id', null);

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { tieneFeature } from '@/lib/planFeatures';
 import { Lock, Loader2, Send, ThumbsUp, ThumbsDown, MessageCircleQuestion, AlertTriangle } from 'lucide-react';
+import RespuestaIA from '@/components/RespuestaIA';
 
 // ─────────────────────────────────────────────────────────────
 // PREGUNTALE A TU TALLER (idea 3): escribís en criollo, contesta con los
@@ -164,7 +165,7 @@ export default function PreguntaleTaller() {
                 </p>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+            <div className="flex-1 overflow-y-auto space-y-5 pr-1">
                 {historial.length === 0 && !pensando && (
                     <Card><CardContent className="p-5 text-sm text-muted-foreground">
                         <p className="mb-3">Probá con una de estas:</p>
@@ -179,38 +180,48 @@ export default function PreguntaleTaller() {
                     </CardContent></Card>
                 )}
 
+                {/* Un turno. La PREGUNTA va en burbuja (es de él, y es corta); la
+                    RESPUESTA no: encerrar diez renglones de lista en una caja con
+                    borde los aplasta y hace que la pantalla se lea como un formulario.
+                    Sin caja, el texto respira y la jerarquía la da la tipografía.
+                    (18-sep-2026, Iara: "más minimalista, estético, más lindo".) */}
                 {historial.map(p => (
-                    <div key={p.id} className="space-y-2">
+                    <div key={p.id} className="group space-y-3 pb-2">
                         <div className="flex justify-end">
-                            <div className="bg-primary text-primary-foreground rounded-2xl rounded-br-sm px-4 py-2 text-sm max-w-[85%]">
+                            <div className="bg-primary text-primary-foreground rounded-2xl rounded-br-md px-4 py-2.5 text-sm max-w-[85%]">
                                 {p.pregunta}
                             </div>
                         </div>
                         {p.respuesta && (
-                            <div className="flex justify-start">
-                                <div className="bg-card border border-border rounded-2xl rounded-bl-sm px-4 py-3 text-sm max-w-[85%]">
-                                    <div className="whitespace-pre-wrap">{p.respuesta}</div>
-                                    <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-border/60">
-                                        {(p.herramientas?.length ?? 0) > 0 && (
-                                            <span className="text-[11px] text-muted-foreground">
-                                                Se apoyó en: {[...new Set((p.herramientas ?? []).map(h => NOMBRES_TOOL[h.herramienta] ?? h.herramienta))].join(', ')}
+                            <div className="pr-4 sm:pr-10">
+                                <RespuestaIA texto={p.respuesta} />
+                                {/* El pie: sin línea divisoria y en gris claro. Es
+                                    procedencia, no contenido — que no compita con la
+                                    respuesta. Los pulgares aparecen al acercarse (y
+                                    quedan siempre visibles en el celular, donde no hay
+                                    hover ni forma de descubrirlos). */}
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-4">
+                                    {(p.herramientas?.length ?? 0) > 0 && (
+                                        // Con el rótulo: "órdenes" suelto abajo de una
+                                        // respuesta no se entiende. Es de dónde salió el dato.
+                                        <span className="text-[11px] text-muted-foreground/70">
+                                            Se apoyó en {[...new Set((p.herramientas ?? []).map(h => NOMBRES_TOOL[h.herramienta] ?? h.herramienta))].join(' · ')}
+                                        </span>
+                                    )}
+                                    <span className="ml-auto flex items-center gap-0.5">
+                                        {p.feedback ? (
+                                            <span className="text-[11px] text-muted-foreground/70">
+                                                {p.feedback === 'util' ? 'Marcada útil' : 'Marcada no útil'}
+                                            </span>
+                                        ) : !p.id.startsWith('tmp-') && (
+                                            <span className="flex gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity">
+                                                <button onClick={() => votar(p, 'util')} title="Me sirvió" aria-label="Me sirvió"
+                                                    className="p-1.5 rounded-md text-muted-foreground/60 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"><ThumbsUp size={13} /></button>
+                                                <button onClick={() => votar(p, 'no_util')} title="No me sirvió" aria-label="No me sirvió"
+                                                    className="p-1.5 rounded-md text-muted-foreground/60 hover:text-red-500 hover:bg-red-50 transition-colors"><ThumbsDown size={13} /></button>
                                             </span>
                                         )}
-                                        <span className="ml-auto flex gap-1">
-                                            {p.feedback ? (
-                                                <span className="text-[11px] text-muted-foreground">
-                                                    {p.feedback === 'util' ? 'Marcada útil' : 'Marcada no útil'}
-                                                </span>
-                                            ) : !p.id.startsWith('tmp-') && (
-                                                <>
-                                                    <button onClick={() => votar(p, 'util')} title="Me sirvió"
-                                                        className="p-1 text-slate-500 hover:text-emerald-600"><ThumbsUp size={14} /></button>
-                                                    <button onClick={() => votar(p, 'no_util')} title="No me sirvió"
-                                                        className="p-1 text-slate-500 hover:text-red-500"><ThumbsDown size={14} /></button>
-                                                </>
-                                            )}
-                                        </span>
-                                    </div>
+                                    </span>
                                 </div>
                             </div>
                         )}
@@ -218,10 +229,8 @@ export default function PreguntaleTaller() {
                 ))}
 
                 {pensando && (
-                    <div className="flex justify-start">
-                        <div className="bg-card border border-border rounded-2xl px-4 py-3 text-sm text-muted-foreground flex items-center gap-2">
-                            <Loader2 className="animate-spin" size={14} /> Mirando los datos del taller…
-                        </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground/80 pb-2">
+                        <Loader2 className="animate-spin" size={14} /> Mirando los datos del taller…
                     </div>
                 )}
                 <div ref={finRef} />

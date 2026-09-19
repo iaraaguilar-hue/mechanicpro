@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/authStore';
 import { getBase64ImageFromUrl } from '@/lib/pdfGenerator';
 import { instanteARLargo, entregaMostrable } from '@/lib/fechaAR';
 import { notasParaElCliente } from '@/lib/notasServicio';
+import { nombreArchivoComprobante } from '@/lib/nombreArchivoComprobante';
 
 function stripHtml(html: string): string {
   if (!html) return '';
@@ -117,8 +118,14 @@ export const printServiceReport = async (
   const dateOutStr = entrega ? entrega.texto : null;
   const dateOutLabel = entrega ? entrega.etiqueta : null;
 
-  const safeClientName = clientName.trim().replace(/\s+/g, '_');
-  const printFileName = `${safeClientName}_#${formatOrdenNumber(job.numero_orden, job.id)}_Informe_Service`;
+  // El nombre del archivo lo arma una sola funcion, espejada en la Edge Function, para que
+  // el PDF que baja el taller y el que le llega al cliente por WhatsApp se llamen igual.
+  const printFileName = nombreArchivoComprobante({
+    taller: taller?.nombre,
+    numeroOrden: job.numero_orden,
+    fallbackId: job.id,
+    cliente: clientName,
+  }).replace(/\.pdf$/i, '');
 
   // Build the props for the PDF
   const pdfData = {

@@ -1,5 +1,12 @@
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Image, Font } from '@react-pdf/renderer';
+
+// 🔴 NADA DE PALABRAS CORTADAS (19-sep-2026). @react-pdf/renderer hifena por defecto, en
+// ingles: con el nombre del cliente y el modelo de la bici en columna angosta salia
+// "MARIA DE LOS ANGELES RO-DRIGUEZ" y "Specialized S-Works Tar-mac". Un apellido partido al
+// medio en un comprobante que el cliente recibe por WhatsApp no lo escribe nadie. Devolver
+// la palabra entera apaga el guionado: si no entra, baja de renglon completa.
+Font.registerHyphenationCallback((palabra) => [palabra]);
 
 // Importante: @react-pdf/renderer no soporta HTML, por lo que usaremos Text para todo.
 
@@ -46,10 +53,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
   },
+  // 🔴 19-sep-2026: las dos columnas no tenian ancho, asi que con un nombre largo de un
+  // lado y un modelo largo del otro los dos textos crecian hasta PISARSE. Le paso a
+  // Veronica Natalia Baccaro con una "Tarmac SL8 SW Frameset": el comprobante salio con el
+  // nombre del cliente encima del de la bici y se lo mandamos asi. Ahora cada columna tiene
+  // su ancho y el texto que no entra baja de renglon, que es lo unico que no rompe nada.
   clientBikeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 40,
+  },
+  clientCol: {
+    width: '56%',
+    paddingRight: 16,
+  },
+  bikeCol: {
+    width: '40%',
+    alignItems: 'flex-end',
   },
   sectionLabel: {
     fontSize: 10,
@@ -59,7 +80,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   clientName: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 5,
     color: '#111111',
@@ -69,7 +90,8 @@ const styles = StyleSheet.create({
     color: '#666666',
   },
   bikeModel: {
-    fontSize: 20,
+    fontSize: 16,
+    lineHeight: 1.3,
     fontWeight: 'bold',
     marginBottom: 5,
     color: '#111111',
@@ -106,10 +128,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333333',
   },
+  // Una sola tipografia para TODOS los montos del comprobante (19-sep-2026): antes los de
+  // mano de obra salian en Helvetica y los de repuestos y los totales en Courier, en la misma
+  // pagina y a dos renglones de distancia. La columna la arma el textAlign, no la monoespaciada.
   tableCellRight: {
     fontSize: 12,
     textAlign: 'right',
-    fontFamily: 'Courier',
   },
   tableCellRightBold: {
     fontSize: 14,
@@ -159,14 +183,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333333',
-    fontFamily: 'Courier',
   },
   grandTotalContainer: {
     marginTop: 8,
     paddingTop: 15,
     borderTopWidth: 2,
     borderTopColor: '#333333',
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+  },
+  grandTotalLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333333',
+    letterSpacing: 1,
   },
   grandTotalValue: {
     fontSize: 30,
@@ -187,7 +218,8 @@ const styles = StyleSheet.create({
     marginTop: 60,
     textAlign: 'center',
     fontSize: 10,
-    color: '#CCCCCC',
+    letterSpacing: 1,
+    color: '#999999',
   },
 });
 
@@ -243,7 +275,7 @@ export const ServiceTicketPDF: React.FC<ServiceTicketPDFProps> = ({ data }) => {
 
         {/* Client & Bike */}
         <View style={styles.clientBikeRow}>
-          <View>
+          <View style={styles.clientCol}>
             <Text style={styles.sectionLabel}>Cliente</Text>
             <Text style={styles.clientName}>{data.clientName}</Text>
             <Text style={styles.clientDetails}>
@@ -252,7 +284,7 @@ export const ServiceTicketPDF: React.FC<ServiceTicketPDFProps> = ({ data }) => {
               {data.clientPhone ? `Tel: ${data.clientPhone}` : ''}
             </Text>
           </View>
-          <View style={{ alignItems: 'flex-end' }}>
+          <View style={styles.bikeCol}>
             <Text style={styles.sectionLabel}>Bicicleta</Text>
             <Text style={styles.bikeModel}>{data.bikeModel}</Text>
           </View>
@@ -336,7 +368,10 @@ export const ServiceTicketPDF: React.FC<ServiceTicketPDFProps> = ({ data }) => {
             <Text style={styles.totalValue}>$ {data.totalProducts.toLocaleString('es-AR')}</Text>
           </View>
 
+          {/* El numero grande iba SOLO, sin decir de que era: el que lo lee tiene que
+              deducirlo sumando las dos lineas de arriba. Ahora lleva su etiqueta. */}
           <View style={styles.grandTotalContainer}>
+            <Text style={styles.grandTotalLabel}>TOTAL</Text>
             <Text style={styles.grandTotalValue}>$ {data.grandTotal.toLocaleString('es-AR')}</Text>
           </View>
         </View>

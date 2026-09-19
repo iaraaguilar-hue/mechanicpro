@@ -56,3 +56,13 @@ export function nombreArchivoComprobante(opts: {
 
     return `${partes.join(' - ')}.pdf`;
 }
+
+/**
+ * El nombre tal como se va a ver en el preview de "Asi le llega" de Configuracion.
+ * Usa el taller de verdad y un service de ejemplo: el numero y el cliente cambian en
+ * cada envio, el formato no. Antes esos tres previews decian a mano
+ * "Comprobante de service.pdf", que dejo de ser cierto el 19-sep-2026.
+ */
+export function nombreDeEjemploDelPdf(taller?: string | null): string {
+    return nombreArchivoComprobante({ taller, numeroOrden: 374, cliente: 'Martin Gomez' });
+}

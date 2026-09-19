@@ -56,6 +56,7 @@ import {
     Loader2, Plus, Save, X, FileText, Clock, CheckCircle2, XCircle, PauseCircle,
     RefreshCw, Trash2, Pencil, Sparkles, Send, PlayCircle,
 } from 'lucide-react';
+import { nombreDeEjemploDelPdf } from '@/lib/nombreArchivoComprobante';
 import {
     CAMPOS, CAMPOS_VALIDOS, LARGO_MAXIMO, validarCuerpo, vistaPreviaDeCuerpo,
     camposDelCuerpo, type Campo,
@@ -570,7 +571,7 @@ function ArmadorConIA({ taller, mandando, momentoDeEntrada, onMandar, onAMano, o
                         <div className="rounded-lg bg-[#dcf8c6] p-3 text-sm text-slate-800 whitespace-pre-wrap">
                             {borrador.lleva_pdf && (
                                 <div className="flex items-center gap-2 mb-2 pb-2 border-b border-black/10 text-xs text-slate-600">
-                                    <FileText className="h-4 w-4" /> Comprobante de service.pdf
+                                    <FileText className="h-4 w-4" /> {nombreDeEjemploDelPdf(taller?.nombre)}
                                 </div>
                             )}
                             {previa}
@@ -1047,7 +1048,7 @@ function EditorDePlantilla({ borrador, taller, mandando, onCambio, onMandar, onC
                     <div className="rounded-lg bg-[#dcf8c6] p-3 text-sm text-slate-800 whitespace-pre-wrap">
                         {borrador.lleva_pdf && (
                             <div className="flex items-center gap-2 mb-2 pb-2 border-b border-black/10 text-xs text-slate-600">
-                                <FileText className="h-4 w-4" /> Comprobante de service.pdf
+                                <FileText className="h-4 w-4" /> {nombreDeEjemploDelPdf(taller?.nombre)}
                             </div>
                         )}
                         {previa}

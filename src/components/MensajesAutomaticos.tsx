@@ -26,6 +26,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Loader2, Plus, Trash2, Save, AlertCircle, FileText, X } from 'lucide-react';
+import { nombreDeEjemploDelPdf } from '@/lib/nombreArchivoComprobante';
 import { PlantillasDelTaller, type PlantillaDelTaller } from '@/components/PlantillasDelTaller';
 import { vistaPreviaDeCuerpo } from '@/lib/plantillasTaller';
 import { ComoFunciona } from '@/components/ComoFunciona';
@@ -654,7 +655,7 @@ function Editor({ regla, taller, propias, guardando, onCambio, onGuardar, onCanc
                     <div className="rounded-lg bg-[#dcf8c6] p-3 text-sm text-slate-800 whitespace-pre-wrap">
                         {regla.adjunta_pdf && (
                             <div className="flex items-center gap-2 mb-2 pb-2 border-b border-black/10 text-xs text-slate-600">
-                                <FileText className="h-4 w-4" /> Comprobante de service.pdf
+                                <FileText className="h-4 w-4" /> {nombreDeEjemploDelPdf(taller?.nombre)}
                             </div>
                         )}
                         {previa}

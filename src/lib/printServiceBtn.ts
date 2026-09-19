@@ -9,7 +9,7 @@ import { instanteARLargo, entregaMostrable } from '@/lib/fechaAR';
 import { notasParaElCliente } from '@/lib/notasServicio';
 import { nombreArchivoComprobante } from '@/lib/nombreArchivoComprobante';
 
-function stripHtml(html: string): string {
+export function stripHtml(html: string): string {
   if (!html) return '';
   return html
     .replace(/<\/?(p|div|li|br)[^>]*>/gi, '\n')

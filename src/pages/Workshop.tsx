@@ -6,11 +6,13 @@ import { useAuthStore } from "@/store/authStore";
 import { supabase } from "@/lib/supabase";
 import { formatOrdenNumber, ordenNumberForWebhook } from "@/lib/formatId";
 import { printServiceReport } from "@/lib/printServiceBtn";
+import { printTicketIngreso } from "@/lib/printTicketIngreso";
+import { TelefonoCopiable } from "@/components/TelefonoCopiable";
 import { dispararMensajesAutomaticos } from "@/lib/comprobanteALaNube";
 import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign, PackageSearch, Phone, Bike, Send } from "lucide-react";
+import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign, PackageSearch, Phone, Bike, Send, Printer } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { servicioRevenue } from "@/lib/servicioRevenue";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -1469,6 +1471,20 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
         }
     };
 
+    const handleTicketIngreso = () => {
+        if (!service || !bike || !client) return;
+        try {
+            printTicketIngreso(
+                service,
+                client.nombre,
+                `${bike.marca ?? ''} ${bike.modelo ?? ''}`.trim(),
+                client.telefono || '',
+            );
+        } catch (e) {
+            console.error('Error generando el ticket de ingreso:', e);
+        }
+    };
+
     const handleDownloadPDF = () => {
         if (!service || !bike || !client) return;
         try {
@@ -1520,7 +1536,11 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
             >
                 <DialogHeader>
                     <DialogTitle className="text-2xl text-primary">Finalizar Service: {job.client_name}</DialogTitle>
-                    <p className="text-muted-foreground">{job.bike_brand} {job.bike_model} - {job.service_type}</p>
+                    <p className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span>{job.bike_brand} {job.bike_model} - {job.service_type}</span>
+                        {/* El telefono a un toque, pedido de Alejo (11 a Fondo, 10-sep-2026). */}
+                        <TelefonoCopiable telefono={client?.telefono} className="text-sm" />
+                    </p>
                 </DialogHeader>
 
                 <div className="grid gap-6 py-4">
@@ -1646,6 +1666,12 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
 
                 <DialogFooter data-tour="finalizar-boton" className="gap-2 sm:gap-0">
                     <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                    {/* El ticket A4 que se corta al medio (Alejo, 11 a Fondo): arriba el
+                        comprobante del cliente, abajo el checklist del taller. Va SIEMPRE,
+                        no solo al finalizar: se imprime cuando la bici entra. */}
+                    <Button variant="outline" onClick={handleTicketIngreso}>
+                        <Printer className="mr-2 h-4 w-4" /> Ticket de ingreso
+                    </Button>
                     {isCompleted ? (
                         <>
                             <Button variant="secondary" onClick={handleDownloadPDF}>

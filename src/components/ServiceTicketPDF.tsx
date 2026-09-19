@@ -8,6 +8,25 @@ import { Document, Page, Text, View, StyleSheet, Image, Font } from '@react-pdf/
 // la palabra entera apaga el guionado: si no entra, baja de renglon completa.
 Font.registerHyphenationCallback((palabra) => [palabra]);
 
+/**
+ * Una palabra sola, larguisima y sin espacios ("BICICLETERIAELPEDALDEORO", un modelo cargado
+ * todo junto) no tiene donde cortarse: desborda su columna y se mete en la de al lado. Lo
+ * encontro el candado `qa_comprobante_pdf.cjs` probando el peor caso, no un cliente real, que
+ * es de lo que se trata. Se le meten cortes invisibles (U+200B) para que pueda bajar de
+ * renglon.
+ *
+ * 🔴 Con U+200B (el espacio de ancho cero) NO alcanza: se probó primero y el candado siguió
+ * midiendo 241 px de tinta en el hueco, porque el motor de react-pdf no lo toma como punto de
+ * corte. El unico corte que respeta es un salto de linea de verdad. 14 caracteres entran
+ * holgados en las dos columnas (18pt en 244pt de ancho, 16pt en 174pt).
+ */
+const LARGO_MAXIMO = 16;
+export const partible = (texto?: string | null): string =>
+    (texto ?? '')
+        .split(' ')
+        .map((p) => (p.length > LARGO_MAXIMO ? (p.match(/.{1,14}/g) ?? [p]).join('\n') : p))
+        .join(' ');
+
 // Importante: @react-pdf/renderer no soporta HTML, por lo que usaremos Text para todo.
 
 // Definimos estilos
@@ -277,7 +296,7 @@ export const ServiceTicketPDF: React.FC<ServiceTicketPDFProps> = ({ data }) => {
         <View style={styles.clientBikeRow}>
           <View style={styles.clientCol}>
             <Text style={styles.sectionLabel}>Cliente</Text>
-            <Text style={styles.clientName}>{data.clientName}</Text>
+            <Text style={styles.clientName}>{partible(data.clientName)}</Text>
             <Text style={styles.clientDetails}>
               {data.clientDni ? `DNI: ${data.clientDni}` : ''}
               {data.clientDni && data.clientPhone ? ' • ' : ''}
@@ -286,7 +305,7 @@ export const ServiceTicketPDF: React.FC<ServiceTicketPDFProps> = ({ data }) => {
           </View>
           <View style={styles.bikeCol}>
             <Text style={styles.sectionLabel}>Bicicleta</Text>
-            <Text style={styles.bikeModel}>{data.bikeModel}</Text>
+            <Text style={styles.bikeModel}>{partible(data.bikeModel)}</Text>
           </View>
         </View>
 

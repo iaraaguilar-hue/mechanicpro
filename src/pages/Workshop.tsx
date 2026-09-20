@@ -8,6 +8,7 @@ import { formatOrdenNumber, ordenNumberForWebhook } from "@/lib/formatId";
 import { printServiceReport } from "@/lib/printServiceBtn";
 import { printTicketIngreso } from "@/lib/printTicketIngreso";
 import { TelefonoCopiable } from "@/components/TelefonoCopiable";
+import { configTicketIngreso } from "@/lib/ticketIngreso";
 import { dispararMensajesAutomaticos } from "@/lib/comprobanteALaNube";
 import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -1667,11 +1668,15 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                 <DialogFooter data-tour="finalizar-boton" className="gap-2 sm:gap-0">
                     <Button variant="outline" onClick={onClose}>Cancelar</Button>
                     {/* El ticket A4 que se corta al medio (Alejo, 11 a Fondo): arriba el
-                        comprobante del cliente, abajo el checklist del taller. Va SIEMPRE,
-                        no solo al finalizar: se imprime cuando la bici entra. */}
-                    <Button variant="outline" onClick={handleTicketIngreso}>
-                        <Printer className="mr-2 h-4 w-4" /> Ticket de ingreso
-                    </Button>
+                        comprobante del cliente, abajo el checklist del taller. Va en cualquier
+                        momento, no solo al finalizar: se imprime cuando la bici entra, y no
+                        reemplaza al comprobante, que sale igual al entregar.
+                        Se prende en Configuración → En cada orden → Ticket de ingreso. */}
+                    {configTicketIngreso(taller).habilitado && (
+                        <Button variant="outline" onClick={handleTicketIngreso}>
+                            <Printer className="mr-2 h-4 w-4" /> Ticket de ingreso
+                        </Button>
+                    )}
                     {isCompleted ? (
                         <>
                             <Button variant="secondary" onClick={handleDownloadPDF}>

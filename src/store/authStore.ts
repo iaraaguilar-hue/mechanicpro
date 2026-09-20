@@ -37,6 +37,14 @@ export interface TallerData {
     } | null;
     // Cómo se ve la app en ESTE taller (14-sep-2026). Hoy solo el número de orden grande de Leira.
     config_vista?: { numero_orden_grande?: boolean } | null;
+    /**
+     * El ticket de ingreso A4 que se corta al medio (Alejo, 11 a Fondo, 20-sep-2026).
+     * No reemplaza al comprobante: se imprime cuando la bici ENTRA y el comprobante entero
+     * sigue saliendo igual al entregar.
+     * 🔴 `notas_internas` es la ÚNICA superficie del sistema donde las notas internas se
+     * imprimen. Si no cortan la hoja, el cliente se las lleva.
+     */
+    config_ticket_ingreso?: { habilitado?: boolean; notas_internas?: boolean } | null;
     [key: string]: any;
 }
 

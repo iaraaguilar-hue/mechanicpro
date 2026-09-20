@@ -15,8 +15,7 @@ import { NuevoBadge } from '@/components/NuevoBadge';
 import {
     Settings, Loader2, Save, UploadCloud, Plus, Edit2, Check, X, Users,
     AlertCircle, Sparkles, ListChecks, CheckCircle, Lock, Bell, HeartPulse,
-    GraduationCap, PlayCircle, PhoneCall, Eye, Bike, Hash
-} from 'lucide-react';
+    GraduationCap, PlayCircle, PhoneCall, Eye, Bike, Hash, Printer } from 'lucide-react';
 import { useTourStore } from '@/components/OnboardingTour';
 import { resetTours } from '@/lib/tourSeen';
 import { ProductosOcultos } from '@/components/ProductosOcultos';
@@ -25,6 +24,7 @@ import { MensajesAutomaticos } from '@/components/MensajesAutomaticos';
 import { AltasDesdeERP } from '@/components/AltasDesdeERP';
 import { ComoFunciona } from '@/components/ComoFunciona';
 import { PanelAjustes, FilaAjuste, SubAjuste, GrupoAjustes } from '@/components/FilaAjuste';
+import { configTicketIngreso } from '@/lib/ticketIngreso';
 import { configMantenimiento, COMPONENTES_BASE, PLAZOS_MESES, POSTVENTA_DEFAULT, mesesEnPalabras, comoLeLlegaPostventa, type ComponenteDiagnostico, type ConfigPostventa } from '@/lib/mantenimiento';
 import { tintaSobre, tintaLegible, PISO_TEXTO_GRANDE } from '@/lib/contraste';
 import { BuscadorDeAjustes, AJUSTES, type Ajuste, type PestanaConfig } from '@/components/BuscadorDeAjustes';
@@ -1069,6 +1069,41 @@ function TabPreferencias({ taller, setTaller, avisar }: {
         }
     };
 
+    // ── El ticket de ingreso A4 que se corta al medio (Alejo, 11 a Fondo, 20-sep-2026).
+    // No reemplaza al comprobante: el entero sigue saliendo igual al entregar.
+    const cfgTicket = configTicketIngreso(taller);
+    const [ticketHab, setTicketHab] = useState(cfgTicket.habilitado);
+    const [ticketNotas, setTicketNotas] = useState(cfgTicket.notasInternas);
+    const [savingTicket, setSavingTicket] = useState(false);
+
+    const guardarTicket = async (patch: { habilitado?: boolean; notas_internas?: boolean }) => {
+        const antes = { habilitado: ticketHab, notas_internas: ticketNotas };
+        const nuevo = {
+            habilitado: patch.habilitado ?? ticketHab,
+            notas_internas: patch.notas_internas ?? ticketNotas,
+        };
+        setTicketHab(nuevo.habilitado);
+        setTicketNotas(nuevo.notas_internas);
+        try {
+            setSavingTicket(true);
+            const { error } = await supabase
+                .from('talleres')
+                .update({ config_ticket_ingreso: nuevo })
+                .eq('id', taller.id);
+            if (error) throw error;
+            setTaller({ ...taller, config_ticket_ingreso: nuevo as any });
+            avisar('ok', nuevo.habilitado
+                ? 'Listo. El boton "Ticket de ingreso" esta en cada orden.'
+                : 'Apagado. El boton sale de la orden.');
+        } catch (e: any) {
+            setTicketHab(antes.habilitado);
+            setTicketNotas(antes.notas_internas);
+            avisar('error', e.message || 'No se pudo guardar');
+        } finally {
+            setSavingTicket(false);
+        }
+    };
+
     const guardarTareas = async (patch: { tareas?: boolean; bloqueo?: boolean }) => {
         const antesTareas = tareasHab;
         const antesBloqueo = bloqueo;
@@ -1392,6 +1427,50 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                                 …ese es el checklist de esa orden. Se agrega un trabajo y aparece solo en la lista.
                             </p>
                         </div>
+                    </ComoFunciona>
+                </FilaAjuste>
+
+                <FilaAjuste
+                    id="ticket_ingreso"
+                    icono={Printer}
+                    titulo="Ticket de ingreso"
+                    resumen="Una A4 que se corta al medio."
+                    control={
+                        <Switch
+                            checked={ticketHab}
+                            onCheckedChange={v => guardarTicket({ habilitado: v })}
+                            disabled={savingTicket}
+                        />
+                    }
+                >
+                    <SubAjuste
+                        apagado={!ticketHab}
+                        titulo="Imprimir las notas internas"
+                        resumen="Solo en la mitad del taller."
+                        control={
+                            <Switch
+                                checked={ticketNotas}
+                                onCheckedChange={v => guardarTicket({ notas_internas: v })}
+                                disabled={savingTicket || !ticketHab}
+                            />
+                        }
+                    />
+                    {/* La explicacion va PLEGADA, como todas (regla de Iara, 9-sep): a la vista
+                        obliga a leerla a quien ya sabe lo que es. Y no lleva `data-contenido`:
+                        esa marca es para el texto que ES contenido (el mensaje que sale), no para
+                        una ayuda. Ponersela a una explicacion es taparle los ojos al candado. */}
+                    <ComoFunciona>
+                        <p>
+                            Se imprime cuando la bici entra: arriba va lo que se lleva el cliente y
+                            abajo el checklist del taller, con los trabajos para tildar y el telefono
+                            a mano. <strong>El comprobante entero sigue saliendo igual al entregar</strong>,
+                            esto no lo reemplaza.
+                        </p>
+                        <p>
+                            Si prendes las notas internas, salen solo en la mitad de abajo, la que
+                            queda en el taller. Es el unico lugar donde se imprimen: si un dia no
+                            cortan la hoja, el cliente se las lleva.
+                        </p>
                     </ComoFunciona>
                 </FilaAjuste>
 

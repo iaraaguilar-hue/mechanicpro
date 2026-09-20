@@ -8,6 +8,7 @@ import { useAuthStore } from '@/store/authStore';
 import { instanteARLargo, entregaMostrable } from '@/lib/fechaAR';
 import { notasParaElCliente } from '@/lib/notasServicio';
 import { nombreArchivoComprobante } from '@/lib/nombreArchivoComprobante';
+import { configTicketIngreso } from '@/lib/ticketIngreso';
 
 /**
  * EL TICKET DE INGRESO en A4 para cortar al medio (pedido de Alejo, 11 a Fondo, 10-sep-2026).
@@ -25,6 +26,7 @@ export const printTicketIngreso = async (
 
     const taller = useAuthStore.getState().taller;
     const esSport = (taller?.plan_actual || 'Pro') === 'Sport';
+    const { notasInternas: imprimeNotasInternas } = configTicketIngreso(taller);
 
     // Mismo criterio que el comprobante: sin logo propio (o plan Sport) va el de Mechanic Pro,
     // nunca el de Probikes. Ver printServiceBtn.ts.
@@ -78,8 +80,10 @@ export const printTicketIngreso = async (
         trabajos,
         notasCliente: notasParaElCliente(job),
         // 🔴 El ÚNICO lugar del sistema donde las notas internas se imprimen, y solo en la
-        // mitad de abajo, que queda en el taller (decisión de Iara, 19-sep-2026).
-        notasInternas: String(job.notas_internas || '').trim(),
+        // mitad de abajo, que queda en el taller. Cada taller decide si las quiere impresas
+        // (Configuración → En cada orden → Ticket de ingreso): si no corta la hoja, el
+        // cliente se lleva lo que el taller escribió para adentro.
+        notasInternas: imprimeNotasInternas ? String(job.notas_internas || '').trim() : '',
         presupuesto: presupuesto > 0 ? presupuesto : null,
     };
 

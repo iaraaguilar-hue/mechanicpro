@@ -109,8 +109,19 @@ export default function ConectarWhatsApp({ taller, avisar }: {
     avisar: (tipo: "ok" | "error", msg: string) => void;
 }) {
     const conectado = Boolean(taller?.wa_activo && taller?.wa_phone_number_id);
+    // La segunda línea del mismo negocio (20-sep-2026). Ver OtraLinea, abajo.
+    const [etiquetaNueva, setEtiquetaNueva] = useState<string | null>(null);
 
-    if (conectado) return <EstadoConectado taller={taller!} />;
+    if (conectado && etiquetaNueva) {
+        return (
+            <FlujoDeConexion
+                avisar={avisar}
+                etiqueta={etiquetaNueva}
+                alVolver={() => setEtiquetaNueva(null)}
+            />
+        );
+    }
+    if (conectado) return <EstadoConectado taller={taller!} alAgregarLinea={setEtiquetaNueva} />;
     return <FlujoDeConexion avisar={avisar} />;
 }
 
@@ -118,7 +129,13 @@ export default function ConectarWhatsApp({ taller, avisar }: {
 // DESCONECTADO — pantallas 1 y 2 del spec
 // ═════════════════════════════════════════════════════════════
 
-function FlujoDeConexion({ avisar }: { avisar: (tipo: "ok" | "error", msg: string) => void }) {
+function FlujoDeConexion({ avisar, etiqueta, alVolver }: {
+    avisar: (tipo: "ok" | "error", msg: string) => void;
+    /** Presente = este número entra como línea de ESCUCHA, con este nombre. */
+    etiqueta?: string;
+    alVolver?: () => void;
+}) {
+    const esEscucha = Boolean(etiqueta);
     const [paso, setPaso] = useState<Paso>("info");
     const [entendido, setEntendido] = useState(false);
     const [meses, setMeses] = useState<number>(6);
@@ -176,7 +193,10 @@ function FlujoDeConexion({ avisar }: { avisar: (tipo: "ok" | "error", msg: strin
         }
 
         const { data, error } = await supabase.functions.invoke("whatsapp-conectar", {
-            body: { code, waba_id, phone_number_id, historial_meses: meses },
+            body: {
+                code, waba_id, phone_number_id, historial_meses: meses,
+                ...(esEscucha ? { rol: "escucha", etiqueta } : {}),
+            },
         });
 
         setLanzando(false);
@@ -189,6 +209,15 @@ function FlujoDeConexion({ avisar }: { avisar: (tipo: "ok" | "error", msg: strin
         // Conectó, pero puede que el historial no haya venido. Se dice: un "listo"
         // completo sobre una conexión a medias es lo que después aparece como
         // "me faltan las conversaciones y nadie me avisó".
+        if (esEscucha) {
+            // Se dice que NO manda, y no como letra chica: si alguien cree que
+            // conectó una línea para escribir por ahí, va a esperar mensajes que
+            // nunca van a salir.
+            avisar("ok", `Listo: ${data?.numero ?? "el número"} quedó registrando como "${etiqueta}". Sus conversaciones entran a la misma base de clientes. Los avisos automáticos siguen saliendo por el número principal.`);
+            alVolver?.();
+            return;
+        }
+
         if (Array.isArray(data?.avisos) && data.avisos.length > 0) {
             avisar("ok", `Tu WhatsApp quedó conectado (${data.numero ?? "número listo"}), pero no pudimos traer todo el historial. Lo reintentamos y te avisamos.`);
         } else {
@@ -390,7 +419,10 @@ function FlujoDeConexion({ avisar }: { avisar: (tipo: "ok" | "error", msg: strin
 // CONECTADO — pantalla 3 del spec
 // ═════════════════════════════════════════════════════════════
 
-function EstadoConectado({ taller }: { taller: TallerData }) {
+function EstadoConectado({ taller, alAgregarLinea }: {
+    taller: TallerData;
+    alAgregarLinea: (etiqueta: string) => void;
+}) {
     const ultimaSync: string | null = taller.wa_ultima_sync ?? null;
     const dias = diasDesde(ultimaSync);
     const cortada = dias !== null && dias >= DIAS_SIN_SYNC_PARA_ALERTAR;
@@ -452,6 +484,71 @@ function EstadoConectado({ taller }: { taller: TallerData }) {
                     </div>
                 </CardContent>
             </Card>
+
+            <OtraLinea alAgregarLinea={alAgregarLinea} />
         </div>
+    );
+}
+
+/**
+ * Un segundo número del MISMO negocio.
+ *
+ * Muchos talleres atienden por dos líneas —la del mostrador y la del taller, o la
+ * del dueño y la de ventas— y los dos hablan con los mismos clientes. Hasta hoy el
+ * único camino era abrir una cuenta aparte, y ahí la ficha del cliente queda
+ * partida en dos: la mitad de lo que dijo en un lado y la mitad en el otro.
+ *
+ * Lo que entra por acá REGISTRA y no manda. Se dice arriba, no en letra chica.
+ */
+function OtraLinea({ alAgregarLinea }: { alAgregarLinea: (etiqueta: string) => void }) {
+    const [abierto, setAbierto] = useState(false);
+    const [nombre, setNombre] = useState("");
+
+    if (!abierto) {
+        return (
+            <button
+                type="button"
+                onClick={() => setAbierto(true)}
+                className="text-sm text-slate-600 underline underline-offset-4 hover:text-slate-900"
+            >
+                ¿Tenés otro número que también habla con clientes?
+            </button>
+        );
+    }
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="text-base">Sumar otra línea</CardTitle>
+                <CardDescription>
+                    Sus conversaciones entran a la misma base de clientes, así la ficha de cada uno
+                    queda completa. <strong>Esta línea solo registra:</strong> todo lo que manda
+                    Mechanic Pro sigue saliendo por el número principal.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+                <label className="block text-sm">
+                    <span className="text-slate-700">¿Cómo le dicen a esa línea?</span>
+                    <input
+                        value={nombre}
+                        onChange={(e) => setNombre(e.target.value.slice(0, 40))}
+                        placeholder="tienda, mostrador, ventas…"
+                        className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                    />
+                </label>
+                <p className="text-xs text-muted-foreground">
+                    El nombre queda en cada mensaje: es lo que después deja leer por cuál de las dos entró.
+                </p>
+                <div className="flex gap-2">
+                    <Button
+                        disabled={nombre.trim().length < 2}
+                        onClick={() => alAgregarLinea(nombre.trim())}
+                    >
+                        Conectar esta línea
+                    </Button>
+                    <Button variant="ghost" onClick={() => setAbierto(false)}>Cancelar</Button>
+                </div>
+            </CardContent>
+        </Card>
     );
 }

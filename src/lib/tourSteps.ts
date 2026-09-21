@@ -1,14 +1,14 @@
 // ─────────────────────────────────────────────────────────────
-// Guion del recorrido guiado de Mechanic Pro — UN solo tour con TODO
+// Guion del recorrido guiado de Mechanic Pro , UN solo tour con TODO
 // (pedido de Iara 3-ago: "quiero que estén todos los pasos ahí, más
 // interactivo: que avance cuando el mecánico selecciona lo que tiene
 // que seleccionar"). Tono FORMAL: reemplaza la reunión de capacitación.
 //
 // Dos tipos de paso:
-//  · informativos → botón «Siguiente».
+//  · informativos → botón "Siguiente".
 //  · interactivos (`avanza`) → la persona hace la acción REAL (apretar
-//    «Recibir Bici», elegir el cliente, cerrar la orden) y el tour
-//    avanza solo al detectarla. Siempre hay «Saltear paso» de escape.
+//    "Recibir Bici", elegir el cliente, cerrar la orden) y el tour
+//    avanza solo al detectarla. Siempre hay "Saltear paso" de escape.
 // Pasos `opcional` se saltean solos si su elemento no existe (feature
 // apagada, taller sin datos): nunca se rompe.
 // ─────────────────────────────────────────────────────────────
@@ -28,10 +28,10 @@ export interface PasoTour {
     /** Si el elemento no aparece, saltear el paso en vez de mostrarlo centrado. */
     opcional?: boolean;
     /**
-     * Paso INTERACTIVO: no hay botón «Siguiente» — la persona realiza la acción
+     * Paso INTERACTIVO: no hay botón "Siguiente" — la persona realiza la acción
      * real en la pantalla (el velo deja pasar los clics) y el tour avanza solo
      * cuando `aparece` un elemento data-tour o cuando `desaparece` uno que
-     * estaba (ej: se cerró el modal). Siempre queda el atajo «Saltear paso».
+     * estaba (ej: se cerró el modal). Siempre queda el atajo "Saltear paso".
      */
     avanza?: { aparece?: string; desaparece?: string };
     /** Velo pasante (clics libres) sin condición de avance — para pasos donde
@@ -50,9 +50,9 @@ const BIENVENIDA: PasoTour[] = [
     {
         id: 'bienvenida',
         ruta: '/',
-        titulo: 'Le damos la bienvenida a Mechanic Pro',
+        titulo: 'Bienvenido a Mechanic Pro',
         cuerpo:
-            'Su taller ya cuenta con un sistema de gestión profesional. Este recorrido le mostrará todo lo que puede hacer y, en varios pasos, lo hará usted mismo sobre la pantalla real. Puede repetirlo cuando lo desee desde Configuración → Preferencias.',
+            'Este recorrido te muestra todo el sistema, y en varios pasos lo vas a usar vos sobre la pantalla de verdad. Son unos minutos. Lo podés repetir cuando quieras desde Configuración, en Preferencias.',
         botonSiguiente: 'Comenzar recorrido',
     },
     {
@@ -60,33 +60,33 @@ const BIENVENIDA: PasoTour[] = [
         ruta: '/',
         selector: 'nav',
         selectorMobile: 'menu-mobile',
-        titulo: 'Su centro de operaciones',
+        titulo: 'Por dónde te vas a mover',
         cuerpo:
-            'Toda la aplicación se organiza en estas secciones: el trabajo del día, sus clientes, el historial, la retención, las métricas y la configuración. Las recorreremos en orden.',
+            'Todo está en estas secciones: el trabajo del día, tus clientes, el historial, la retención, los números y la configuración. Las vamos a ver en ese orden.',
     },
     {
         id: 'taller-activo',
         ruta: '/',
         selector: 'taller-activo',
-        titulo: 'Taller Activo: su mesa de trabajo',
+        titulo: 'Taller Activo: tu mesa de trabajo',
         cuerpo:
-            'Esta es la pantalla principal. Muestra, en tiempo real, todas las bicicletas que se encuentran dentro del taller y el estado de cada una. Al abrir la aplicación, siempre comenzará aquí.',
+            'Es la pantalla principal y donde vas a caer cada vez que entres. Muestra todas las bicis que están adentro del taller ahora y cómo viene cada una.',
     },
     {
         id: 'contadores',
         ruta: '/',
         selector: 'contadores',
-        titulo: 'El estado del taller, de un vistazo',
+        titulo: 'Cómo viene el día, de un vistazo',
         cuerpo:
-            'Cuántas bicicletas están en proceso y cuántas ya están listas para ser retiradas. Comience cada jornada sabiendo con exactitud qué hay pendiente.',
+            'Cuántas bicis están en proceso y cuántas ya están listas esperando que las vengan a buscar.',
     },
     {
         id: 'mesa-trabajo',
         ruta: '/',
         selector: 'mesa-trabajo',
-        titulo: 'Sus órdenes de trabajo',
+        titulo: 'Tus órdenes',
         cuerpo:
-            'Cada orden en curso vive aquí, y puede abrirse y editarse en cualquier momento con "Editar" (trabajos, precios, notas). Al abrirla también le escribe al cliente y ve todo lo que se habló por esa bici. Y si una orden quedó esperando una respuesta suya, la fila lo muestra: una bici frenada por el cliente deja de parecerse a una en la que se está trabajando.',
+            'Cada orden en curso vive acá y la podés abrir y editar cuando quieras: trabajos, precios, notas. Adentro también le escribís al cliente y ves todo lo que se habló por esa bici. Y si una orden quedó esperando que el cliente conteste, la fila te lo muestra: una bici frenada deja de parecerse a una en la que estás trabajando.',
     },
 
     // ═══ Recibir una bici, DE VERDAD (interactivo) ═══
@@ -95,27 +95,27 @@ const BIENVENIDA: PasoTour[] = [
         ruta: '/',
         selector: 'recibir-bici',
         avanza: { aparece: 'sm-cliente' },
-        titulo: 'Ahora, reciba una bicicleta',
+        titulo: 'Ahora recibí una bici',
         cuerpo:
-            'Así se registra cada ingreso al taller. Hágalo usted mismo: presione el botón iluminado "Recibir Bici". Si tiene las manos ocupadas, adentro puede DICTAR la orden hablando y el sistema la arma solo: el tipo de service, los repuestos y las tareas.',
+            'Así se carga cada ingreso. Hacelo vos: apretá el botón iluminado "Recibir Bici". Si tenés las manos ocupadas, adentro podés DICTAR la orden hablando y se arma sola: el tipo de service, los repuestos y las tareas.',
     },
     {
         id: 'sm-cliente',
         selector: 'sm-cliente',
         avanza: { aparece: 'sm-bici' },
         opcional: true,
-        titulo: 'Todo empieza por el cliente',
+        titulo: 'Primero, el cliente',
         cuerpo:
-            'Busque al cliente por nombre o teléfono y selecciónelo. Si es la primera vez que viene, créelo desde aquí mismo: se carga una sola vez y el sistema lo recuerda para siempre.',
+            'Buscalo por nombre o teléfono y elegilo. Si es la primera vez que viene, lo creás acá mismo: se carga una sola vez y queda para siempre.',
     },
     {
         id: 'sm-bici',
         selector: 'sm-bici',
         avanza: { aparece: 'service-tipo' },
         opcional: true,
-        titulo: 'La bicicleta que ingresa',
+        titulo: 'La bici que entra',
         cuerpo:
-            'Seleccione la bicicleta que entra al taller, o agréguela al garage si es nueva. Cada bicicleta lleva su propio historial y su propio estado de salud.',
+            'Elegí cuál de sus bicis entra al taller, o sumala al garage si es nueva. Cada bici lleva su propio historial y su propio estado.',
     },
     {
         id: 'service-tipo',
@@ -123,48 +123,48 @@ const BIENVENIDA: PasoTour[] = [
         opcional: true,
         titulo: 'El tipo de service',
         cuerpo:
-            'Su menú de services, con los precios de su catálogo: se elige uno y el precio base se carga solo. El menú se administra desde Configuración → Menú de Services.',
+            'Tu lista de services con tus precios: elegís uno y el precio base se carga solo. La lista la armás en Configuración, en Menú de Services.',
     },
     {
         id: 'service-items',
         selector: 'service-items',
         opcional: true,
-        titulo: 'Repuestos y trabajos adicionales',
+        titulo: 'Repuestos y trabajos extra',
         cuerpo:
-            'Con "+ Agregar" se suma cada repuesto (📦) o mano de obra (🛠️) con su precio. Al escribir, el buscador le sugiere lo que su taller ya usó antes con el precio de la última vez: cuanto más lo usa, menos tipea. Todo queda detallado en la orden y en el comprobante, y el total se calcula solo.',
+            'Con "+ Agregar" sumás cada repuesto o mano de obra con su precio. Al escribir, el buscador te sugiere lo que tu taller ya usó antes, con el precio de la última vez: cuanto más lo usás, menos tipeás. Todo queda detallado en la orden y en el comprobante.',
     },
     {
         id: 'service-carrera',
         selector: 'service-carrera',
         opcional: true,
-        titulo: '¿El cliente compite?',
+        titulo: 'Corre alguna carrera?',
         cuerpo:
-            'Si la bicicleta corre una carrera próximamente, asóciela a la orden: búsquela por nombre o créela con su fecha de evento. La orden queda vinculada a esa competencia.',
+            'Si la bici tiene una carrera cerca, atala a la orden: la buscás por nombre o la creás con su fecha. Después vas a saber qué bicis tenés con fecha encima.',
     },
     {
         id: 'service-diagnostico',
         selector: 'service-diagnostico',
         opcional: true,
-        titulo: 'Diagnóstico durante el trabajo',
+        titulo: 'Lo que ves mientras trabajás',
         cuerpo:
-            'Registre aquí lo que observe mientras trabaja: cada componente con su fecha de vencimiento se convierte en un aviso de mantenimiento en Retención.',
+            'Anotá acá lo que le encuentres: cada componente con su fecha de vencimiento se convierte solo en un aviso en Retención.',
     },
     {
         id: 'service-confirmar',
         selector: 'service-confirmar',
         avanza: { desaparece: 'service-confirmar' },
         opcional: true,
-        titulo: 'Cree la orden',
+        titulo: 'Creá la orden',
         cuerpo:
-            'Complete los datos que desee y presione "CONFIRMAR INGRESO" para crear la orden. Si prefiere no guardarla ahora, ciérrela con la X: el recorrido continúa igual.',
+            'Cargá lo que tengas y apretá "CONFIRMAR INGRESO". Si preferís no guardarla ahora, cerrala con la X: el recorrido sigue igual.',
     },
     {
         id: 'orden-creada',
         ruta: '/',
         libre: true,
-        titulo: 'La orden ya está en su mesa de trabajo',
+        titulo: 'La orden ya está en tu mesa',
         cuerpo:
-            'Cada orden sigue este ciclo: se trabaja, se presiona "Finalizar" cuando el trabajo terminó (queda "Lista para entregar"), y "Entregar" cuando el cliente la retira (pasa al Historial). Veamos el paso más importante: la finalización.',
+            'Cada orden hace este camino: se trabaja, apretás "Finalizar" cuando el trabajo terminó y queda lista para entregar, y "Entregar" cuando el cliente la retira, que la manda al Historial. Vamos al paso que más importa: la finalización.',
     },
 
     // ═══ Avisarle al cliente sin salir de la orden (8-sep-2026) ═══
@@ -177,9 +177,9 @@ const BIENVENIDA: PasoTour[] = [
         ruta: '/',
         selector: 'mesa-trabajo',
         avanza: { aparece: 'aviso-al-cliente' },
-        titulo: 'Abra la orden que acaba de cargar',
+        titulo: 'Abrí la orden que acabás de cargar',
         cuerpo:
-            'Presione sobre la fila de cualquier orden. Adentro está lo que se usa mientras la bici está en el banco: avisarle al cliente y ver todo lo que se habló con él.',
+            'Apretá sobre la fila de cualquier orden. Adentro está lo que se usa mientras la bici está en el banco: escribirle al cliente y ver todo lo que se habló con él. Y el botón para imprimir el ticket de ingreso, la hoja que se corta al medio: arriba lo que se lleva el cliente, abajo tu checklist.',
     },
     {
         id: 'aviso-al-cliente',
@@ -187,9 +187,9 @@ const BIENVENIDA: PasoTour[] = [
         opcional: true,
         libre: true,
         avanza: { desaparece: 'aviso-al-cliente' },
-        titulo: 'Avisarle al cliente, sin salir de la orden',
+        titulo: 'Escribirle sin salir de la orden',
         cuerpo:
-            'Abrió la bici y encontró algo que no estaba en la orden. Desde acá le escribe y el mensaje sale solo: elija "Preguntarle algo" si necesita un sí para seguir (la orden queda marcada como que espera respuesta, y si no le contestan le avisa que conviene llamarlo), o "Contarle cómo va" si solo quiere que sepa en qué anda su bici. Abajo queda el registro: lo que se le mandó, lo que contestó y las llamadas, con quién lo hizo y cuándo. Cierre la orden para continuar.',
+            'Abriste la bici y encontraste algo que no estaba en la orden. Desde acá le escribís: elegí "Preguntarle algo" si necesitás un sí para seguir (la orden queda marcada como que espera respuesta, y si no te contestan te avisa que conviene llamarlo) o "Contarle cómo va" si es solo para tenerlo al tanto. Y el teléfono lo tenés ahí arriba, con un botón para copiarlo.',
     },
 
     // ═══ Finalizar un service (interactivo) ═══
@@ -198,42 +198,42 @@ const BIENVENIDA: PasoTour[] = [
         ruta: '/',
         selector: 'mesa-trabajo',
         avanza: { aparece: 'finalizar-resumen' },
-        titulo: 'Abra la finalización de un service',
+        titulo: 'Abrí la finalización de un service',
         cuerpo:
-            'Presione el botón verde "Finalizar" de cualquier orden para conocer el cierre. Tranquilidad: no se guardará nada sin su confirmación.',
+            'Apretá el botón verde "Finalizar" de cualquier orden para ver cómo es el cierre. Tranquilo: no se guarda nada hasta que confirmes.',
     },
     {
         id: 'finalizar-resumen',
         selector: 'finalizar-resumen',
         opcional: true,
-        titulo: 'El resumen de costos',
+        titulo: 'El resumen de lo que se cobra',
         cuerpo:
-            'Verifique el detalle antes de cerrar: service base, adicionales y el total a cobrar, tal como lo verá el cliente. Si algo del presupuesto no cierra —un repuesto que se cargó sin mano de obra, un precio muy lejos del habitual— el sistema se lo marca acá, antes de cobrar y no después.',
+            'Mirá el detalle antes de cerrar: service base, adicionales y el total, tal cual lo va a ver el cliente. Si algo no cierra, un repuesto cargado sin la mano de obra o un precio lejos del habitual, te lo marca antes de cobrar.',
     },
     {
         id: 'finalizar-obs',
         selector: 'finalizar-obs',
         opcional: true,
-        titulo: 'Observaciones finales',
+        titulo: 'Las notas para el cliente',
         cuerpo:
-            'Las notas para el cliente sobre el trabajo realizado. Quedan guardadas en la orden y salen en el comprobante.',
+            'Lo que quieras contarle del trabajo. Queda en la orden y sale en el comprobante. Lo que es para adentro va en las notas internas, que el cliente no ve nunca.',
     },
     {
         id: 'finalizar-diagnostico',
         selector: 'finalizar-diagnostico',
         opcional: true,
-        titulo: 'El diagnóstico: su próxima venta',
+        titulo: 'Lo que va a necesitar más adelante',
         cuerpo:
-            'Registre los componentes que van a necesitar atención y su fecha estimada. Cada registro se convierte en un aviso del Motor de Retención: el taller contacta al cliente en el momento justo, antes que nadie. Acá mismo puede dejar programado "avisale en 30 días para que vuelva" para ESTA bici —usted sabe cuál se usa todos los días y cuál sale dos veces al mes— y, si lo tiene activado, elegir qué mecánico hizo el trabajo.',
+            'Anotá los componentes que van a pedir atención y para cuándo. Cada uno se convierte en un aviso en Retención, así lo llamás en el momento justo. Y acá mismo podés dejar programado un "avisale en tantos días".',
     },
     {
         id: 'finalizar-cerrar',
         selector: 'finalizar-boton',
         avanza: { desaparece: 'finalizar-resumen' },
         opcional: true,
-        titulo: 'Confirme… o vuelva sin cambios',
+        titulo: 'Confirmá, o volvé sin cambios',
         cuerpo:
-            'Si esta orden realmente está lista, confirme la finalización. Si solo estaba mirando, presione "Cancelar": el recorrido continúa igual.',
+            'Si la orden está lista de verdad, confirmá. Si solo estabas mirando, apretá "Cancelar": el recorrido sigue igual.',
     },
 
     // ═══ Clientes y la ficha (interactivo) ═══
@@ -243,17 +243,17 @@ const BIENVENIDA: PasoTour[] = [
         selector: 'clientes',
         seccion: 'Clientes',
         nav: 'nav-clientes',
-        titulo: 'Su cartera de clientes',
+        titulo: 'Tus clientes',
         cuerpo:
-            'Cada cliente queda registrado con sus bicicletas y todos sus services. Con "Nuevo Cliente" el alta es guiada: sus datos, su bicicleta y, si lo desea, su primer service en el mismo paso.',
+            'Cada uno queda con sus bicis y todos sus services. Con "Nuevo Cliente" el alta te va llevando: sus datos, su bici y, si querés, el primer service en el mismo paso.',
     },
     {
         id: 'buscador-clientes',
         ruta: '/clientes',
         selector: 'buscador-clientes',
-        titulo: 'Encuentre a cualquiera al instante',
+        titulo: 'Encontralo al toque',
         cuerpo:
-            'Escriba un nombre o un modelo de bicicleta y el sistema lo localiza de inmediato. Sin cuadernos ni planillas.',
+            'Escribí un nombre o un modelo de bici y aparece. También sirve para saber si ya lo tenés cargado antes de crearlo dos veces.',
     },
     {
         id: 'ficha-abrir',
@@ -261,9 +261,9 @@ const BIENVENIDA: PasoTour[] = [
         selector: 'clientes-grilla',
         avanza: { aparece: 'garage-header' },
         opcional: true,
-        titulo: 'Abra la ficha de un cliente',
+        titulo: 'Abrí la ficha de un cliente',
         cuerpo:
-            'Haga clic en cualquier cliente de la lista para abrir su perfil completo.',
+            'Apretá cualquier cliente de la lista para ver su perfil completo.',
     },
     {
         id: 'garage-bicis',
@@ -271,31 +271,31 @@ const BIENVENIDA: PasoTour[] = [
         opcional: true,
         titulo: 'El garage',
         cuerpo:
-            'Cada pestaña es una bicicleta del cliente; selecciónela para ver su información. Con "Nueva Bici" se agregan las que hagan falta: el historial de cada una se mantiene separado.',
+            'Cada solapa es una bici de ese cliente. Con "Nueva Bici" sumás las que hagan falta: el historial de cada una va por separado.',
     },
     {
         id: 'garage-iniciar',
         selector: 'garage-iniciar',
         opcional: true,
-        titulo: 'Iniciar un service desde aquí',
+        titulo: 'Arrancar un service desde acá',
         cuerpo:
-            'Con la bicicleta seleccionada, este botón crea una orden de trabajo directamente, sin volver a buscar al cliente.',
+            'Con la bici elegida, este botón crea la orden directo, sin volver a buscar al cliente.',
     },
     {
         id: 'garage-salud',
         selector: 'garage-salud',
         opcional: true,
-        titulo: 'Estado de salud y mantenimiento',
+        titulo: 'Cómo viene esa bici',
         cuerpo:
-            'Aquí viven los vencimientos de componentes registrados en los diagnósticos de cada service. Esta información alimenta el Motor de Retención y las alertas de la campana.',
+            'Acá están los vencimientos que fuiste anotando en los diagnósticos de cada service. Es lo que alimenta Retención y los avisos de la campana.',
     },
     {
         id: 'garage-historial',
         selector: 'garage-historial',
         opcional: true,
-        titulo: 'El historial de esta bicicleta',
+        titulo: 'Todo lo que le hiciste a esta bici',
         cuerpo:
-            'Todos los services realizados a esta bicicleta, con sus trabajos y precios. La memoria completa de la máquina, siempre disponible.',
+            'Cada service, con sus trabajos y sus precios. Cuando el cliente pregunta si eso ya se lo cambiaste, la respuesta está acá.',
     },
 
     // ═══ Historial ═══
@@ -305,17 +305,17 @@ const BIENVENIDA: PasoTour[] = [
         selector: 'historial',
         seccion: 'Historial',
         nav: 'nav-historial',
-        titulo: 'Historial: la memoria de su taller',
+        titulo: 'Historial: la memoria del taller',
         cuerpo:
-            'Todos los trabajos entregados quedan guardados de manera permanente: qué se hizo, cuándo y por cuánto. Ante cualquier consulta de un cliente, la respuesta está a un clic.',
+            'Todo lo entregado queda guardado: qué se hizo, cuándo y por cuánto. No se borra ni se pierde.',
     },
     {
         id: 'historial-buscador',
         ruta: '/history',
         selector: 'historial-buscador',
-        titulo: 'Búsqueda profesional',
+        titulo: 'Buscar en el historial',
         cuerpo:
-            'Filtre por tipo o marca de bicicleta, o busque por cliente, modelo o trabajo realizado (por ejemplo, "horquilla"). El historial completo responde en el momento.',
+            'Filtrá por tipo o marca de bici, o buscá por cliente, modelo o trabajo hecho, por ejemplo "horquilla".',
     },
 
     // ═══ Retención: el círculo se cierra ═══
@@ -325,61 +325,61 @@ const BIENVENIDA: PasoTour[] = [
         selector: 'retencion',
         seccion: 'Retención',
         nav: 'nav-retencion',
-        titulo: 'Motor de Retención: haga que vuelvan',
+        titulo: 'Retención: los que tienen que volver',
         cuerpo:
-            'Los diagnósticos que registró al finalizar cada service viven aquí: el sistema le anticipa qué componentes están por vencer y a qué clientes conviene contactar. Cada aviso es una oportunidad concreta de reventa.',
+            'Los diagnósticos que anotaste al cerrar cada service viven acá: el sistema te dice qué componentes están por vencer y a quién conviene llamar. Es la pantalla que te trae trabajo sin que salgas a buscarlo.',
     },
     {
         id: 'retencion-urgentes',
         selector: 'retencion-urgentes',
         opcional: true,
-        titulo: 'Atención inmediata',
+        titulo: 'Los de ahora',
         cuerpo:
-            'Componentes vencidos o que vencen hoy: a estos clientes conviene contactarlos primero.',
+            'Componentes vencidos o que vencen hoy: estos son los primeros que conviene contactar.',
     },
     {
         id: 'retencion-contactar',
         selector: 'retencion-contactar',
         opcional: true,
-        titulo: 'El mensaje, ya escrito',
+        titulo: 'El mensaje ya escrito',
         cuerpo:
-            'Con "Contactar por WhatsApp" se abre el chat con el mensaje preparado para ese cliente y su componente; con "Copiar Mensaje" lo lleva al canal que prefiera. Solo debe revisarlo y enviarlo.',
+            'Con "Contactar por WhatsApp" se abre el chat con el mensaje armado para ese cliente y ese componente. Con "Copiar Mensaje" lo llevás a donde quieras. Lo leés, lo cambiás si querés, y lo mandás.',
     },
     {
         id: 'retencion-proximos',
         selector: 'retencion-proximos',
         opcional: true,
-        titulo: 'Próximos vencimientos',
+        titulo: 'Lo que viene',
         cuerpo:
-            'Lo que vence en los próximos días, ordenado por urgencia: su agenda de reventa para anticiparse, también con el WhatsApp a un clic.',
+            'Lo que vence en los próximos días, ordenado por urgencia, también con el WhatsApp a un toque.',
     },
 
     // ═══ Lo que Retención ganó desde agosto ═══
     // El Motor ya estaba en el recorrido; estas tres pantallas no. La de retorno
-    // es la más importante de las tres —y quizá del producto—: es la única que
+    // es la mas importante de las tres, y quiza del producto: es la unica que
     // le muestra al taller un RESULTADO y no más trabajo por hacer.
     {
         id: 'retencion-retorno',
         ruta: '/reminders',
         selector: 'retencion-retorno',
         opcional: true,
-        titulo: 'Qué le trajeron sus mensajes',
+        titulo: 'Qué te trajeron tus mensajes',
         cuerpo:
-            'A cuántos les escribió, cuántos volvieron a traer la bici y cuánto facturó con esas vueltas, de los últimos 90 días. Va en dos partes: los mensajes que salieron del sistema y, aparte, los que usted escribió a mano desde su celular. Se cuenta la vuelta cuando el cliente volvió DESPUÉS del mensaje: algunos habrían vuelto igual, y el número no dice lo contrario.',
+            'A cuántos les escribiste, cuántos volvieron con la bici y cuánta plata entró por esas vueltas, en los últimos 90 días. Va en dos partes: los mensajes que salieron del sistema y, aparte, los que escribiste a mano desde tu celular.',
     },
     {
         id: 'retencion-bandeja',
         ruta: '/reminders',
-        titulo: 'Lo que le contestaron',
+        titulo: 'Lo que te contestaron',
         cuerpo:
-            'El recontacto no termina cuando el mensaje sale: termina cuando alguien contesta y le responden. En cuanto un cliente conteste, su mensaje va a aparecer en esta misma pantalla, con el tiempo que le queda para responderle por WhatsApp. Un cliente que pregunta "cuánto me sale?" y no recibe respuesta en el día es una venta perdida con aviso previo.',
+            'El recontacto no termina cuando sale el mensaje: termina cuando alguien contesta y le respondés. En cuanto un cliente conteste, va a aparecer en esta misma pantalla, con el tiempo que te queda para responderle por WhatsApp.',
     },
     {
         id: 'retencion-campanas',
         ruta: '/reminders',
-        titulo: 'Campañas: muchos mensajes, una sola aprobación',
+        titulo: 'Escribirle a un grupo entero',
         cuerpo:
-            'Cuando haga falta escribirle a un grupo entero —los que hace rato no vienen, los de una marca— acá mismo prepara la tanda y ve el texto EXACTO que le llega a cada persona, con su nombre y su bici. Nada sale hasta que usted lo aprueba.',
+            'Cuando quieras avisarle a muchos a la vez, los que hace rato no vienen, los de una marca, acá preparás la tanda y ves el texto EXACTO que le llega a cada uno, con su nombre y su bici. No sale nada hasta que lo aprobás.',
     },
 
     // ═══ Métricas, notificaciones y configuración ═══
@@ -389,18 +389,18 @@ const BIENVENIDA: PasoTour[] = [
         selector: 'metricas',
         seccion: 'Métricas',
         nav: 'nav-metricas',
-        titulo: 'Los números de su negocio',
+        titulo: 'Los números del taller',
         cuerpo:
-            'Facturación, mano de obra, repuestos y ticket promedio, en el período que usted elija. Decisiones basadas en datos reales, no en intuición.',
+            'Facturación, mano de obra, repuestos y ticket promedio, en el período que elijas.',
     },
     {
         id: 'notificaciones',
         ruta: '/metrics',
         selector: 'notificaciones',
         selectorMobile: 'notificaciones-mobile',
-        titulo: 'Centro de notificaciones',
+        titulo: 'La campana',
         cuerpo:
-            'Aquí recibirá avisos importantes y novedades del sistema. Cuando la campana muestre un indicador, hay información nueva esperándolo.',
+            'Acá te caen los avisos del sistema y las novedades. Cuando tiene un punto, hay algo nuevo.',
     },
     {
         id: 'configuracion',
@@ -408,18 +408,18 @@ const BIENVENIDA: PasoTour[] = [
         selector: 'configuracion',
         seccion: 'Configuración',
         nav: 'nav-config',
-        titulo: 'Un sistema con su marca',
+        titulo: 'El sistema con tu marca',
         cuerpo:
-            'Desde Configuración se administra su logo y sus colores —que se aplican a toda la aplicación y a la orden de trabajo—, su menú de services con precios propios y las preferencias de trabajo de su equipo.',
+            'En Configuración cargás tu logo y tus colores, que se aplican a toda la app y al comprobante, tu lista de services con tus precios, y cómo quiere trabajar tu equipo.',
     },
     {
         id: 'config-whatsapp',
         ruta: '/configuracion',
         selector: 'config-whatsapp',
         opcional: true,
-        titulo: 'Su propio número de WhatsApp',
+        titulo: 'Tu propio número de WhatsApp',
         cuerpo:
-            'Los avisos pueden salir del número que su taller ya usa, no de uno nuevo: el cliente ve el contacto que tiene agendado. Antes de conectarlo hay dos cosas que conviene saber, y las decimos ahora y no después: las listas de difusión dejan de funcionar en ese número, y WhatsApp Web se desvincula hasta que termine de sincronizar, que puede tardar 24 horas. Ese día el mostrador atiende desde el celular, que anda normal.',
+            'Los avisos pueden salir del número que tu taller ya usa, no de uno nuevo: el cliente ve el contacto que ya tiene agendado. Antes de conectarlo hay dos cosas que conviene que sepas, y te las decimos ahora y no después: las listas de difusión dejan de funcionar en ese número, y WhatsApp Web se desvincula hasta que termine de sincronizar, que puede tardar 24 horas. Ese día el mostrador atiende desde el celular, que anda normal.',
     },
     {
         id: 'config-automaticos',
@@ -428,7 +428,7 @@ const BIENVENIDA: PasoTour[] = [
         opcional: true,
         titulo: 'Los mensajes que salen solos',
         cuerpo:
-            'Acá decide qué se manda sin que nadie apriete un botón: el comprobante cuando termina el service, el aviso cuando el cliente retira la bici, o un seguimiento a los días para saber cómo la viene sintiendo. Elige quién los firma —el nombre de pila de quien atiende, que es lo que hace que le contesten— y su propia línea. Y si le falta un aviso que no está en la lista, lo escribe con sus palabras y se crea solo.',
+            'Acá decidís qué se manda sin que nadie apriete un botón: el comprobante cuando termina el service, el aviso cuando el cliente retira la bici, o un seguimiento a los días para saber cómo la viene sintiendo. Elegís quién los firma, el nombre de pila del que atiende, que es lo que hace que te contesten. Y si te falta un aviso que no está en la lista, lo escribís con tus palabras y se crea solo.',
     },
     // ═══ Las tres pantallas que el recorrido nunca abría ═══
     // Estaban en el menú desde hace semanas y el tour pasaba de largo: una
@@ -440,9 +440,9 @@ const BIENVENIDA: PasoTour[] = [
         seccion: 'Bicis paradas',
         nav: 'nav-paradas',
         opcional: true,
-        titulo: 'Las bicis que están frenadas',
+        titulo: 'Las bicis frenadas',
         cuerpo:
-            'Las que llevan demasiado tiempo en el taller y las que ya están listas y el cliente no vino a buscar. Es la lista que evita la conversación incómoda de "hace tres semanas que la tenés".',
+            'Las que llevan demasiado tiempo adentro y las que ya están listas y el cliente no vino a buscar. Es la lista que te evita el reclamo de las tres semanas.',
     },
     {
         id: 'preguntale',
@@ -450,9 +450,9 @@ const BIENVENIDA: PasoTour[] = [
         seccion: 'Preguntale',
         nav: 'nav-preguntale',
         opcional: true,
-        titulo: 'Preguntarle al sistema en castellano',
+        titulo: 'Preguntarle al sistema en criollo',
         cuerpo:
-            'Escriba lo que quiere saber como se lo preguntaría a un empleado: "cuántas Specialized atendimos este año", "a quién no veo hace seis meses". Contesta con los datos de SU taller, no con una opinión.',
+            'Escribí lo que querés saber como se lo preguntarías a un empleado: cuántas Specialized atendimos este año, a quién no veo hace seis meses. Te contesta con los datos de TU taller.',
     },
     {
         id: 'auditoria',
@@ -462,7 +462,7 @@ const BIENVENIDA: PasoTour[] = [
         opcional: true,
         titulo: 'Nada se borra para siempre',
         cuerpo:
-            'Todo lo que se elimina queda acá y se puede restaurar, con el registro de quién lo hizo y cuándo. Es la red que permite trabajar sin miedo a apretar el botón equivocado.',
+            'Todo lo que se elimina queda acá y se puede recuperar, con quién lo hizo y cuándo. Es la red para trabajar sin miedo a apretar el botón equivocado.',
     },
 
     {
@@ -470,9 +470,9 @@ const BIENVENIDA: PasoTour[] = [
         ruta: '/',
         seccion: 'Taller Activo',
         nav: 'nav-taller',
-        titulo: 'Está todo listo para comenzar',
+        titulo: 'Listo, ya está',
         cuerpo:
-            'Ya recorrió todo Mechanic Pro e incluso operó el sistema con sus propias manos. Le sugerimos continuar con lo que quedó pendiente del día. Recuerde: puede repetir este recorrido cuando lo desee desde Configuración → Preferencias.',
+            'Recorriste todo Mechanic Pro y además lo usaste con tus propias manos. Cualquier cosa que no te cierre, lo repetís desde Configuración, en Preferencias.',
         botonSiguiente: 'Finalizar',
     },
 ];

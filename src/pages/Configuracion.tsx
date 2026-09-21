@@ -184,7 +184,7 @@ export default function Configuracion() {
                 <TabsContent value="automaticos" className="mt-6 space-y-6">
                     <ComoEscribis taller={taller} setTaller={setTaller} avisar={avisar} />
                     {verWhatsApp && (
-                        <div data-ajuste="automaticos" className="rounded-lg">
+                        <div data-ajuste="automaticos" data-tour="config-automaticos" className="rounded-lg">
                             <MensajesAutomaticos taller={taller} avisar={avisar} />
                         </div>
                     )}

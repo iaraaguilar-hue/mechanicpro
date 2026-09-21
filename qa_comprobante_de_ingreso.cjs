@@ -14,6 +14,13 @@
  *   4. en el historial, con la bici ya entregada;
  *   y que al tocarlo baja un PDF de verdad (no solo que el botón esté dibujado).
  *
+ * 🔴 Y LO MIDE EN LOS DOS ANCHOS: compu (1440) y CELULAR (iPhone 13, 390 px). La primera
+ * versión de este candado corría solo en 1440 y daba verde mientras en el celular el botón
+ * no existía en ninguna parte: el Taller Activo en el celu no es la tabla, son tarjetas
+ * (`MobileJobCard`), y las tarjetas no lo tenían. Alejo avisó el 21-sep que desde el celular
+ * "no hace nada", y tenía razón otra vez. Un candado que mide en un solo ancho no mide la
+ * app: mide la mitad que el autor tenía abierta.
+ *
  * CONTROL NEGATIVO: apaga `config_ticket_ingreso.habilitado` del Taller Demo y exige que el
  * botón NO esté en ninguno de los cuatro lugares. Si con el ajuste apagado siguiera apareciendo,
  * este candado no estaría mirando el botón que cree. El ajuste se restaura en un `finally`.
@@ -28,7 +35,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { chromium } = require('/Users/iaraaguilar/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core');
+const { chromium, devices } = require('/Users/iaraaguilar/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core');
 
 const EXEC = process.env.PW_CHROME
     || '/Users/iaraaguilar/Library/Caches/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell';
@@ -51,16 +58,23 @@ const mal = (t) => { console.log('  ❌ ' + t); fallos.push(t); };
 // atrás del diálogo con su botón en cada fila, así que un conteo global daba 24 y habría
 // dado verde con la pantalla de "listo" vacía. Una medición que no puede fallar no mide.
 const cuantosVisibles = (page, etiqueta, dentroDe) => page.evaluate(([et, cont]) => {
-    const raiz = cont ? document.querySelector(cont) : document;
-    if (!raiz) return 0;
-    return [...raiz.querySelectorAll(`[aria-label="${et}"]`)]
-        .filter(el => el.checkVisibility({ contentVisibilityAuto: true, opacityProperty: true, visibilityProperty: true }))
-        .length;
+    const vis = (el) => el.checkVisibility({ contentVisibilityAuto: true, opacityProperty: true, visibilityProperty: true });
+    // 🔴 El contenedor del momento puede estar DOS VECES en el DOM: la app dibuja la tabla
+    // (compu) y las tarjetas (celular) a la vez y esconde una con `hidden md:block`. Un
+    // `querySelector` agarraba la primera —la escondida— y contaba 0 con el botón en
+    // pantalla, o al revés: contaba los 22 de la tabla oculta con el celular vacío.
+    // Se toman TODOS los contenedores que existan y se cuentan solo los visibles.
+    const raices = cont ? [...document.querySelectorAll(cont)].filter(vis) : [document.body];
+    const encontrados = new Set();
+    for (const r of raices) for (const el of r.querySelectorAll(`[aria-label="${et}"]`)) if (vis(el)) encontrados.add(el);
+    return encontrados.size;
 }, [etiqueta, dentroDe || null]);
 
-async function entrar() {
+async function entrar(celu = false) {
     const b = await chromium.launch({ executablePath: EXEC });
-    const ctx = await b.newContext({ viewport: { width: 1440, height: 1000 }, acceptDownloads: true });
+    const ctx = await b.newContext(celu
+        ? { ...devices['iPhone 13'], isMobile: true, hasTouch: true, acceptDownloads: true }
+        : { viewport: { width: 1440, height: 1000 }, acceptDownloads: true });
     const page = await ctx.newPage();
     page.on('console', m => { if (m.type() === 'error') console.log('    [consola] ' + m.text().slice(0, 200)); });
     page.on('pageerror', e => console.log('    [pageerror] ' + String(e).slice(0, 200)));
@@ -80,12 +94,19 @@ async function entrar() {
 }
 
 const irA = async (page, nombre) => {
-    await page.locator('nav a, aside a').filter({ hasText: nombre }).first().click({ force: true });
+    // En el celular el menú lateral está plegado: hay que abrirlo antes.
+    let link = page.locator('nav a, aside a').filter({ hasText: nombre }).first();
+    if (!(await link.isVisible().catch(() => false))) {
+        const burger = page.locator('header button, [aria-label*="menu" i], [aria-label*="Menú" i]').first();
+        if (await burger.count()) { await burger.click({ force: true }); await page.waitForTimeout(1000); }
+        link = page.locator('nav a, aside a').filter({ hasText: nombre }).first();
+    }
+    await link.click({ force: true });
     await page.waitForTimeout(3000);
 };
 
 // Los cuatro lugares. Devuelve {lugar: visibles}.
-async function recorrer(page, { conDescarga }) {
+async function recorrer(page, { conDescarga, celu = false }) {
     const visto = {};
 
     // ── 1. Alta: "Recibir Bici" → cliente → bici → CONFIRMAR INGRESO → pantalla de listo.
@@ -121,21 +142,35 @@ async function recorrer(page, { conDescarga }) {
     await page.keyboard.press('Escape');
     await page.waitForTimeout(1500);
 
-    // ── 2. La fila del Taller Activo, sin abrir nada.
+    // ── 2. El Taller Activo, sin abrir nada.
+    //    🔴 En compu es una TABLA y en el celular son TARJETAS: son dos componentes
+    //    distintos (`JobRow` y `MobileJobCard`) y el botón hay que ponerlo en los dos.
+    //    Por eso se cuenta dentro del contenedor de la mesa de trabajo que esté VISIBLE,
+    //    no dentro de `tbody`, que en el celular existe pero está escondido.
     await irA(page, 'Taller Activo');
-    visto['en la fila'] = await cuantosVisibles(page, ETIQUETA, 'tbody');
+    visto['en la fila'] = await cuantosVisibles(page, ETIQUETA, '[data-tour="mesa-trabajo"]');
 
     // ── 3. Adentro de la orden abierta (lo que promete el tutorial).
-    await page.locator('tbody tr').first().click();
+    if (celu) {
+        await page.locator('[data-tour="mesa-trabajo"]:visible h3').first().click({ force: true });
+    } else {
+        await page.locator('tbody tr').first().click();
+    }
     await page.waitForTimeout(3800);
     visto['adentro de la orden'] = await cuantosVisibles(page, ETIQUETA, 'div[role=dialog]');
     await page.keyboard.press('Escape');
     await page.waitForTimeout(1500);
 
-    // ── 4. El historial, con la bici ya entregada.
+    // ── 4. El historial, con la bici ya entregada. El detalle se despliega: en compu
+    //    tocando la fila, en el celular con el chevron de la tarjeta.
     await irA(page, 'Historial');
-    const verDetalle = page.locator('tbody tr').first();
-    if (await verDetalle.count()) { await verDetalle.click(); await page.waitForTimeout(3000); }
+    if (celu) {
+        const chevron = page.locator('[aria-label="Expandir"]').first();
+        if (await chevron.count()) { await chevron.click({ force: true }); await page.waitForTimeout(3000); }
+    } else {
+        const verDetalle = page.locator('tbody tr').first();
+        if (await verDetalle.count()) { await verDetalle.click(); await page.waitForTimeout(3000); }
+    }
     visto['en el historial'] = await cuantosVisibles(page, ETIQUETA);
     await page.keyboard.press('Escape');
     await page.waitForTimeout(1200);
@@ -150,41 +185,48 @@ async function recorrer(page, { conDescarga }) {
     const idsAntes = new Set(antes.map(s => s.id));
     console.log(`el Demo tiene ${idsAntes.size} services antes de empezar\n`);
 
+    const LUGARES = ['al confirmar el ingreso', 'en la fila', 'adentro de la orden', 'en el historial'];
     let creados = [];
     try {
-        console.log('── CON el ajuste prendido: el botón tiene que estar en los 4 lugares');
-        let { b, page } = await entrar();
-        const visto = await recorrer(page, { conDescarga: true });
-        await b.close();
+        // Los DOS anchos: el mecánico recibe la bici con el teléfono en la mano.
+        for (const { nombre, celu } of [{ nombre: 'COMPU (1440)', celu: false }, { nombre: 'CELULAR (iPhone 13, 390)', celu: true }]) {
+            console.log(`── ${nombre} · con el ajuste prendido: el botón tiene que estar en los 4 lugares`);
+            const { b, page } = await entrar(celu);
+            const visto = await recorrer(page, { conDescarga: true, celu });
+            await b.close();
 
-        for (const lugar of ['al confirmar el ingreso', 'en la fila', 'adentro de la orden', 'en el historial']) {
-            if (visto[lugar] > 0) ok(`${lugar}  (${visto[lugar]} botón/es)`);
-            else mal(`${lugar}: NO está el botón`);
+            for (const lugar of LUGARES) {
+                if (visto[lugar] > 0) ok(`${nombre} · ${lugar}  (${visto[lugar]} botón/es)`);
+                else mal(`${nombre} · ${lugar}: NO está el botón`);
+            }
+            if (/ingreso/i.test(visto._archivo || '')) ok(`${nombre} · baja el PDF de verdad: "${visto._archivo}"`);
+            else mal(`${nombre} · el clic no bajó un PDF de ingreso (bajó: ${visto._archivo || 'nada'})`);
+
+            // Los títulos del PDF van con letter-spacing: pdftotext los devuelve como
+            // "C H E C K L I S T D E L TA L L E R". Se compara sin espacios.
+            const txt = visto._texto || '';
+            const pegado = txt.replace(/\s+/g, '').toLowerCase();
+            if (pegado.includes('comprobantedeingreso')) ok(`${nombre} · el PDF es el comprobante de ingreso`);
+            else mal(`${nombre} · el PDF no dice "Comprobante de ingreso"`);
+            // Todos los services del catálogo del Demo empiezan por el lavado: si el checklist
+            // salió vacío, esta palabra no está.
+            if (/lavado/i.test(txt)) ok(`${nombre} · trae el checklist del service del catálogo`);
+            else mal(`${nombre} · el PDF salió SIN el checklist del catálogo (descripcion_catalogo perdida)`);
+            if (pegado.includes('checklistdeltaller')) ok(`${nombre} · trae la mitad de abajo, la del taller`);
+            else mal(`${nombre} · no aparece la mitad del taller`);
+            console.log('');
         }
-        if (/ingreso/i.test(visto._archivo || '')) ok(`baja el PDF de verdad: "${visto._archivo}"`);
-        else mal(`el clic no bajó un PDF de ingreso (bajó: ${visto._archivo || 'nada'})`);
-
-        // Los títulos del PDF van con letter-spacing: pdftotext los devuelve como
-        // "C H E C K L I S T D E L TA L L E R". Se compara sin espacios.
-        const txt = visto._texto || '';
-        const pegado = txt.replace(/\s+/g, '').toLowerCase();
-        if (pegado.includes('comprobantedeingreso')) ok('el PDF es el comprobante de ingreso');
-        else mal('el PDF no dice "Comprobante de ingreso"');
-        // Todos los services del catálogo del Demo empiezan por el lavado: si el checklist
-        // salió vacío, esta palabra no está.
-        if (/lavado/i.test(txt)) ok('trae el checklist del service del catálogo');
-        else mal('el PDF salió SIN el checklist del catálogo (descripcion_catalogo perdida)');
-        if (pegado.includes('checklistdeltaller')) ok('trae la mitad de abajo, la del taller');
-        else mal('no aparece la mitad del taller');
 
         // ── CONTROL NEGATIVO ─────────────────────────────────────────────
-        console.log('\n── CONTROL NEGATIVO: con el ajuste APAGADO no tiene que estar en ninguno');
+        // Va en el celular: es el ancho donde el botón acaba de nacer, y es donde un
+        // conteo mal hecho tiene de dónde agarrar botones de la tabla escondida.
+        console.log('── CONTROL NEGATIVO (en el celular): con el ajuste APAGADO no tiene que estar en ninguno');
         await api(`talleres?id=eq.${DEMO}`, {
             method: 'PATCH',
             body: JSON.stringify({ config_ticket_ingreso: { habilitado: false, notas_internas: true } }),
         });
-        ({ b, page } = await entrar());
-        const apagado = await recorrer(page, { conDescarga: false });
+        const { b, page } = await entrar(true);
+        const apagado = await recorrer(page, { conDescarga: false, celu: true });
         await b.close();
         const asomados = Object.entries(apagado).filter(([k, v]) => !k.startsWith('_') && v > 0);
         if (asomados.length === 0) ok('con el ajuste apagado el botón no aparece en ningún lado');

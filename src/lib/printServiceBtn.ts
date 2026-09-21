@@ -6,6 +6,7 @@ import { cleanItemName } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
 import { getBase64ImageFromUrl } from '@/lib/pdfGenerator';
 import { instanteARLargo, entregaMostrable } from '@/lib/fechaAR';
+import { entregarArchivo } from '@/lib/entregarArchivo';
 import { notasParaElCliente } from '@/lib/notasServicio';
 import { nombreArchivoComprobante } from '@/lib/nombreArchivoComprobante';
 
@@ -159,20 +160,12 @@ export const printServiceReport = async (
     asPdf.updateContainer(doc);
     const blob = await asPdf.toBlob();
 
-    // Descarga local temporal
+    // Se le deja en la mano al que apretó: en la compu baja a Descargas y en el teléfono
+    // se abre la hoja de compartir (imprimir, guardar, mandárselo al cliente). Un
+    // `<a download>` a secas no muestra nada en un celular — ver `lib/entregarArchivo.ts`.
     if (shouldDownload) {
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${printFileName}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      
-      // Limpieza
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 100);
+      const entrega = await entregarArchivo(blob, `${printFileName}.pdf`);
+      setTimeout(() => URL.revokeObjectURL(entrega.url), 8000);
     }
 
     // Preparado para enviar por n8n: se retorna el blob

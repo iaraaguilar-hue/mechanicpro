@@ -637,18 +637,30 @@ function MobileJobCard({ job, onClick, onFinalize, onDeliver, onReopen }: { job:
                 ojos y el aviso de vuelta: los tres viven en el modal de finalizar. Es
                 el mismo botón y el mismo modal que en escritorio. */}
             {!isReady && (
-                <div className="mt-3">
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                     <button
                         onClick={(e) => { e.stopPropagation(); onFinalize(); }}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-white bg-green-600 hover:bg-green-700 active:bg-green-700 rounded-lg transition-colors"
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-white bg-green-600 hover:bg-green-700 active:bg-green-700 rounded-lg transition-colors"
                         title="El mecánico terminó el trabajo"
                     >
                         <CheckCircle size={16} /> Finalizar Service
                     </button>
+                    {/* 🔴 EL COMPROBANTE DE INGRESO FALTABA EN EL CELULAR (Alejo, 21-sep-2026:
+                        "desde el celu no hace nada"). El botón se había puesto en la FILA de la
+                        tabla, que en el teléfono no se dibuja: el Taller Activo son estas
+                        tarjetas. Existía en el DOM, medía 0 px y no se podía tocar. Es el mismo
+                        botón que en la tabla, y acá es donde más falta hace: el mecánico recibe
+                        la bici con el teléfono en la mano. */}
+                    <BotonTicketIngreso
+                        servicioId={job.service_id}
+                        variant="outline"
+                        soloIcono
+                        className="h-11 w-11 flex-shrink-0 border-slate-300 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    />
                 </div>
             )}
             {isReady && (
-                <div className="flex gap-2 mt-3">
+                <div className="flex flex-wrap gap-2 mt-3">
                     <button
                         onClick={(e) => { e.stopPropagation(); onReopen(); }}
                         className="flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-semibold text-slate-600 border border-slate-300 hover:bg-slate-100 active:bg-slate-100 rounded-lg transition-colors"
@@ -656,6 +668,12 @@ function MobileJobCard({ job, onClick, onFinalize, onDeliver, onReopen }: { job:
                     >
                         <Undo2 size={15} /> Reabrir
                     </button>
+                    <BotonTicketIngreso
+                        servicioId={job.service_id}
+                        variant="outline"
+                        soloIcono
+                        className="h-11 w-11 flex-shrink-0 border-slate-300 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    />
                     <button
                         onClick={(e) => { e.stopPropagation(); onDeliver(); }}
                         className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 active:bg-slate-800 rounded-lg transition-colors"

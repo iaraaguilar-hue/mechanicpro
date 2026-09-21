@@ -16,12 +16,18 @@ import { configTicketIngreso } from '@/lib/ticketIngreso';
  * Arriba va el comprobante del cliente y abajo el checklist del taller. Ver el porqué de cada
  * mitad en `components/TicketIngresoPDF.tsx`.
  */
+/**
+ * Genera la hoja y la devuelve. NO la entrega: entregar un archivo es otra cosa y depende
+ * de si estamos en una compu o en un teléfono (`lib/entregarArchivo.ts`). Separarlas es lo
+ * que permite que la pantalla muestre qué pasó —compartido, descargado, o "tocá acá para
+ * abrirlo"— en vez de suponer que el archivo llegó.
+ */
 export const printTicketIngreso = async (
     job: any,
     clientName = 'Cliente',
     bikeModel = 'Bicicleta',
     clientPhone = '',
-): Promise<Blob | undefined> => {
+): Promise<{ blob: Blob; nombre: string } | undefined> => {
     if (!job) return;
 
     const taller = useAuthStore.getState().taller;
@@ -99,13 +105,5 @@ export const printTicketIngreso = async (
         cliente: clientName,
     }).replace(/\.pdf$/i, '');
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${nombre} - Ingreso.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
-
-    return blob;
+    return { blob, nombre: `${nombre} - Ingreso.pdf` };
 };

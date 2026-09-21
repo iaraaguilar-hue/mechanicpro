@@ -1093,8 +1093,8 @@ function TabPreferencias({ taller, setTaller, avisar }: {
             if (error) throw error;
             setTaller({ ...taller, config_ticket_ingreso: nuevo as any });
             avisar('ok', nuevo.habilitado
-                ? 'Listo. El boton "Ticket de ingreso" esta en cada orden.'
-                : 'Apagado. El boton sale de la orden.');
+                ? 'Listo. El boton "Comprobante de ingreso" esta al confirmar el ingreso, en la fila y adentro de la orden.'
+                : 'Apagado. El boton sale de todos lados.');
         } catch (e: any) {
             setTicketHab(antes.habilitado);
             setTicketNotas(antes.notas_internas);
@@ -1433,7 +1433,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                 <FilaAjuste
                     id="ticket_ingreso"
                     icono={Printer}
-                    titulo="Ticket de ingreso"
+                    titulo="Comprobante de ingreso"
                     resumen="Una A4 que se corta al medio."
                     control={
                         <Switch

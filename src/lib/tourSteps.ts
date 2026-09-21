@@ -179,7 +179,7 @@ const BIENVENIDA: PasoTour[] = [
         avanza: { aparece: 'aviso-al-cliente' },
         titulo: 'Abrí la orden que acabás de cargar',
         cuerpo:
-            'Apretá sobre la fila de cualquier orden. Adentro está lo que se usa mientras la bici está en el banco: escribirle al cliente y ver todo lo que se habló con él. Y el botón para imprimir el ticket de ingreso, la hoja que se corta al medio: arriba lo que se lleva el cliente, abajo tu checklist.',
+            'Apretá sobre la fila de cualquier orden. Adentro está lo que se usa mientras la bici está en el banco: escribirle al cliente y ver todo lo que se habló con él. Y abajo, el botón del comprobante de ingreso: la hoja A4 que se corta al medio, arriba lo que se lleva el cliente y abajo tu checklist.',
     },
     {
         id: 'aviso-al-cliente',

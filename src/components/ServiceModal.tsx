@@ -7,6 +7,7 @@ import { diaParaInput, horaCorta } from "@/lib/fechaAR";
 import { estadoDeEspera } from "@/lib/avisoDeLaOrden";
 import { ETIQUETAS_NOTAS } from "@/lib/notasServicio";
 import { SuccessModal } from "@/components/SuccessModal";
+import { BotonTicketIngreso } from "@/components/BotonTicketIngreso";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -430,6 +431,9 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
     const [extraItems, setExtraItems] = useState<{ id: string, description: string, price: number, category?: 'part' | 'labor' }[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [successMessage, setSuccessMessage] = useState<string | null>(null);
+    // La orden que se acaba de guardar, para ofrecer el comprobante de ingreso ahí
+    // mismo: es el momento en que el cliente está enfrente (Alejo, 21-sep-2026).
+    const [servicioGuardado, setServicioGuardado] = useState<string | null>(null);
     const [fechaEntrega, setFechaEntrega] = useState("");
     // La hora estimada va en el mismo renglón que la fecha (14-sep-2026).
     const [horaEntrega, setHoraEntrega] = useState("");
@@ -648,6 +652,11 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
         if (!taller_id) return alert("Error: sin taller_id");
         setIsSaving(true);
         try {
+            // Lo que incluye el service según el catálogo: no es una columna de `servicios`
+            // (la inyecta el fetch), pero viaja con el guardado para que la fila que queda
+            // en memoria pueda imprimir el comprobante de ingreso sin esperar un refetch.
+            const descripcionCatalogo = catalogoServicios.find(c => c.nombre === serviceType)?.descripcion ?? null;
+
             // Build Supabase-shaped items_extra
             const supabaseItems = extraItems.map(i => ({
                 id: i.id,
@@ -660,6 +669,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                 // UPDATE
                 await updateServicio(serviceId, {
                     tipo_servicio: serviceType,
+                    descripcion_catalogo: descripcionCatalogo,
                     notas_mecanico: notes,
                     notas_internas: notasInternas,
                     precio_base: basePrice,
@@ -689,6 +699,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                         estado: 'Pendiente',
                     })));
                 }
+                setServicioGuardado(serviceId);
                 setSuccessMessage(`Servicio actualizado correctamente.`);
             } else {
                 // CREATE
@@ -696,6 +707,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                     taller_id,
                     bicicleta_id: bike?.id || "",
                     tipo_servicio: serviceType,
+                    descripcion_catalogo: descripcionCatalogo,
                     estado: "in_progress",
                     fecha_ingreso: new Date().toISOString(),
                     notas_mecanico: notes,
@@ -710,6 +722,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                     tareas_extra: tareasExtra,
                     pieza: pieza.trim() || null,
                 });
+                setServicioGuardado(created.id);
                 setSuccessMessage(`Servicio ${formatOrdenNumber(created.numero_orden, created.id)} creado con éxito.`);
             }
         } catch (e: any) {
@@ -724,8 +737,16 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
             <div className="w-full h-full flex items-center justify-center p-4">
                 <SuccessModal
                     message={successMessage}
+                    /* El comprobante de ingreso, acá: es el segundo en que la bici
+                       queda cargada y el cliente sigue en el mostrador esperando su
+                       papel. Antes había que cerrar esto, buscar la orden y abrir el
+                       diálogo de finalizar para encontrar el botón. */
+                    extra={servicioGuardado
+                        ? <BotonTicketIngreso servicioId={servicioGuardado} className="w-full h-11" />
+                        : null}
                     onClose={() => {
                         setSuccessMessage(null);
+                        setServicioGuardado(null);
                         setNotes("");
                         setNotasInternas("");
                         setBasePrice(0);
@@ -1154,9 +1175,16 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
 
             {/* Footer. En la pestaña de mensajes no va: ahí cada mensaje se manda con su botón. */}
             <div data-tour="service-confirmar" className={`px-6 py-4 border-t bg-muted/10 z-10 ${pestana === 'mensajes' ? 'hidden' : ''}`}>
-                <Button size="lg" className="w-full text-lg h-12 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmit} disabled={isSaving}>
-                    {isSaving ? "Guardando..." : (serviceId ? "GUARDAR CAMBIOS" : "CONFIRMAR INGRESO")}
-                </Button>
+                <div className="flex flex-col-reverse sm:flex-row gap-2">
+                    {/* Reimprimir el comprobante en cualquier momento del service: es el
+                        botón que el tutorial decía que estaba acá adentro y no estaba
+                        (vivía solo en el diálogo de finalizar). En una orden nueva todavía
+                        no hay nada que imprimir: sale recién al confirmar el ingreso. */}
+                    {serviceId && <BotonTicketIngreso servicioId={serviceId} className="h-12 sm:w-auto" />}
+                    <Button size="lg" className="flex-1 text-lg h-12 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleSubmit} disabled={isSaving}>
+                        {isSaving ? "Guardando..." : (serviceId ? "GUARDAR CAMBIOS" : "CONFIRMAR INGRESO")}
+                    </Button>
+                </div>
             </div>
         </DialogContent>
     );

@@ -56,7 +56,7 @@ export const AJUSTES: Ajuste[] = [
     { id: 'plantillas', titulo: 'Armar un mensaje nuevo (plantilla)', tab: 'automaticos', palabras: 'plantilla plantillas mensaje nuevo crear armar meta aprobar texto', requiere: 'mensajes_automaticos' },
     { id: 'checklist', titulo: 'Checklist de trabajos', tab: 'preferencias', palabras: 'checklist tildar trabajos avances etapas lista de trabajos' },
     { id: 'tareas', titulo: 'Tareas del service y candado de finalización', tab: 'preferencias', palabras: 'tareas candado bloquear finalizar pendientes olvidarse anotar' },
-    { id: 'ticket_ingreso', titulo: 'Ticket de ingreso', tab: 'preferencias', palabras: 'ticket ingreso imprimir papel comprobante recibo a4 cortar al medio checklist del mecanico constancia cuando entra la bici notas internas impresas' },
+    { id: 'ticket_ingreso', titulo: 'Comprobante de ingreso', tab: 'preferencias', palabras: 'ticket ingreso imprimir papel comprobante recibo a4 cortar al medio checklist del mecanico constancia cuando entra la bici notas internas impresas' },
     { id: 'mecanico', titulo: 'Quién firma cada service', tab: 'preferencias', palabras: 'mecanico mecanicos empleado empleados quien hizo quien firma firmar firmo nombres gente del taller comision equipo metricas por persona' },
     { id: 'diagnostico', titulo: 'Registro del diagnóstico', tab: 'preferencias', palabras: 'diagnostico health check mantenimiento vencimientos componentes durante al finalizar' },
     { id: 'componentes', titulo: 'Componentes del diagnóstico y sus plazos', tab: 'preferencias', palabras: 'componentes diagnostico plazos meses sugerido cadena drop tija telescopica brain horquilla agregar sacar lista health check' },

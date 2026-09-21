@@ -23,6 +23,7 @@ import {
 import { Search, FilterX, ChevronUp, ChevronDown, FileText, Pencil, Trash2, Eye, ClipboardList, Calendar as CalendarIcon, Wrench, Package, Info, Tag, MessageCircle, Lock } from "lucide-react";
 import { printServiceReport } from '@/lib/printServiceBtn';
 import { ServiceModal } from '@/components/ServiceModal';
+import { BotonTicketIngreso } from '@/components/BotonTicketIngreso';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { es } from "date-fns/locale";
 import { instanteAR, instanteARConHora, entregaMostrable } from '@/lib/fechaAR';
@@ -837,10 +838,15 @@ function ExpandedServiceDetail({ job }: { job: any }) {
                     <ClipboardList className="w-5 h-5" />
                     Detalle del Service {formatOrdenNumber(job.numero_orden, job.id)} <span className="text-gray-500 font-normal text-sm ml-2">| {job.bikeModel}</span>
                 </h2>
-                <Button onClick={() => printServiceReport(job.rawJob, job.clientName, job.bikeModel, job.clientDni, job.clientPhone)} className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                    <FileText className="w-4 h-4 mr-2" />
-                    Imprimir Comprobante
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                    {/* El de INGRESO también después de entregada: el cliente que vuelve
+                        pidiendo su papel (Alejo, 11 a Fondo, 21-sep-2026). */}
+                    <BotonTicketIngreso servicioId={job.id} etiqueta="Comprobante de ingreso" />
+                    <Button onClick={() => printServiceReport(job.rawJob, job.clientName, job.bikeModel, job.clientDni, job.clientPhone)} className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+                        <FileText className="w-4 h-4 mr-2" />
+                        Comprobante del service
+                    </Button>
+                </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 w-full">

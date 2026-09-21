@@ -6,14 +6,13 @@ import { useAuthStore } from "@/store/authStore";
 import { supabase } from "@/lib/supabase";
 import { formatOrdenNumber, ordenNumberForWebhook } from "@/lib/formatId";
 import { printServiceReport } from "@/lib/printServiceBtn";
-import { printTicketIngreso } from "@/lib/printTicketIngreso";
+import { BotonTicketIngreso } from "@/components/BotonTicketIngreso";
 import { TelefonoCopiable } from "@/components/TelefonoCopiable";
-import { configTicketIngreso } from "@/lib/ticketIngreso";
 import { dispararMensajesAutomaticos } from "@/lib/comprobanteALaNube";
 import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign, PackageSearch, Phone, Bike, Send, Printer } from "lucide-react";
+import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign, PackageSearch, Phone, Bike, Send } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { servicioRevenue } from "@/lib/servicioRevenue";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -933,6 +932,14 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                         >
                             <Pencil className="h-4 w-4" />
                         </Button>
+                        {/* Reimprimir el comprobante de ingreso sin abrir nada, en cualquier
+                            momento del service (Alejo, 11 a Fondo, 21-sep-2026). */}
+                        <BotonTicketIngreso
+                            servicioId={job.service_id}
+                            variant="ghost"
+                            soloIcono
+                            className="h-8 w-8 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                        />
                         {job.status !== 'delivered' && (
                             <>
                                 {/* Solo cuando la bici YA está lista: el botón dice "avisar que
@@ -1472,20 +1479,6 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
         }
     };
 
-    const handleTicketIngreso = () => {
-        if (!service || !bike || !client) return;
-        try {
-            printTicketIngreso(
-                service,
-                client.nombre,
-                `${bike.marca ?? ''} ${bike.modelo ?? ''}`.trim(),
-                client.telefono || '',
-            );
-        } catch (e) {
-            console.error('Error generando el ticket de ingreso:', e);
-        }
-    };
-
     const handleDownloadPDF = () => {
         if (!service || !bike || !client) return;
         try {
@@ -1667,16 +1660,13 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
 
                 <DialogFooter data-tour="finalizar-boton" className="gap-2 sm:gap-0">
                     <Button variant="outline" onClick={onClose}>Cancelar</Button>
-                    {/* El ticket A4 que se corta al medio (Alejo, 11 a Fondo): arriba el
-                        comprobante del cliente, abajo el checklist del taller. Va en cualquier
-                        momento, no solo al finalizar: se imprime cuando la bici entra, y no
-                        reemplaza al comprobante, que sale igual al entregar.
-                        Se prende en Configuración → En cada orden → Ticket de ingreso. */}
-                    {configTicketIngreso(taller).habilitado && (
-                        <Button variant="outline" onClick={handleTicketIngreso}>
-                            <Printer className="mr-2 h-4 w-4" /> Ticket de ingreso
-                        </Button>
-                    )}
+                    {/* La A4 que se corta al medio (Alejo, 11 a Fondo): arriba el comprobante
+                        del cliente, abajo el checklist del taller. No reemplaza al comprobante
+                        del service, que sale igual al entregar. Este era el ÚNICO lugar donde
+                        estaba el botón —y este diálogo se abre para CERRAR la orden, no para
+                        recibir la bici—: desde el 21-sep está también al confirmar el ingreso,
+                        en la fila, adentro de la orden y en el historial. */}
+                    <BotonTicketIngreso servicioId={job.service_id} />
                     {isCompleted ? (
                         <>
                             <Button variant="secondary" onClick={handleDownloadPDF}>

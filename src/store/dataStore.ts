@@ -696,7 +696,11 @@ export const useDataStore = create<DataState>((set, get) => ({
     // ═════════════════════════════════════════════════════════
     createServicio: async (data) => {
         // Step 0: Separate items from service payload
-        const { items_extra, ...serviceData } = data as any;
+        // 🔴 `descripcion_catalogo` NO es una columna: la inyecta el fetch cruzando
+        // `tipo_servicio` contra el catálogo. Si no se separa acá, el insert explota; y si
+        // no se vuelve a pegar en la fila que queda en memoria, el comprobante de ingreso de
+        // una orden RECIÉN creada sale sin el checklist del service (21-sep-2026).
+        const { items_extra, descripcion_catalogo, ...serviceData } = data as any;
         // Also strip servicio_items (JOIN artifact) if present
         delete (serviceData as any).servicio_items;
 
@@ -726,13 +730,15 @@ export const useDataStore = create<DataState>((set, get) => ({
 
         // Update Zustand state with items attached
         createdService.items_extra = itemsArray;
+        createdService.descripcion_catalogo = descripcion_catalogo ?? null;
         set({ servicios: [...get().servicios, createdService] });
         return createdService;
     },
 
     updateServicio: async (id, data) => {
         // Step 0: Separate items from service payload
-        const { items_extra, ...serviceData } = data as any;
+        // `descripcion_catalogo` tampoco es columna acá: ver createServicio.
+        const { items_extra, descripcion_catalogo, ...serviceData } = data as any;
         // Also strip servicio_items (JOIN artifact) if present
         delete (serviceData as any).servicio_items;
 
@@ -795,7 +801,11 @@ export const useDataStore = create<DataState>((set, get) => ({
         // Update Zustand state
         set({
             servicios: get().servicios.map(s => s.id === id
-                ? { ...s, ...serviceData, ...(items_extra !== undefined ? { items_extra } : {}) }
+                ? {
+                    ...s, ...serviceData,
+                    ...(items_extra !== undefined ? { items_extra } : {}),
+                    ...(descripcion_catalogo !== undefined ? { descripcion_catalogo } : {}),
+                }
                 : s
             ),
         });

@@ -23,14 +23,14 @@ import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
 import { estadoDeEspera } from "@/lib/avisoDeLaOrden";
 import { resolveOrdenWebhookUrl, resolveEntregadoWebhookUrl } from "@/lib/ordenWebhook";
-import { claveProducto, buscarProductos } from "@/lib/buscadorProductos";
+import { armarPayloadOrden, cargarVinculosERP as cargarVinculosERPDelTaller, enFila, mandarOrden, registrarRespuestaERP, textoAvisoERP } from "@/lib/ordenVentaERP";
+import { buscarProductos } from "@/lib/buscadorProductos";
 import { instanteAR, diaCalendario, horaCorta, ZONA_AR } from "@/lib/fechaAR";
 import { ETIQUETAS_NOTAS } from "@/lib/notasServicio";
 import { quienFirmaPatch, limpiarNombreFirmante, OTRO_FIRMANTE } from "@/lib/quienFirma";
 import { repeticionesDeLaOrden, type ServicioRepetible } from "@/lib/repeticionServices";
 import {
     chequearOrdenParaERP,
-    clavesAChequear,
     itemsQueVanAlERP,
     sugerirProductoERP,
     estaVinculadoAlERP,
@@ -871,8 +871,8 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                             suposición: lo registra doFinalize con lo que contestó el servidor.
                             Sin esto, una orden de venta que no se generó no deja rastro. */}
                         {job.webhook_erp_ok === false && (
-                            <div className="flex items-center gap-1 text-[10px] font-bold text-red-600" title={job.webhook_erp_detalle || ''}>
-                                <PackageSearch className="h-3 w-3" /> LA ORDEN DE VENTA NO SALIÓ
+                            <div className="flex items-center gap-1 text-[10px] font-bold text-red-600 uppercase" title={textoAvisoERP(job.webhook_erp_detalle).cuerpo}>
+                                <PackageSearch className="h-3 w-3" /> {textoAvisoERP(job.webhook_erp_detalle).titulo}
                             </div>
                         )}
                         <ChipDeEspera serviceId={job.service_id} />
@@ -1228,26 +1228,7 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
     // (`activo`/`sugerible`): la pregunta es "¿existe en el ERP?", no "¿lo
     // sugiere el buscador?". Un casco está en Contabilium aunque el buscador no
     // lo ofrezca como repuesto.
-    const cargarVinculosERP = async (): Promise<{ vinculos: Map<string, VinculoProducto>; pudoMedir: boolean }> => {
-        const vinculos = new Map<string, VinculoProducto>();
-        const claves = clavesAChequear(service?.items_extra);
-        if (claves.length === 0 || !taller_id) return { vinculos, pudoMedir: true };
-        try {
-            const { data, error } = await supabase
-                .from('productos_taller')
-                .select('clave,nombre,sku,id_externo,origen,veces_part,veces_labor')
-                .eq('taller_id', taller_id)
-                .in('clave', claves);
-            if (error) throw error;
-            for (const p of (data || []) as (VinculoProducto & { clave: string })[]) {
-                vinculos.set(p.clave, p);
-            }
-            return { vinculos, pudoMedir: true };
-        } catch (e: any) {
-            console.warn('[Finalizar] No se pudo leer el catálogo del ERP:', e?.message);
-            return { vinculos, pudoMedir: false };
-        }
-    };
+    const cargarVinculosERP = () => cargarVinculosERPDelTaller(taller_id, service?.items_extra);
 
     const chequearItemsYFinalizar = async () => {
         if (!service) return;
@@ -1394,9 +1375,6 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                     const productosFisicos = itemsQueVanAlERP(service.items_extra || []);
 
                     if (productosFisicos.length > 0) {
-                        const totalProductos = productosFisicos.reduce((sum: number, p: any) => sum + (Number(p.precio) || 0), 0);
-                        const nombresConcatenados = productosFisicos.map((p: any) => p.descripcion).join(", ");
-
                         // ── Lo que el ERP necesita para no adivinar (20-ago-2026) ──
                         // Hasta hoy el payload mandaba SOLO la descripción que
                         // escribió el mecánico, y la automatización la matcheaba por
@@ -1411,28 +1389,19 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                         // `descripcion` y funciona igual sin enterarse del cambio.
                         const { vinculos } = await cargarVinculosERP();
 
-                        const payload = {
-                            numero_orden: ordenNumberForWebhook(service.numero_orden, service.id),
-                            dni_cliente: client?.dni || "Sin DNI",
-                            nombre_cliente: client?.nombre || "Cliente",
-                            fecha_finalizacion: fechaFinalizacion,
-                            nombre_producto: nombresConcatenados,
-                            productos: productosFisicos.map((p: any) => {
-                                const v = vinculos.get(claveProducto(p.descripcion || ''));
-                                return {
-                                    descripcion: p.descripcion,
-                                    precio: Number(p.precio) || 0,
-                                    // Un renglón de la orden = una unidad. Un repuesto
-                                    // cargado dos veces viaja como dos renglones de 1,
-                                    // igual que antes de este cambio.
-                                    cantidad: 1,
-                                    ...(v?.sku ? { sku: v.sku } : {}),
-                                    ...(v?.id_externo ? { id_externo: v.id_externo } : {}),
-                                    ...(v?.nombre ? { nombre_erp: v.nombre } : {}),
-                                };
-                            }),
-                            total_service: totalProductos,
-                        };
+                        // El armado vive en `ordenVentaERP.ts` y lo usa también la
+                        // corrección que sale al editar una orden ya enviada: si los
+                        // dos armaran distinto, la corrección pisaría la orden con
+                        // otra forma.
+                        const payload = armarPayloadOrden({
+                            numeroOrden: service.numero_orden,
+                            servicioId: service.id,
+                            dni: client?.dni,
+                            nombre: client?.nombre,
+                            fechaFinalizacion,
+                            items: productosFisicos,
+                            vinculos,
+                        });
 
                         // Multi-taller: dispara a la URL propia del taller (o al fallback
                         // Probikes). Si el taller no tiene webhook configurado → null → no
@@ -1453,27 +1422,15 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                             // registro se escribe cuando llega, aunque el modal ya se haya
                             // cerrado (va a la base, no al estado de React).
                             const servicioId = job.service_id;
-                            fetch(ordenUrl, {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify(payload),
-                                keepalive: true,
-                                signal: AbortSignal.timeout(20000),
-                            })
-                                .then(r => ({ ok: r.ok, detalle: `HTTP ${r.status}` }))
-                                .catch(e => ({ ok: false, detalle: e?.message || 'no se pudo entregar' }))
-                                .then(async ({ ok, detalle }) => {
-                                    if (!ok) console.error("Webhook de orden: no llegó —", detalle);
-                                    try {
-                                        await supabase.from('servicios').update({
-                                            webhook_erp_ok: ok,
-                                            webhook_erp_detalle: detalle,
-                                            webhook_erp_at: new Date().toISOString(),
-                                        }).eq('id', servicioId);
-                                    } catch (e: any) {
-                                        console.error("No pude registrar la respuesta del webhook:", e?.message);
-                                    }
-                                });
+                            // En la misma fila que las correcciones: una edición hecha
+                            // mientras este envío viaja sale después, no antes. Y el
+                            // registro va ADENTRO de la fila: la corrección lee de la base
+                            // si la orden llegó, así que tiene que encontrarlo escrito.
+                            void enFila(servicioId, async () => {
+                                const { ok, detalle } = await mandarOrden(ordenUrl, payload);
+                                if (!ok) console.error("Webhook de orden: no llegó —", detalle);
+                                await registrarRespuestaERP(servicioId, ok, detalle);
+                            });
                             await updateServicio(job.service_id, { webhook_erp_disparado: true });
                         } else if (service.webhook_erp_disparado) {
                             console.log("Webhook de orden NO re-disparado: ya corrió para este service (reabierto y re-finalizado).");

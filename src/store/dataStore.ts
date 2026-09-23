@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { huellaItemsERP, corregirOrdenEnERP } from '@/lib/ordenVentaERP';
 import { supabase } from '@/lib/supabase';
 import { claveProducto, type ProductoTaller } from '@/lib/buscadorProductos';
 
@@ -775,6 +776,16 @@ export const useDataStore = create<DataState>((set, get) => ({
                     .filter(Boolean)
             );
 
+            // Lo que el ERP recibiría ANTES de esta edición (ver más abajo). Se
+            // lee de la base, no del store: si otra pantalla editó la orden, el
+            // store puede estar viejo y saltearse (o inventar) una corrección.
+            const { data: itemsAntes } = await supabase
+                .from('servicio_items')
+                .select('descripcion,precio,categoria')
+                .eq('servicio_id', id);
+            const huellaAntes = huellaItemsERP(itemsAntes);
+            let itemsGuardados = true;
+
             // Delete existing items for this service
             await supabase.from('servicio_items').delete().eq('servicio_id', id);
 
@@ -791,10 +802,33 @@ export const useDataStore = create<DataState>((set, get) => ({
                     categoria: item.categoria || 'labor',
                 }));
                 const { error: itemsError } = await supabase.from('servicio_items').insert(itemsToInsert);
-                if (itemsError) console.error('Error insertando items:', itemsError.message);
+                if (itemsError) {
+                    console.error('Error insertando items:', itemsError.message);
+                    itemsGuardados = false;
+                }
 
                 const nuevos = itemsToInsert.filter((i: any) => !antes.has(claveProducto(i.descripcion || '')));
                 if (nuevos.length) await get().registrarProductosUsados(nuevos);
+            }
+
+            // ── La orden de venta ya está en el ERP y cambió lo que viaja (372, 23-sep) ──
+            // Un precio, un "(ML)", un repuesto de más o de menos: si la orden ya
+            // se había mandado, se vuelve a mandar corregida. Contabilium la
+            // reconoce por el número y la actualiza (no crea otra). Sin esto, el
+            // cambio quedaba solo en MP y el ERP facturaba lo viejo.
+            // `corregirOrdenEnERP` lee la base y no hace nada si la orden nunca salió.
+            // Si el guardado de los renglones falló, la base no refleja la
+            // edición: corregir con eso mandaría una orden vacía o equivocada.
+            if (itemsGuardados && huellaItemsERP(itemsArray) !== huellaAntes) {
+                void corregirOrdenEnERP(id).then(async (r) => {
+                    if (r === 'no_aplica') return;
+                    const { data: fila } = await supabase
+                        .from('servicios')
+                        .select('webhook_erp_ok,webhook_erp_detalle,webhook_erp_at')
+                        .eq('id', id)
+                        .maybeSingle();
+                    if (fila) set({ servicios: get().servicios.map(s => s.id === id ? { ...s, ...fila } : s) });
+                });
             }
         }
 

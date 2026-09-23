@@ -1,4 +1,5 @@
 import { useState, Fragment, useMemo } from 'react';
+import { textoAvisoERP } from "@/lib/ordenVentaERP";
 import { useAuthStore } from '@/store/authStore';
 import { StatusBadge, grupoDeEstado, type GrupoDeEstado } from "@/components/StatusBadge";
 import { useDataStore } from '@/store/dataStore';
@@ -933,10 +934,10 @@ function ExpandedServiceDetail({ job }: { job: any }) {
             {service.webhook_erp_ok === false && (
                 <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4">
                     <h4 className="text-red-700 flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-1">
-                        <Info className="w-4 h-4" /> La orden de venta no salió al ERP
+                        <Info className="w-4 h-4" /> {textoAvisoERP(service.webhook_erp_detalle).titulo}
                     </h4>
                     <p className="text-sm text-red-700">
-                        El aviso a la automatización no se pudo entregar{service.webhook_erp_detalle ? ` (${service.webhook_erp_detalle})` : ''}. Puede que haya que cargar la venta a mano.
+                        {textoAvisoERP(service.webhook_erp_detalle).cuerpo}
                     </p>
                 </div>
             )}

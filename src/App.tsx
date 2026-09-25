@@ -32,6 +32,7 @@ import { UpdateBanner } from "@/components/UpdateBanner";
 import { NotificationBell } from "@/components/NotificationBell";
 import { NovedadesPopup } from "@/components/NovedadesPopup";
 import { OnboardingTour } from "@/components/OnboardingTour";
+import { AccesoSuspendido } from "@/components/AccesoSuspendido";
 
 function AppContent() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -45,6 +46,7 @@ function AppContent() {
   const rol = useAuthStore((state) => state.rol);
   const taller = useAuthStore((state) => state.taller);
   const setAuth = useAuthStore((state) => state.setAuth);
+  const setTaller = useAuthStore((state) => state.setTaller);
   const fetchDashboardData = useDataStore((state) => state.fetchDashboardData);
   const invalidateData = useDataStore((state) => state.invalidate);
   const navigate = useNavigate();
@@ -131,6 +133,32 @@ function AppContent() {
     };
   }, []);
 
+  // Acceso suspendido (25-sep-2026, Leira al terminar la prueba). El taller se
+  // lee al entrar, pero la compu de un taller deja la app abierta el día entero
+  // (el cierre por inactividad es a las 6 horas). Se vuelve a mirar cada 5 minutos
+  // y al volver a la pestaña: solo esas dos columnas de UNA fila.
+  useEffect(() => {
+    if (!session || !taller?.id || taller.acceso_suspendido_at) return;
+    const tallerId = taller.id;
+    const revisar = async () => {
+      const { data } = await supabase
+        .from('talleres')
+        .select('acceso_suspendido_at, acceso_suspendido_motivo')
+        .eq('id', tallerId)
+        .single();
+      if (!data?.acceso_suspendido_at) return;
+      const actual = useAuthStore.getState().taller;
+      if (actual?.id === tallerId) setTaller({ ...actual, ...data });
+    };
+    const intervalo = setInterval(revisar, 5 * 60 * 1000);
+    const alVolver = () => { if (document.visibilityState === 'visible') revisar(); };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => {
+      clearInterval(intervalo);
+      document.removeEventListener('visibilitychange', alVolver);
+    };
+  }, [session, taller?.id, taller?.acceso_suspendido_at]);
+
   const handleLogout = async () => {
     // CRITICAL: Wipe stores BEFORE signOut to prevent cross-tenant data leakage
     logout();
@@ -146,6 +174,12 @@ function AppContent() {
         <Route path="/update-password" element={<UpdatePasswordScreen />} />
       </Routes>
     );
+  }
+
+  // Con el acceso cortado no se ve NADA de la app: solo el cartel y cerrar
+  // sesión. El super admin pasa (es quien lo pone y lo saca).
+  if (taller?.acceso_suspendido_at && rol !== 'super_admin') {
+    return <AccesoSuspendido taller={taller} onLogout={handleLogout} />;
   }
 
   // Obtenemos el nombre del usuario (o fallback al email)

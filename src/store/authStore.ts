@@ -45,6 +45,13 @@ export interface TallerData {
      * imprimen. Si no cortan la hoja, el cliente se las lleva.
      */
     config_ticket_ingreso?: { habilitado?: boolean; notas_internas?: boolean } | null;
+    /**
+     * Acceso cortado (25-sep-2026, Leira al terminar la prueba). Con fecha, la app
+     * muestra solo el cartel de `AccesoSuspendido`; los datos no se tocan.
+     * Lo pone y lo saca el super admin (trigger `proteger_acceso_suspendido`).
+     */
+    acceso_suspendido_at?: string | null;
+    acceso_suspendido_motivo?: string | null;
     [key: string]: any;
 }
 

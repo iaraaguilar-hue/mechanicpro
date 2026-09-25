@@ -59,6 +59,9 @@ export default function Turnos() {
     const [confirmar, setConfirmar] = useState<{ turno: Turno; que: 'cancelar' | 'liberar' } | null>(null);
     const [orden, setOrden] = useState<Orden | null>(null);
     const [trabajando, setTrabajando] = useState(false);
+    // Los leídos del WhatsApp que esperan un sí, de hoy en adelante y de CUALQUIER semana:
+    // si el cliente pidió para dentro de dos semanas, el aviso tiene que verse igual.
+    const [pendientes, setPendientes] = useState<Turno[]>([]);
 
     const cargar = useCallback(async () => {
         if (!taller_id) return;
@@ -73,7 +76,16 @@ export default function Turnos() {
         setCargando(false);
     }, [taller_id, lunes]);
 
+    const cargarPendientes = useCallback(async () => {
+        if (!taller_id) return;
+        const { data } = await supabase.from('turnos').select('*')
+            .eq('taller_id', taller_id).eq('estado', 'a_confirmar').gte('fecha', hoyAR())
+            .order('fecha').limit(20);
+        setPendientes((data ?? []) as Turno[]);
+    }, [taller_id]);
+
     useEffect(() => { cargar(); }, [cargar]);
+    useEffect(() => { cargarPendientes(); }, [cargarPendientes, turnos]);
 
     useEffect(() => {
         if (!aviso) return;
@@ -199,6 +211,10 @@ export default function Turnos() {
                             orden con su bici ya elegida. Si no estaba cargado como cliente, se carga ahí.
                         </p>
                         <p>
+                            Si prendiste la lectura del WhatsApp, cuando en una charla le das un día a un cliente,
+                            el turno aparece solo, marcado para confirmar y con la frase de donde salió.
+                        </p>
+                        <p>
                             El <strong>tiempo reservado</strong> es para los días que te guardás aunque no
                             tengas turnos: lo atrasado, un pedido de bicis para armar. Sin hora, toma el día entero.
                         </p>
@@ -213,6 +229,27 @@ export default function Turnos() {
                     </Button>
                 </div>
             </div>
+
+            {pendientes.length > 0 && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5">
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-900">
+                        <MessageCircle size={15} />
+                        {pendientes.length === 1 ? '1 turno leído del WhatsApp para confirmar' : `${pendientes.length} turnos leídos del WhatsApp para confirmar`}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                        {pendientes.map(p => (
+                            <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => { setLunes(lunesDe(p.fecha)); setAbierto(p); }}
+                                className="rounded-full border border-amber-300 bg-white px-3 py-1 text-xs text-amber-900 hover:border-amber-500"
+                            >
+                                {etiquetaDia(p.fecha).corto.toLowerCase()} {etiquetaDia(p.fecha).numero}{p.hora ? ` ${horaCorta(p.hora)}` : ''} · {quien(p)}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* ── La semana ── */}
             <div className="flex flex-wrap items-center gap-2">

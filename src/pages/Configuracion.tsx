@@ -1004,6 +1004,9 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     // Calendario de turnos (Juan Otero, Private Garage, 25-sep-2026): opt-in, Pro/Expert.
     const tienePlanTurnos = tieneFeature(taller, 'turnos');
     const [turnosHab, setTurnosHab] = useState(taller.config_turnos?.habilitado === true);
+    const [leerWa, setLeerWa] = useState(taller.config_turnos?.leer_whatsapp === true);
+    // Leer la charla necesita el número del taller conectado (y el plan que lo trae).
+    const puedeLeerWa = tieneFeature(taller, 'whatsapp_propio') && taller.wa_activo === true;
     const [savingTurnos, setSavingTurnos] = useState(false);
 
     // Registro del diagnóstico: en qué momento del service se cargan los
@@ -1109,20 +1112,29 @@ function TabPreferencias({ taller, setTaller, avisar }: {
         }
     };
 
-    const guardarTurnos = async (v: boolean) => {
-        const antes = turnosHab;
-        setTurnosHab(v);
+    const guardarTurnos = async (patch: { habilitado?: boolean; leer_whatsapp?: boolean }) => {
+        const antes = { habilitado: turnosHab, leer_whatsapp: leerWa };
+        const habilitado = patch.habilitado ?? turnosHab;
+        // Sin calendario no hay dónde cargar lo que se lee: apagar uno apaga el otro.
+        const leer_whatsapp = habilitado ? (patch.leer_whatsapp ?? leerWa) : false;
+        setTurnosHab(habilitado);
+        setLeerWa(leer_whatsapp);
         try {
             setSavingTurnos(true);
-            const config_turnos = { ...(taller.config_turnos || {}), habilitado: v };
+            const config_turnos = { ...(taller.config_turnos || {}), habilitado, leer_whatsapp };
             const { error } = await supabase.from('talleres').update({ config_turnos }).eq('id', taller.id);
             if (error) throw error;
             setTaller({ ...taller, config_turnos });
-            avisar('ok', v
-                ? 'Calendario de turnos prendido: ya está Turnos en el menú.'
-                : 'Calendario de turnos apagado. Los turnos anotados quedan guardados.');
+            avisar('ok', patch.leer_whatsapp !== undefined
+                ? (leer_whatsapp
+                    ? 'Listo: los turnos que des por WhatsApp van a aparecer en el calendario para confirmar.'
+                    : 'La app deja de leer los turnos del WhatsApp.')
+                : habilitado
+                    ? 'Calendario de turnos prendido: ya está Turnos en el menú.'
+                    : 'Calendario de turnos apagado. Los turnos anotados quedan guardados.');
         } catch (error: any) {
-            setTurnosHab(antes);
+            setTurnosHab(antes.habilitado);
+            setLeerWa(antes.leer_whatsapp);
             avisar('error', 'No se pudo guardar: ' + error.message);
         } finally {
             setSavingTurnos(false);
@@ -1692,7 +1704,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     control={
                         <Switch
                             checked={turnosHab}
-                            onCheckedChange={guardarTurnos}
+                            onCheckedChange={v => guardarTurnos({ habilitado: v })}
                             disabled={!tienePlanTurnos || savingTurnos}
                         />
                     }
@@ -1703,6 +1715,18 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                         </div>
                     )}
                 >
+                    <SubAjuste
+                        apagado={!turnosHab || !puedeLeerWa}
+                        titulo="Leer los turnos del WhatsApp"
+                        resumen={puedeLeerWa ? 'Los que das por chat, para confirmar.' : 'Necesita el WhatsApp conectado.'}
+                        control={
+                            <Switch
+                                checked={leerWa}
+                                onCheckedChange={v => guardarTurnos({ leer_whatsapp: v })}
+                                disabled={!turnosHab || !puedeLeerWa || savingTurnos}
+                            />
+                        }
+                    />
                     <ComoFunciona className="mt-0">
                         <p>
                             Prendido, aparece <strong>Turnos</strong> en el menú: la semana a la vista con los
@@ -1711,6 +1735,11 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                         <p>
                             Los turnos los das vos. El cliente no puede reservarse uno solo. Cuando llega,
                             su turno abre la orden con la bici ya elegida.
+                        </p>
+                        <p>
+                            Con <strong>Leer los turnos del WhatsApp</strong>, cuando en una charla le das un día
+                            a un cliente (traela el martes a las 10), el turno aparece solo en el calendario,
+                            marcado para confirmar, con la frase de donde salió. Lo confirmás con un toque.
                         </p>
                     </ComoFunciona>
                 </FilaAjuste>

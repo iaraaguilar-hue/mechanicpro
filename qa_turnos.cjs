@@ -11,6 +11,7 @@
  *  4. No vino → se ve; volver a dejarlo en pie → se va.
  *  5. Llegó → se abre la orden con el cliente y la bici ya elegidos (no se guarda).
  *  6. Cancelar el turno y liberar la reserva → salen del calendario.
+ *  6-bis. Uno leído del WhatsApp: aviso arriba, la frase a la vista, Confirmar.
  *  7. En el celular (390 px): nada desborda.
  *  + cero errores de consola.
  *
@@ -179,6 +180,25 @@ const check = (nombre, cond, detalle = '') => {
         await page.locator('[role=dialog] button:has-text("Liberar")').last().click();
         await page.waitForFunction(d => !document.querySelector(`section[data-dia="${d}"]`)?.innerText.includes('Armar pedido'), JUE, { timeout: 10000 });
         check('liberado sale del calendario', (await dia(JUE).locator('header').innerText()).includes('Libre'));
+
+        // ── 6-bis. Uno leído del WhatsApp: el aviso, la frase y el Confirmar ──
+        const [leido] = await rest('turnos', { method: 'POST', body: JSON.stringify({
+            taller_id: DEMO, tipo: 'turno', fecha: JUE, hora: '11:00', nombre: 'Mariano QA', telefono: '5491155559876',
+            trabajo: 'service de horquilla', estado: 'a_confirmar', origen: 'whatsapp',
+            evidencia: 'Traela el jueves a las 11', wa_message_id: 'qa-turnos-ui',
+        }) });
+        await page.locator('nav a[href="/"]').first().click();
+        await page.locator('nav a[href="/turnos"]').first().click();
+        await page.waitForSelector('text=turno leído del WhatsApp para confirmar', { timeout: 10000 });
+        check('el aviso de turnos para confirmar se ve aunque sea de otra semana', true);
+        await page.locator('button:has-text("Mariano QA")').first().click();
+        await page.waitForSelector(`section[data-dia="${JUE}"]`);
+        const txtLeido = await page.locator('[role=dialog]').innerText();
+        check('al tocarlo muestra la frase de donde salió', txtLeido.includes('Traela el jueves a las 11'));
+        await page.locator('[role=dialog] button:has-text("Confirmar")').click();
+        await page.waitForFunction(() => !document.body.innerText.includes('leído del WhatsApp para confirmar'), null, { timeout: 10000 });
+        const confirmado = (await rest(`turnos?id=eq.${leido.id}&select=estado`))[0];
+        check("Confirmar lo deja confirmado y el aviso se va", confirmado.estado === "confirmado");
 
         // ── 7. Celular ──
         await page.setViewportSize({ width: 390, height: 844 });

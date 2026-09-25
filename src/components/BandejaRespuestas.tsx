@@ -193,7 +193,7 @@ export default function BandejaRespuestas() {
                         cosa (cuántos respondieron TU recontacto). Se veían 0 arriba y 20
                         acá, en la misma pantalla. Acá son mensajes entrantes sin responder. */}
                     <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">
-                        {conversaciones.length} conversación{conversaciones.length === 1 ? "" : "es"} sin responder
+                        {conversaciones.length} {conversaciones.length === 1 ? "conversación" : "conversaciones"} sin responder
                     </h3>
                 </div>
 

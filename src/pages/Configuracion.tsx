@@ -15,7 +15,7 @@ import { NuevoBadge } from '@/components/NuevoBadge';
 import {
     Settings, Loader2, Save, UploadCloud, Plus, Edit2, Check, X, Users,
     AlertCircle, Sparkles, ListChecks, CheckCircle, Lock, Bell, HeartPulse,
-    GraduationCap, PlayCircle, PhoneCall, Eye, Bike, Hash, Printer } from 'lucide-react';
+    GraduationCap, PlayCircle, PhoneCall, Eye, Bike, Hash, Printer, CalendarDays } from 'lucide-react';
 import { useTourStore } from '@/components/OnboardingTour';
 import { resetTours } from '@/lib/tourSeen';
 import { ProductosOcultos } from '@/components/ProductosOcultos';
@@ -1001,6 +1001,11 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     const [bloqueo, setBloqueo] = useState(taller.config_notificaciones?.bloquear_finalizacion === true);
     const [savingTareas, setSavingTareas] = useState(false);
 
+    // Calendario de turnos (Juan Otero, Private Garage, 25-sep-2026): opt-in, Pro/Expert.
+    const tienePlanTurnos = tieneFeature(taller, 'turnos');
+    const [turnosHab, setTurnosHab] = useState(taller.config_turnos?.habilitado === true);
+    const [savingTurnos, setSavingTurnos] = useState(false);
+
     // Registro del diagnóstico: en qué momento del service se cargan los
     // avisos de mantenimiento futuro (Retención). 'final' | 'durante' | 'ambos'.
     const [momentoDiag, setMomentoDiag] = useState<'final' | 'durante' | 'ambos'>(
@@ -1101,6 +1106,26 @@ function TabPreferencias({ taller, setTaller, avisar }: {
             avisar('error', e.message || 'No se pudo guardar');
         } finally {
             setSavingTicket(false);
+        }
+    };
+
+    const guardarTurnos = async (v: boolean) => {
+        const antes = turnosHab;
+        setTurnosHab(v);
+        try {
+            setSavingTurnos(true);
+            const config_turnos = { ...(taller.config_turnos || {}), habilitado: v };
+            const { error } = await supabase.from('talleres').update({ config_turnos }).eq('id', taller.id);
+            if (error) throw error;
+            setTaller({ ...taller, config_turnos });
+            avisar('ok', v
+                ? 'Calendario de turnos prendido: ya está Turnos en el menú.'
+                : 'Calendario de turnos apagado. Los turnos anotados quedan guardados.');
+        } catch (error: any) {
+            setTurnosHab(antes);
+            avisar('error', 'No se pudo guardar: ' + error.message);
+        } finally {
+            setSavingTurnos(false);
         }
     };
 
@@ -1654,6 +1679,42 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     </ComoFunciona>
                 </CardContent>
             </Card>
+        </GrupoAjustes>
+
+        {/* ═══ AGENDA ═══ */}
+        <GrupoAjustes titulo="Agenda">
+            <PanelAjustes>
+                <FilaAjuste
+                    id="turnos"
+                    icono={CalendarDays}
+                    titulo="Calendario de turnos"
+                    resumen="Los turnos que das, semana a semana."
+                    control={
+                        <Switch
+                            checked={turnosHab}
+                            onCheckedChange={guardarTurnos}
+                            disabled={!tienePlanTurnos || savingTurnos}
+                        />
+                    }
+                    aviso={!tienePlanTurnos && (
+                        <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900">
+                            <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                            Disponible en los planes Pro y Expert.
+                        </div>
+                    )}
+                >
+                    <ComoFunciona className="mt-0">
+                        <p>
+                            Prendido, aparece <strong>Turnos</strong> en el menú: la semana a la vista con los
+                            turnos que das y el tiempo que te guardás para lo atrasado o para armar bicis.
+                        </p>
+                        <p>
+                            Los turnos los das vos. El cliente no puede reservarse uno solo. Cuando llega,
+                            su turno abre la orden con la bici ya elegida.
+                        </p>
+                    </ComoFunciona>
+                </FilaAjuste>
+            </PanelAjustes>
         </GrupoAjustes>
 
         {/* ═══ CLIENTES Y SEGUIMIENTO ═══ */}

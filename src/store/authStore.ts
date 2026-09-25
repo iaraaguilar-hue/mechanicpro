@@ -52,6 +52,12 @@ export interface TallerData {
      */
     acceso_suspendido_at?: string | null;
     acceso_suspendido_motivo?: string | null;
+    /**
+     * El calendario de turnos (Juan Otero, Private Garage, 25-sep-2026). Opt-in: casi
+     * ningún taller da turnos. `leer_whatsapp` = la app carga 'a_confirmar' los turnos
+     * que se acuerdan en la charla del WhatsApp conectado.
+     */
+    config_turnos?: { habilitado?: boolean; leer_whatsapp?: boolean } | null;
     [key: string]: any;
 }
 

@@ -95,6 +95,13 @@ const FEATURES: Record<string, Plan[]> = {
      * decide `whatsapp_propio`, no este gate.
      */
     aviso_al_cliente: ['Sport', 'Pro', 'Expert'],
+
+    /** El calendario de turnos (Juan Otero, Private Garage, 25-sep-2026). Pro/Expert
+     *  porque así se lo vendió Iara: "del base al medio la diferencia es el WhatsApp,
+     *  y ahí te quedarías sin la agenda". La agenda entera va con el escalón del
+     *  WhatsApp porque su gracia es que los turnos se lean solos de la charla.
+     *  Además es opt-in por taller: ver `turnosActivos`. */
+    turnos: ['Pro', 'Expert'],
 };
 
 export type Feature = keyof typeof FEATURES;
@@ -197,6 +204,11 @@ export function tareasActivas(taller?: { plan_actual?: string; config_notificaci
 /** true si además prendió el candado: no se puede finalizar con tareas sin tildar. */
 export function bloqueoFinalizacionActivo(taller?: { plan_actual?: string; config_notificaciones?: any } | null): boolean {
     return tareasActivas(taller) && taller?.config_notificaciones?.bloquear_finalizacion === true;
+}
+
+/** true solo si el plan lo permite Y el taller dijo en Configuración que trabaja con turnos. */
+export function turnosActivos(taller?: { plan_actual?: string; config_turnos?: any } | null): boolean {
+    return tieneFeature(taller ?? null, 'turnos') && taller?.config_turnos?.habilitado === true;
 }
 
 /** Tareas libres de una orden que todavía no se tildaron. */

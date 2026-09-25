@@ -15,9 +15,10 @@ import SuperAdmin from "./pages/SuperAdmin";
 import Configuracion from "./pages/Configuracion";
 import BicisParadas from "./pages/BicisParadas";
 import PreguntaleTaller from "./pages/PreguntaleTaller";
+import Turnos from "./pages/Turnos";
 import { Button } from "@/components/ui/button";
-import { Settings, Wrench, History, Repeat, LogOut, BarChart3, Trash2, Menu, User, X, Users, Bike, MessageCircleQuestion } from "lucide-react";
-import { tieneFeature } from "@/lib/planFeatures";
+import { Settings, Wrench, History, Repeat, LogOut, BarChart3, Trash2, Menu, User, X, Users, Bike, MessageCircleQuestion, CalendarDays } from "lucide-react";
+import { tieneFeature, turnosActivos } from "@/lib/planFeatures";
 
 
 
@@ -301,6 +302,9 @@ function AppContent() {
             {/* Nav links */}
             <nav className="flex-1 py-4 flex flex-col gap-1 px-3">
               <DrawerLink to="/" icon={<Wrench size={20} />} label="Taller Activo" onClick={closeDrawer} />
+              {turnosActivos(taller) && (
+                <DrawerLink to="/turnos" icon={<CalendarDays size={20} />} label="Turnos" onClick={closeDrawer} />
+              )}
               <DrawerLink to="/clientes" icon={<Users size={20} />} label="Clientes" onClick={closeDrawer} />
               <DrawerLink to="/history" icon={<History size={20} />} label="Historial" onClick={closeDrawer} />
               <DrawerLink to="/reminders" icon={<Repeat size={20} />} label="Retención" onClick={closeDrawer} />
@@ -360,6 +364,9 @@ function AppContent() {
         <div className="flex-1 flex flex-col items-center space-y-4 justify-start">
           <div data-tour="notificaciones"><NotificationBell variant="desktop" /></div>
           <Link to="/" data-tour="nav-taller"><NavButton icon={<Wrench />} label="Taller Activo" /></Link>
+          {turnosActivos(taller) && (
+            <Link to="/turnos" data-tour="nav-turnos"><NavButton icon={<CalendarDays />} label="Turnos" /></Link>
+          )}
           <Link to="/clientes" data-tour="nav-clientes"><NavButton icon={<Users />} label="Clientes" /></Link>
           <Link to="/history" data-tour="nav-historial"><NavButton icon={<History />} label="Historial" /></Link>
           <Link to="/reminders" data-tour="nav-retencion"><NavButton icon={<Repeat />} label="Retención" /></Link>
@@ -414,6 +421,7 @@ function AppContent() {
           {/* "Contactar" (Admin) se unificó dentro de Retención → redirect por si
               queda algún link/bookmark viejo apuntando acá (Tarea A). */}
           <Route path="/admin" element={<Navigate to="/reminders" replace />} />
+          <Route path="/turnos" element={<Turnos />} />
           <Route path="/bicis-paradas" element={<BicisParadas />} />
           <Route path="/preguntale" element={<PreguntaleTaller />} />
           <Route path="/configuracion" element={<Configuracion />} />

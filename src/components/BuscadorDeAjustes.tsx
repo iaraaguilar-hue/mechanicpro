@@ -54,6 +54,7 @@ export const AJUSTES: Ajuste[] = [
     { id: 'whatsapp', titulo: 'Conectar el WhatsApp del taller', tab: 'whatsapp', palabras: 'whatsapp numero conectar telefono celular coexistencia meta desconectar', requiere: 'whatsapp_propio' },
     { id: 'automaticos', titulo: 'Mensajes que salen solos', tab: 'automaticos', palabras: 'automaticos automatico solo avisar lista comprobante al cliente entrega seguimiento dias despues', requiere: 'mensajes_automaticos' },
     { id: 'plantillas', titulo: 'Armar un mensaje nuevo (plantilla)', tab: 'automaticos', palabras: 'plantilla plantillas mensaje nuevo crear armar meta aprobar texto', requiere: 'mensajes_automaticos' },
+    { id: 'turnos', titulo: 'Calendario de turnos', tab: 'preferencias', palabras: 'turnos turno calendario agenda agendar dar turno reservar dia semana cita citas horario cuaderno', requiere: 'turnos' },
     { id: 'checklist', titulo: 'Checklist de trabajos', tab: 'preferencias', palabras: 'checklist tildar trabajos avances etapas lista de trabajos' },
     { id: 'tareas', titulo: 'Tareas del service y candado de finalización', tab: 'preferencias', palabras: 'tareas candado bloquear finalizar pendientes olvidarse anotar' },
     { id: 'ticket_ingreso', titulo: 'Comprobante de ingreso', tab: 'preferencias', palabras: 'ticket ingreso imprimir papel comprobante recibo a4 cortar al medio checklist del mecanico constancia cuando entra la bici notas internas impresas' },

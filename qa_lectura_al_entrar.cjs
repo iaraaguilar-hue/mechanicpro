@@ -29,6 +29,7 @@ const CONTROL = process.argv.includes('--control-negativo');
 // medición del 9-sep-2026 con todo ya plegado, más un poco de aire.
 const TECHO = {
     'Taller Activo': 150,
+    'Turnos': 150,          // 25-sep-2026: la semana y las tarjetas; la explicación va plegada
     'Clientes': 150,
     'Historial': 150,
     'Retención': 700,      // las tarjetas dicen «venía cada 4 semanas…»: es dato

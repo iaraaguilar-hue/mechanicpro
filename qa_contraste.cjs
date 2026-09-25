@@ -129,7 +129,7 @@ const MEDIR = (PISO) => {
             if (!cazado) { total = 999; }
         }
 
-        for (const p of ['Taller Activo', 'Clientes', 'Historial', 'Retención', 'Métricas', 'Bicis paradas', 'Configuración']) {
+        for (const p of ['Taller Activo', 'Turnos', 'Clientes', 'Historial', 'Retención', 'Métricas', 'Bicis paradas', 'Configuración']) {
             const link = page.locator('nav a, aside a').filter({ hasText: p }).first();
             if (!(await link.count())) continue;
             await link.click({ force: true });

@@ -180,12 +180,14 @@ async function detalleDeError(data: any, error: any, porDefecto: string): Promis
         ?? porDefecto;
 }
 
-export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waListo, enUso, onUsar, abrirCon }: {
+export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waListo, irAWhatsApp, enUso, onUsar, abrirCon }: {
     taller: TallerData;
     plantillas: PlantillaDelTaller[];
     recargar: () => Promise<void> | void;
     avisar: (tipo: 'ok' | 'error', msg: string) => void;
     waListo: boolean;
+    /** Lleva a la pestaña donde se conecta el WhatsApp. */
+    irAWhatsApp?: () => void;
     /** Los `nombre_meta` que ya usa algún aviso automático. */
     enUso?: Set<string>;
     /** Arma el aviso automático con esta plantilla ya elegida. */
@@ -203,8 +205,14 @@ export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waLi
     // Entrar desde un momento concreto («Cuando termina el service → ¿no está el
     // que querés?») abre el armador con ese momento ya dicho: el mecánico no
     // tiene que repetir lo que la pantalla ya sabe.
+    // Sin WhatsApp el armador no abre, pero se baja igual hasta la tarjeta: ahí
+    // está escrito por qué. Antes el pedido no hacía nada y parecía roto.
     useEffect(() => {
-        if (!abrirCon || !waListo) return;
+        if (!abrirCon) return;
+        if (!waListo) {
+            requestAnimationFrame(() => tarjetaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+            return;
+        }
         setBorrador(null);
         setMomentoDeEntrada(abrirCon.evento);
         setArmando(true);
@@ -420,14 +428,24 @@ export function PlantillasDelTaller({ taller, plantillas, recargar, avisar, waLi
                         onAMano={(b) => { setArmando(false); setBorrador(b); }}
                         onCancelar={() => { setArmando(false); setMomentoDeEntrada(null); }}
                     />
-                ) : (
-                    <Button
-                        size="sm" disabled={!waListo}
-                        title={waListo ? undefined : 'Conectá tu WhatsApp primero: la plantilla se crea en tu propia cuenta'}
-                        onClick={() => { setMomentoDeEntrada(null); setArmando(true); }}
-                    >
+                ) : waListo ? (
+                    <Button size="sm" onClick={() => { setMomentoDeEntrada(null); setArmando(true); }}>
                         <Sparkles className="h-4 w-4 mr-1" /> Armar un mensaje nuevo
                     </Button>
+                ) : (
+                    // El motivo va escrito al lado y no en un `title`: en el celular un
+                    // tooltip no aparece y el botón gris parecía roto (Bike Pro, 25-sep-2026).
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <Button size="sm" disabled>
+                            <Sparkles className="h-4 w-4 mr-1" /> Armar un mensaje nuevo
+                        </Button>
+                        <span className="text-xs text-amber-900">Primero conectá tu WhatsApp.</span>
+                        {irAWhatsApp && (
+                            <Button size="sm" variant="outline" className="h-8 hover:text-slate-900" onClick={irAWhatsApp}>
+                                Conectarlo
+                            </Button>
+                        )}
+                    </div>
                 )}
             </CardContent>
         </Card>

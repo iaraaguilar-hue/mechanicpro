@@ -156,9 +156,11 @@ function opcionesDePlantilla(evento: string, propias: PlantillaDelTaller[]) {
     return [...delSistema, ...delTaller];
 }
 
-export function MensajesAutomaticos({ taller, avisar }: {
+export function MensajesAutomaticos({ taller, avisar, irAWhatsApp }: {
     taller: TallerData;
     avisar: (tipo: 'ok' | 'error', msg: string) => void;
+    /** Lleva a la pestaña donde se conecta el WhatsApp. */
+    irAWhatsApp?: () => void;
 }) {
     const [reglas, setReglas] = useState<Regla[]>([]);
     const [propias, setPropias] = useState<PlantillaDelTaller[]>([]);
@@ -406,6 +408,7 @@ export function MensajesAutomaticos({ taller, avisar }: {
                     recargar={cargarPropias}
                     avisar={avisar}
                     waListo={waListo}
+                    irAWhatsApp={irAWhatsApp}
                     enUso={new Set(reglas.map((r) => r.plantilla))}
                     onUsar={ponerAAndar}
                     abrirCon={armarPara}

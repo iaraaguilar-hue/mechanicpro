@@ -185,7 +185,7 @@ export default function Configuracion() {
                     <ComoEscribis taller={taller} setTaller={setTaller} avisar={avisar} />
                     {verWhatsApp && (
                         <div data-ajuste="automaticos" data-tour="config-automaticos" className="rounded-lg">
-                            <MensajesAutomaticos taller={taller} avisar={avisar} />
+                            <MensajesAutomaticos taller={taller} avisar={avisar} irAWhatsApp={() => { setActiveTab('whatsapp'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
                         </div>
                     )}
                 </TabsContent>

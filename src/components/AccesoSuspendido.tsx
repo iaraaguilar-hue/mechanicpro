@@ -44,7 +44,8 @@ export function AccesoSuspendido({ taller, onLogout }: { taller: TallerData; onL
                 </h1>
                 <p className="mt-5 text-slate-700 leading-relaxed">{textoPrincipal(taller)}</p>
                 <p className="mt-3 text-slate-700 leading-relaxed">
-                    Para continuar utilizando el servicio, le solicitamos comunicarse con Iara Aguilar a{' '}
+                    Para continuar utilizando el servicio, le solicitamos comunicarse con Iara Aguilar por
+                    teléfono celular o al siguiente correo electrónico:{' '}
                     <span className="font-medium text-slate-900 whitespace-nowrap">{CONTACTO}</span>.
                 </p>
                 <p className="mt-3 text-sm text-slate-500 leading-relaxed">

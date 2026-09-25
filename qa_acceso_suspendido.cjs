@@ -61,7 +61,7 @@ async function entrar(b, viewport) {
 const seVe = (page, texto) => page.evaluate((t) => [...document.querySelectorAll('h1,h2,a,button,p,span,div')]
     .some(e => e.childElementCount === 0 && (e.textContent || '').trim().toLowerCase() === t.toLowerCase()
         && e.checkVisibility({ opacityProperty: true, visibilityProperty: true })), texto);
-const cartel = (page) => seVe(page, 'Período de prueba finalizado');
+const cartel = (page) => seVe(page, 'Su prueba gratuita ha finalizado');
 const app = (page) => seVe(page, 'Taller Activo');
 
 (async () => {

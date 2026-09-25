@@ -10,20 +10,15 @@
  */
 import type { TallerData } from '@/store/authStore';
 
-const CONTACTO = 'iara@mechanicpro.com.ar';
+// El celular de Iara (factura de Personal, portfolio de Meta) y el mail de la app.
+const TELEFONO = '+54 9 11 2567-7858';
+const CORREO = 'iara@mechanicpro.com.ar';
 
-function textoPrincipal(taller: TallerData): string {
-    const nombre = taller.nombre ? ` para ${taller.nombre}` : '';
-    if (taller.acceso_suspendido_motivo === 'prueba_finalizada') {
-        return `El período de prueba gratuita de Mechanic Pro${nombre} ha finalizado.`;
-    }
-    return `El acceso a Mechanic Pro${nombre} se encuentra suspendido.`;
-}
-
+// Genérico a propósito (pedido de Iara, 25-sep-2026): sin el nombre del taller.
 function titulo(taller: TallerData): string {
     return taller.acceso_suspendido_motivo === 'prueba_finalizada'
-        ? 'Período de prueba finalizado'
-        : 'Acceso suspendido';
+        ? 'Su prueba gratuita ha finalizado'
+        : 'Su acceso se encuentra suspendido';
 }
 
 export function AccesoSuspendido({ taller, onLogout }: { taller: TallerData; onLogout: () => void }) {
@@ -42,13 +37,16 @@ export function AccesoSuspendido({ taller, onLogout }: { taller: TallerData; onL
                 <h1 id="acceso-suspendido-titulo" className="text-xl font-semibold text-slate-900 tracking-tight">
                     {titulo(taller)}
                 </h1>
-                <p className="mt-5 text-slate-700 leading-relaxed">{textoPrincipal(taller)}</p>
-                <p className="mt-3 text-slate-700 leading-relaxed">
-                    Para continuar utilizando el servicio, le solicitamos comunicarse con Iara Aguilar por
-                    teléfono celular o al siguiente correo electrónico:{' '}
-                    <span className="font-medium text-slate-900 whitespace-nowrap">{CONTACTO}</span>.
+                <p className="mt-5 text-slate-700 leading-relaxed">
+                    Para continuar utilizando Mechanic Pro, comuníquese con Iara Aguilar.
                 </p>
-                <p className="mt-3 text-sm text-slate-500 leading-relaxed">
+                <dl className="mt-5 inline-grid grid-cols-[auto_auto] items-baseline gap-x-4 gap-y-1 text-left">
+                    <dt className="text-sm text-slate-500">Teléfono</dt>
+                    <dd className="font-medium text-slate-900 whitespace-nowrap tabular-nums">{TELEFONO}</dd>
+                    <dt className="text-sm text-slate-500">Correo</dt>
+                    <dd className="font-medium text-slate-900 break-all">{CORREO}</dd>
+                </dl>
+                <p className="mt-5 text-sm text-slate-500 leading-relaxed">
                     La información registrada en su cuenta se conserva íntegramente.
                 </p>
                 <button

@@ -14,7 +14,7 @@ import { biciConPieza } from '@/lib/piezaSuelta';
 import { Link } from 'react-router-dom';
 import {
     HALLAZGOS, AVANCES, RESULTADO_DE_LLAMADA,
-    comoLeVaALlegar, limpiarDetalle, estadoDeEspera, type ClaseDeAviso,
+    comoLeVaALlegar, limpiarDetalle, cerrarFrase, estadoDeEspera, type ClaseDeAviso,
 } from '@/lib/avisoDeLaOrden';
 import {
     MessageSquare, Phone, Send, Loader2, Check, AlertTriangle, Clock, User, Wrench,
@@ -166,7 +166,7 @@ export default function AvisoAlCliente({ serviceId, conTitulo = true, onCantidad
 
     const preview = useMemo(() => comoLeVaALlegar(clase, {
         cliente: nombreCliente, firma, taller: nombreTaller, bici: nombreBici,
-        detalle: limpiarDetalle(detalle) || '…',
+        detalle: cerrarFrase(limpiarDetalle(detalle)) || '…',
     }), [clase, nombreCliente, firma, nombreTaller, nombreBici, detalle]);
 
     // El mensaje propio lo completa EL SERVIDOR desde la orden (whatsapp-enviar).
@@ -334,7 +334,7 @@ export default function AvisoAlCliente({ serviceId, conTitulo = true, onCantidad
     // ── Mandar el aviso ─────────────────────────────────────────
     const mandar = async () => {
         if (usandoPropia) return mandarPropia();
-        const texto = limpiarDetalle(detalle);
+        const texto = cerrarFrase(limpiarDetalle(detalle));
         if (texto.length < 4) {
             return setAviso({ tipo: 'error', texto: 'Escribí qué le querés decir, aunque sea corto.' });
         }

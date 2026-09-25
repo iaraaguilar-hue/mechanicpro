@@ -84,6 +84,19 @@ export function limpiarDetalle(texto: string): string {
     return texto.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim().slice(0, 700);
 }
 
+/**
+ * El detalle va en el MEDIO del mensaje de las dos plantillas fijas, antes de
+ * "Decime si lo hacemos y sigo." / "Cualquier cosa escribime por acá.". Sin punto
+ * final al cliente le llegaba "…se empieza a comer el cassette Decime si lo hacemos
+ * y sigo." (25-sep-2026: se vio grabando el video de venta). Los botones rápidos
+ * (HALLAZGOS, AVANCES) no traen punto y el mecánico casi nunca lo escribe.
+ * Solo para las plantillas fijas: en un mensaje propio la nota puede ir a mitad de frase.
+ */
+export function cerrarFrase(texto: string): string {
+    const t = texto.trim();
+    return !t || /[.!?…]$/.test(t) ? t : `${t}.`;
+}
+
 export interface EstadoDeEspera {
     /** La orden está esperando una respuesta que todavía no llegó. */
     esperando: boolean;

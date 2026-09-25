@@ -1,6 +1,6 @@
 // Tests del aviso desde la orden. Mini-harness propio (no hay vitest):
 //   ./node_modules/.bin/esbuild src/lib/avisoDeLaOrden.test.ts --bundle --platform=node --format=cjs --outfile=/tmp/t.cjs && node /tmp/t.cjs
-import { estadoDeEspera, comoLeVaALlegar, limpiarDetalle } from './avisoDeLaOrden';
+import { estadoDeEspera, comoLeVaALlegar, limpiarDetalle, cerrarFrase } from './avisoDeLaOrden';
 
 let ok = 0, fail = 0;
 const eq = (nombre: string, a: unknown, b: unknown) => {
@@ -56,6 +56,15 @@ eq('consulta: texto exacto', comoLeVaALlegar('consulta', p),
     'Hola Martín! Soy Leandro, de Probikes. Estoy con tu Tarmac y encontré algo antes de seguir: las pastillas están gastadas. Decime si lo hacemos y sigo.');
 eq('avance: texto exacto', comoLeVaALlegar('avance', p),
     'Hola Martín! Soy Leandro, de Probikes. Te cuento cómo va tu Tarmac: las pastillas están gastadas. Cualquier cosa escribime por acá.');
+
+// 25-sep-2026: el botón rápido no trae punto y al cliente le llegaba
+// "…el cassette Decime si lo hacemos y sigo.". cerrarFrase lo cierra, sin duplicar.
+eq('cierra la frase', cerrarFrase('la cadena está estirada'), 'la cadena está estirada.');
+eq('no duplica el punto', cerrarFrase('las pastillas están gastadas.'), 'las pastillas están gastadas.');
+eq('respeta la pregunta', cerrarFrase('la cambiamos?'), 'la cambiamos?');
+eq('vacío queda vacío', cerrarFrase('  '), '');
+eq('consulta con botón rápido', comoLeVaALlegar('consulta', { ...p, detalle: cerrarFrase('la cadena está estirada') }),
+    'Hola Martín! Soy Leandro, de Probikes. Estoy con tu Tarmac y encontré algo antes de seguir: la cadena está estirada. Decime si lo hacemos y sigo.');
 
 // Meta rechaza el envío entero si un parámetro trae saltos de línea o corridas
 // de espacios, y el mecánico escribe en un textarea.

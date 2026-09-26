@@ -41,19 +41,45 @@ export function aFormatoMeta(tel: string): string | null {
     if (n.startsWith('9')) n = n.slice(1);
     n = n.replace(/^0/, '');
     // El 15 va pegado al código de área y no forma parte del número internacional.
-    n = n.replace(/^(\d{2,4})15(\d{6,8})$/, '$1$2');
+    // 🔴 Solo si sobran exactamente esos dos dígitos: sacado siempre, se comía el
+    // "15" de 381 5427285 (Tucumán). El porqué entero está en el motor.
+    if (n.length === 12) n = n.replace(/^(\d{2,4})15(\d{6,8})$/, '$1$2');
+    // 15 + ocho cifras sin código de área: el abonado de ocho existe solo en el 11.
+    else if (n.length === 10 && n.startsWith('15')) n = '11' + n.slice(2);
+    // Todo código de área argentino empieza con 11, con 2 o con 3.
+    if (!/^(11|[23])/.test(n)) return null;
     const completo = `549${n}`;
     if (completo.length !== 13) return null;
     return completo;
 }
 
-/** El número como lo leería una persona: +54 9 11 4940-6109. */
+/** Los últimos 8 dígitos del número ya normalizado: la llave de "es la misma persona". */
+export const colaDelTelefono = (t?: string | null) =>
+    (aFormatoMeta(t ?? '') ?? soloNumeros(t)).slice(-8);
+
+// Los códigos de área de TRES cifras (plan de ENACOM). El 11 es el único de dos y
+// todos los demás son de cuatro; como el plan no deja que un código sea el
+// comienzo de otro, estar en esta lista alcanza para saber dónde se corta.
+const AREAS_DE_TRES = new Set([
+    '220', '221', '223', '230', '236', '237', '249', '260', '261', '263', '264', '266',
+    '280', '291', '294', '297', '298', '299', '336', '341', '342', '343', '345', '348',
+    '351', '353', '358', '362', '364', '370', '376', '379', '380', '381', '383', '385',
+    '387', '388',
+]);
+
+/**
+ * El número como lo leería una persona de ese lugar: +54 9 11 4940-6109,
+ * +54 9 381 542-7285, +54 9 2966 42-1234.
+ *
+ * Hasta el 26-sep-2026 se partía siempre como uno de AMBA (2 / 4 / 4), y a un
+ * mecánico de Tucumán le mostraba "+54 9 38 1542-7285": su propio código de área
+ * cortado por la mitad, justo en la línea que le dice que el número está bien.
+ */
 export function comoSeLee(e164: string): string {
-    // 549 + area(2-4) + resto. El área no se puede deducir sin una tabla, así que
-    // se parte en 549 / 2 / 4 / 4, que es como se ve un celular de AMBA y se lee
-    // bien igual para el resto del país.
     const n = e164.replace(/^549/, '');
-    return `+54 9 ${n.slice(0, 2)} ${n.slice(2, 6)}-${n.slice(6)}`;
+    const largo = n.startsWith('11') ? 2 : AREAS_DE_TRES.has(n.slice(0, 3)) ? 3 : 4;
+    const abonado = n.slice(largo);
+    return `+54 9 ${n.slice(0, largo)} ${abonado.slice(0, -4)}-${abonado.slice(-4)}`;
 }
 
 export type DiagnosticoTelefono = {
@@ -88,11 +114,24 @@ export function diagnosticoDeTelefono(texto: string): DiagnosticoTelefono {
 
     // A partir de acá no sirve, y conviene decir POR QUÉ: "está mal" manda a
     // adivinar; "le falta el código de área" se arregla en cinco segundos.
+    //
+    // 🔴 Los textos valen para TODO el país: el ejemplo era "va con el 11 adelante",
+    // y a un taller de Tucumán eso le enseña a cargar mal a sus clientes.
     const sinPais = digitos.replace(/^54/, '').replace(/^9/, '').replace(/^0/, '');
-    if (sinPais.length < 10) {
+    // Hasta ocho cifras es un abonado solo (el más largo, el de AMBA, tiene ocho),
+    // y 15 + siete es el celular del interior cargado sin su código.
+    if (sinPais.length <= 8 || (sinPais.length === 9 && sinPais.startsWith('15'))) {
         return {
             sirve: false,
-            aviso: 'Le falta el código de área. Va con el 11 adelante (11 4940-6109), sin el 15.',
+            aviso: 'Le falta el código de área (11, 351, 381…). Va adelante, sin el 0 ni el 15.',
+            comoQueda: null,
+        };
+    }
+    // Nueve cifras con código: le falta una. Ningún número argentino tiene nueve.
+    if (sinPais.length === 9) {
+        return {
+            sirve: false,
+            aviso: 'Le falta un número. Con el código de área, un celular argentino tiene 10.',
             comoQueda: null,
         };
     }

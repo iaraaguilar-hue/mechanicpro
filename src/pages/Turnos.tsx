@@ -20,7 +20,7 @@ import { useDataStore, type SupabaseClient, type SupabaseBike } from '@/store/da
 import { tieneFeature, turnosActivos } from '@/lib/planFeatures';
 import { hoyAR } from '@/lib/mantenimiento';
 import { horaCorta } from '@/lib/fechaAR';
-import { soloNumeros } from '@/lib/telefonoAR';
+import { colaDelTelefono } from '@/lib/telefonoAR';
 import {
     lunesDe, sumarDias, diasDeLaSemana, etiquetaDia, diaEnPalabras, rangoDeLaSemana,
     ordenarDelDia, diaReservado, turnosEnPie, cuantosTurnos, type Turno,
@@ -167,9 +167,9 @@ export default function Turnos() {
         try {
             let cliente = t.cliente_id ? clientes.find(c => c.id === t.cliente_id) ?? null : null;
             if (!cliente) {
-                const cola = soloNumeros(t.telefono).slice(-8);
+                const cola = colaDelTelefono(t.telefono);
                 if (cola.length === 8) {
-                    cliente = clientes.find(c => !c.eliminado_en && soloNumeros(c.telefono).slice(-8) === cola) ?? null;
+                    cliente = clientes.find(c => !c.eliminado_en && colaDelTelefono(c.telefono) === cola) ?? null;
                 }
                 if (!cliente) {
                     cliente = await createCliente({ taller_id, nombre: (t.nombre ?? '').trim(), telefono: t.telefono?.trim() || undefined });

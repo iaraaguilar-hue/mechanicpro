@@ -48,6 +48,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { getBikeCategory } from '@/utils/bikeRecognition';
 import { EtiquetaService } from '@/components/EtiquetaService';
+import { aFormatoMeta, soloNumeros } from '@/lib/telefonoAR';
 
 
 const datePickerRescueStyles = `
@@ -655,11 +656,11 @@ export default function History() {
                                                             title="WhatsApp"
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                let cleanedPhone = job.clientPhone.replace(/\D/g, '');
+                                                                // Normalizado como el motor: sumarle 549 al número tal cual dejaba el 0 y el 15
+                                                                // adentro ("0381 15 542-7285" abría un chat que no existe). Si no es argentino
+                                                                // (del exterior), va como está, que ya trae su código de país.
+                                                                const cleanedPhone = aFormatoMeta(job.clientPhone) ?? soloNumeros(job.clientPhone);
                                                                 if (!cleanedPhone) return;
-                                                                if (!cleanedPhone.startsWith('54')) {
-                                                                    cleanedPhone = '549' + cleanedPhone;
-                                                                }
                                                                 window.open('https://wa.me/' + cleanedPhone, '_blank');
                                                             }}
                                                         >

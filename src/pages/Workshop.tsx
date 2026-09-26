@@ -48,6 +48,7 @@ import { hoyAR } from '@/lib/mantenimiento';
 import { VentaDeMostrador } from '@/components/VentaDeMostrador';
 import { piezaEnFrase } from '@/lib/piezaSuelta';
 import { nombrePropio, conMayuscula } from '@/lib/nombreAmigable';
+import { aFormatoMeta, soloNumeros } from '@/lib/telefonoAR';
 
 // 🚩 Las fechas se formatean en UN SOLO lugar: `lib/fechaAR.ts`. Ahí está
 // explicado por qué los INSTANTES (fecha_ingreso, fecha_finalizacion,
@@ -925,12 +926,11 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                                 className="h-8 w-8 text-green-600 hover:bg-green-50 hover:text-green-700"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    let cleanedPhone = job.client_phone!.replace(/\D/g, '');
+                                    // Normalizado como el motor: sumarle 549 al número tal cual dejaba el 0 y el 15
+                                    // adentro ("0381 15 542-7285" abría un chat que no existe). Si no es argentino
+                                    // (del exterior), va como está, que ya trae su código de país.
+                                    const cleanedPhone = aFormatoMeta(job.client_phone ?? '') ?? soloNumeros(job.client_phone);
                                     if (!cleanedPhone) return;
-                                    if (!cleanedPhone.startsWith('54')) {
-                                        // Anteponer 549 para celulares de Argentina si no tiene el código de país
-                                        cleanedPhone = '549' + cleanedPhone;
-                                    }
                                     window.open('https://wa.me/' + cleanedPhone, '_blank');
                                 }}
                                 title="Abrir el chat con el cliente"

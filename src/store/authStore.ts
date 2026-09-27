@@ -60,7 +60,7 @@ export interface TallerData {
     config_turnos?: { habilitado?: boolean; leer_whatsapp?: boolean } | null;
     /**
      * Los recordatorios de desgaste (27-sep-2026): 'a_mano' = el mecánico los manda
-     * desde Retención (default); 'solo' = salen a las 10, de lunes a sábado, con la
+     * desde Retención (default); 'solo' = salen a las 10 y media, de lunes a sábado, con la
      * plantilla fija. Lo elige el admin en Configuración → Mensajes. Solo sale si
      * además el plan lo incluye (`recordatorios_auto`) y el WhatsApp está conectado.
      */

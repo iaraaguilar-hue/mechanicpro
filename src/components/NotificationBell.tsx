@@ -5,7 +5,9 @@ import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/lib/supabase';
 import { avancesActivos, tareasActivas, trabajosPendientes, tareasLibresPendientes, tieneFeature } from '@/lib/planFeatures';
 import { buildRetentionAlerts } from '@/lib/retentionAlerts';
-import { carreraEnFrase, nombreBiciAmigable, primerNombre } from '@/lib/nombreAmigable';
+import { nombreBiciAmigable, nombreBiciParaMensaje, primerNombre } from '@/lib/nombreAmigable';
+import { mensajeFijo } from '@/lib/plantillasDelSistema';
+import { useRecordatoriosAuto, claveCiclo, yaSalioOSeEstaMandando } from '@/lib/recordatoriosAuto';
 import { getNovedadesVistas, saveNovedadesVistas } from '@/lib/novedadesSeen';
 import { Bell, Wrench, PackageCheck, HeartPulse, Megaphone } from 'lucide-react';
 
@@ -43,7 +45,7 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
     // Deja constancia del recontacto también desde la campana (el botón de acá
     // manda el mismo mensaje que el del Motor de Retención). Nunca bloquea:
     // si falla el registro, WhatsApp se abre igual.
-    const registrarContactoDeAlerta = (a: any) => {
+    const registrarContactoDeAlerta = (a: any, texto: string) => {
         if (!taller_id) return;
         registrarContacto({
             taller_id,
@@ -52,8 +54,15 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
             servicio_origen_id: a.servicioId,
             componente: a.component,
             canal: 'whatsapp_manual',
+            variante: 'fijo_wame',
+            texto_enviado: texto,
         });
     };
+
+    // Los recordatorios que ya salieron solos (27-sep-2026): la campana no los
+    // cuenta ni los ofrece. Si los ofreciera, el mecánico le mandaría un segundo
+    // mensaje al mismo cliente por lo mismo (hallazgo del auditor independiente).
+    const auto = useRecordatoriosAuto(tieneFeature(taller, 'recordatorios_auto'));
 
     // Novedades activas del proveedor (broadcast; tolera que la tabla no exista aún).
     useEffect(() => {
@@ -99,7 +108,7 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
         // Idea 5: misma bandera que la página de Retención — si difirieran,
         // la campana y la página contarían vencidos distintos.
         predictivo: tieneFeature(taller, 'motor_predictivo'),
-    }).filter(a => a.daysRemaining <= 0);
+    }).filter(a => a.daysRemaining <= 0 && !yaSalioOSeEstaMandando(auto.porCiclo.get(claveCiclo(a))));
 
     const totalPendientes = conTareas.length + paraAvisar.length + vencidos.length;
     const noLeidas = novedades.filter(n => !seen.includes(n.id)).length;
@@ -205,11 +214,11 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
                                     })}
 
                                     {vencidos.map(a => {
-                                        const msg = a.isPostCarrera
-                                            ? `Hola ${primerNombre(a.clientName)}! ¿Cómo te fue en ${carreraEnFrase(a.carreraName)}? Contanos cómo se portó la bici 🚲`
-                                            : `Hola ${primerNombre(a.clientName)}! Pasó el tiempo recomendado para ${a.component || 'el mantenimiento'} de tu ${nombreBiciAmigable(null, a.bikeModel)}. ¿Coordinamos una revisión? 🔧`;
+                                        // El MISMO texto que abre Retención sin el WhatsApp conectado:
+                                        // tenía otro, con ¡¿ y emoji.
+                                        const msg = mensajeFijo(a, nombreBiciParaMensaje(bicicletas, a.bikeId, a.bikeModel));
                                         return (
-                                            <div key={`m-${a.id}`} className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                                            <div key={`m-${a.id}`} data-campana-vencido={a.id} className="flex items-start gap-2.5 p-2 rounded-lg hover:bg-slate-50 transition-colors">
                                                 <span className="mt-0.5 p-1.5 rounded-md bg-amber-100 text-amber-600 shrink-0"><HeartPulse size={14} /></span>
                                                 <span className="flex-1 min-w-0">
                                                     <span className="block text-sm text-slate-700 font-medium truncate">{a.clientName || 'Cliente'}</span>
@@ -217,13 +226,14 @@ export function NotificationBell({ variant = 'mobile' }: { variant?: 'mobile' | 
                                                 </span>
                                                 {a.clientPhone && (
                                                     <a
+                                                        data-campana-wame
                                                         href={waLink(a.clientPhone, msg)}
                                                         target="_blank"
                                                         rel="noreferrer"
                                                         // Mismo registro que en el Motor de Retención: desde acá sale el
                                                         // mismo mensaje, así que tiene que contar igual. Si no, la campana
                                                         // sería un agujero por donde los recontactos no se miden.
-                                                        onClick={e => { e.stopPropagation(); registrarContactoDeAlerta(a); }}
+                                                        onClick={e => { e.stopPropagation(); registrarContactoDeAlerta(a, msg); }}
                                                         className="shrink-0 text-[11px] font-semibold text-amber-600 border border-amber-200 rounded-md px-2 py-1 hover:bg-amber-50"
                                                     >WhatsApp</a>
                                                 )}

@@ -15,13 +15,13 @@ import { buildRetentionAlerts, type RetentionAlert } from "@/lib/retentionAlerts
 import { construirAvisosSuaves, CONFIG_SUAVES_DEFAULT, type AvisoSuave, type ResultadoSuaves } from "@/lib/avisosSuaves";
 import { clientesEnFuga, type ClienteEnFuga } from "@/lib/motorConCabeza";
 import { carreraEnFrase, nombreBiciParaMensaje, primerNombre } from "@/lib/nombreAmigable";
-import { componerPlantilla, parametrosDelRecordatorio } from "@/lib/plantillasDelSistema";
-import { motivoDeMeta } from "@/lib/motivoDeMeta";
+import { componerPlantilla, parametrosDelRecordatorio, mensajeFijo } from "@/lib/plantillasDelSistema";
+import { useRecordatoriosAuto, estadoAutoDe, claveCiclo, yaSalioSolo, type EstadoAuto } from "@/lib/recordatoriosAuto";
 import { tieneFeature } from "@/lib/planFeatures";
 import PanelRetorno from "@/components/PanelRetorno";
 import BandejaRespuestas from "@/components/BandejaRespuestas";
 import { ComoFunciona } from '@/components/ComoFunciona';
-import { diaCalendario, instanteAR } from '@/lib/fechaAR';
+import { diaCalendario } from '@/lib/fechaAR';
 
 // Acceso rápido al perfil del cliente desde la alerta: si tenemos la bici,
 // abrimos esa bici (el perfil muestra igual al cliente con TODAS sus bicis en
@@ -47,23 +47,8 @@ function useNombreBici() {
     );
 }
 
-// El mensaje de siempre: el que sale cuando la IA está apagada o falló.
-// Vive en un solo lugar porque las dos vistas (tarjeta y tabla) tienen que
-// mandar exactamente lo mismo — antes la tabla abría wa.me con el texto
-// vacío para los avisos que no eran de carrera.
-//
-// 🔴 Sin signos de apertura (¡ ¿), como las plantillas aprobadas: regla de Iara del
-// 3-sep-2026, en un WhatsApp nadie los escribe (se sacaron de acá el 27-sep).
-function mensajeFijo(alert: RetentionAlert, bici: string): string {
-    const hola = `Hola ${primerNombre(alert.clientName)}!`;
-    if (alert.isPostCarrera) {
-        return `${hola} Cómo te fue en ${carreraEnFrase(alert.carreraName)}? Contanos cómo se portó la bici.`;
-    }
-    if (alert.isPreCarrera) {
-        return `${hola} Vi que se acerca ${carreraEnFrase(alert.carreraName)}, querés que le demos una revisada a la ${bici} antes de viajar?`;
-    }
-    return `${hola} Te escribo del taller para recordarte que toca revisar: ${alert.component} en tu ${bici}. Querés que coordinemos un turno?`;
-}
+// El mensaje de siempre (wa.me) vive en `lib/plantillasDelSistema.ts` (`mensajeFijo`):
+// la tarjeta, la tabla y la campana mandan exactamente lo mismo.
 
 // ─────────────────────────────────────────────────────────────
 // Contactar al cliente y dejar constancia de que salió el mensaje.
@@ -261,8 +246,17 @@ function useContactarWhatsApp() {
 // mensaje tal cual le llega al cliente y recién ahí "Mandar". El que lo manda lo
 // firma: tiene que poder leerlo. La tarjeta y la tabla de próximos usan lo mismo.
 // ─────────────────────────────────────────────────────────────
+//
+// 🔴 Y ANTES de abrirlo, y otra vez antes de "Mandar", se le pregunta a la base si
+// ese recordatorio ya salió solo: la pestaña pudo quedar abierta desde antes de la
+// corrida, y un segundo mensaje por lo mismo es justo lo que suena a robot
+// (auditoría del 27-sep-2026). Si ya salió, la tarjeta pasa a decirlo y no sale nada.
 function useEnvioConVistaPrevia(onEnviado?: (alert: RetentionAlert) => void) {
     const { modoAuto, preparar, mandar, contactar } = useContactarWhatsApp();
+    const taller_id = useAuthStore(s => s.taller_id);
+    const taller = useAuthStore(s => s.taller);
+    const conAuto = tieneFeature(taller, 'recordatorios_auto');
+    const salioSolo = (alert: RetentionAlert) => conAuto ? yaSalioSolo(taller_id, alert) : Promise.resolve(null);
     const [previa, setPrevia] = useState<{ alert: RetentionAlert; envio: EnvioPreparado } | null>(null);
     const [ocupado, setOcupado] = useState<string | null>(null);
     const [mandando, setMandando] = useState(false);
@@ -270,9 +264,10 @@ function useEnvioConVistaPrevia(onEnviado?: (alert: RetentionAlert) => void) {
     // texto (y no gasta otra vez la IA).
     const armados = useRef(new Map<string, EnvioPreparado>());
 
-    const escribir = async (alert: RetentionAlert, textoFijo: string): Promise<'enviado' | 'manual' | 'previa'> => {
+    const escribir = async (alert: RetentionAlert, textoFijo: string): Promise<'enviado' | 'manual' | 'previa' | 'ya_salio'> => {
         setOcupado(alert.id);
         try {
+            if (await salioSolo(alert)) return 'ya_salio';
             if (!modoAuto) return await contactar(alert, textoFijo);
             let envio = armados.current.get(alert.id);
             if (!envio) {
@@ -294,6 +289,12 @@ function useEnvioConVistaPrevia(onEnviado?: (alert: RetentionAlert) => void) {
             onCerrar={() => setPrevia(null)}
             onMandar={async () => {
                 setMandando(true);
+                if (await salioSolo(previa.alert)) {
+                    // Salió solo mientras el texto estaba abierto: no se manda otro.
+                    setMandando(false);
+                    setPrevia(null);
+                    return;
+                }
                 const r = await mandar(previa.alert, previa.envio);
                 setMandando(false);
                 setPrevia(null);
@@ -349,79 +350,8 @@ function DialogoAntesDeMandar({ alert, envio, mandando, onMandar, onCerrar }: {
     );
 }
 
-// ─────────────────────────────────────────────────────────────
-// LOS QUE SALEN SOLOS (27-sep-2026): qué pasó con cada uno.
-//
-// La Edge Function `recordatorios-auto` anota cada recordatorio que miró en
-// `recordatorios_auto` (uno por ciclo: el día en que vence). Acá se lee para que la
-// tarjeta diga "Salió solo el …" en vez del botón, o por qué no salió y deje el
-// botón para hacerlo a mano.
-// ─────────────────────────────────────────────────────────────
-interface FilaAuto {
-    recordatorio_id: string;
-    vence_el: string;
-    estado: 'omitido' | 'enviando' | 'enviado' | 'fallo';
-    motivo: string | null;
-    dia: string;
-    actualizado_at: string;
-    mensajes_whatsapp?: { estado?: string | null; error_codigo?: string | null; error_detalle?: string | null; enviado_at?: string | null }
-        | { estado?: string | null; error_codigo?: string | null; error_detalle?: string | null; enviado_at?: string | null }[]
-        | null;
-}
-
-function useRecordatoriosAuto(activo: boolean) {
-    const taller_id = useAuthStore(s => s.taller_id);
-    const [filas, setFilas] = useState<FilaAuto[]>([]);
-    useEffect(() => {
-        if (!activo || !taller_id) return;
-        let vivo = true;
-        // Lo que ya salió (o se intentó) de cualquier día, y los motivos de hoy y
-        // ayer: un omitido viejo ya no dice nada, se vuelve a mirar cada mañana.
-        supabase.from('recordatorios_auto')
-            .select('recordatorio_id, vence_el, estado, motivo, dia, actualizado_at, mensajes_whatsapp(estado, error_codigo, error_detalle, enviado_at)')
-            .eq('taller_id', taller_id)
-            .or(`estado.neq.omitido,dia.gte.${sumarDias(hoyAR(), -1)}`)
-            // Si la tabla no está (o falla), la pantalla sigue como siempre: sin
-            // estado automático no se esconde ningún botón.
-            .then(({ data, error }) => { if (vivo) setFilas(error ? [] : ((data ?? []) as FilaAuto[])); });
-        return () => { vivo = false; };
-    }, [activo, taller_id]);
-    return useMemo(() => {
-        const hoy = hoyAR();
-        return {
-            porCiclo: new Map(filas.map(f => [`${f.recordatorio_id}|${String(f.vence_el).slice(0, 10)}`, f])),
-            hoySalieron: filas.filter(f => f.estado === 'enviado' && f.dia === hoy).length,
-        };
-    }, [filas]);
-}
-
-/** Un día de calendario ± N días, sin pasar por la hora local. */
-function sumarDias(dia: string, n: number): string {
-    const d = new Date(`${dia}T12:00:00.000Z`);
-    d.setUTCDate(d.getUTCDate() + n);
-    return d.toISOString().slice(0, 10);
-}
-
-type EstadoAuto = { salio: boolean; texto: string } | null;
-
-function estadoAutoDe(fila: FilaAuto | undefined, alert: RetentionAlert, modoSolo: boolean): EstadoAuto {
-    if (fila) {
-        const msj = Array.isArray(fila.mensajes_whatsapp) ? fila.mensajes_whatsapp[0] : fila.mensajes_whatsapp;
-        if (fila.estado === 'enviado') {
-            // Meta lo aceptó y después avisó que no lo pudo entregar (webhook).
-            if (msj?.estado === 'failed') {
-                return { salio: false, texto: `No le llegó: ${motivoDeMeta(msj.error_codigo, msj.error_detalle).motivo}.` };
-            }
-            return { salio: true, texto: `Salió solo el ${instanteAR(msj?.enviado_at ?? fila.actualizado_at)}` };
-        }
-        if (fila.estado === 'fallo') return { salio: false, texto: `No salió solo: ${fila.motivo ?? 'WhatsApp lo rechazó'}.` };
-        if (fila.estado === 'enviando') return { salio: false, texto: 'No sabemos si salió solo: fijate en el chat antes de mandarlo.' };
-        if (fila.estado === 'omitido' && modoSolo && fila.dia === hoyAR()) return { salio: false, texto: `Hoy no salió solo: ${fila.motivo}.` };
-    }
-    // Prender "Salen solos" no dispara lo viejo: eso queda acá, para hacerlo a mano.
-    if (modoSolo && alert.daysRemaining < -30) return { salio: false, texto: 'Venció hace más de 30 días: este no sale solo.' };
-    return null;
-}
+// Los que salen solos: qué pasó con cada uno vive en `lib/recordatoriosAuto.ts` (lo
+// comparte la campana, que tampoco puede ofrecer a mano uno que ya salió).
 
 // ─────────────────────────────────────────────────────────────
 // LO QUE DEJÓ AGENDADO UNA VENTA Y NO SALIÓ SOLO (Leira, 14-sep-2026).
@@ -622,7 +552,7 @@ export default function RetentionEngine() {
                             <AlertCard
                                 key={alert.id}
                                 alert={alert}
-                                estadoAuto={estadoAutoDe(auto.porCiclo.get(`${alert.id}|${alert.dueDate.slice(0, 10)}`), alert, modoSolo)}
+                                estadoAuto={estadoAutoDe(auto.porCiclo.get(claveCiclo(alert)), alert, modoSolo)}
                             />
                         ))}
                     </div>
@@ -735,7 +665,7 @@ function FranjaSalenSolos({ conWhatsApp, hoySalieron }: { conWhatsApp: boolean; 
         <div data-franja-auto className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
             <span className="flex items-center gap-2">
                 <Clock className="h-4 w-4 shrink-0" />
-                Los recordatorios salen solos a las 10 · hoy {hoySalieron === 1 ? 'salió 1' : `salieron ${hoySalieron}`}
+                Los recordatorios salen solos a las 10 y media · hoy {hoySalieron === 1 ? 'salió 1' : `salieron ${hoySalieron}`}
             </span>
             <Link to="/configuracion?ajuste=recordatorios_auto" className="text-xs text-green-800 underline underline-offset-2">Cambiar</Link>
         </div>

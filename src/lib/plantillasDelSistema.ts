@@ -12,7 +12,7 @@
 // `node tools/paridad_motor_retencion.cjs` en el repo mechanicpro-producto.
 // ─────────────────────────────────────────────────────────────
 
-import { primerNombre } from '@/lib/nombreAmigable';
+import { carreraEnFrase, primerNombre } from '@/lib/nombreAmigable';
 
 export const PLANTILLAS_DEL_SISTEMA: Record<string, string> = {
     recordatorio_mantenimiento: 'Hola {{1}}! Te escribo de {{2}} para recordarte que toca revisar {{3}} en tu {{4}}. Querés que coordinemos un turno?',
@@ -53,4 +53,27 @@ export function componerPlantilla(plantilla: string, parametros: string[]): stri
  */
 export function parametrosDelRecordatorio(cliente: string, taller: string | null | undefined, componente: string, bici: string): string[] {
     return [primerNombre(cliente), taller || 'tu taller', componente, bici];
+}
+
+/**
+ * El mensaje de siempre para abrir WhatsApp con wa.me (sin el WhatsApp conectado,
+ * o cuando la API falla y no hay texto armado). Vive en un solo lugar porque la
+ * tarjeta, la tabla de próximos Y la campana tienen que mandar exactamente lo
+ * mismo: la campana tenía otro texto, con ¡¿ y emoji (auditoría del 27-sep-2026).
+ *
+ * 🔴 Sin signos de apertura (¡ ¿) ni emoji, como las plantillas aprobadas: regla de
+ * Iara del 3-sep-2026, en un WhatsApp nadie los escribe.
+ */
+export function mensajeFijo(
+    alert: { clientName: string; component: string; carreraName?: string; isPostCarrera?: boolean; isPreCarrera?: boolean },
+    bici: string,
+): string {
+    const hola = `Hola ${primerNombre(alert.clientName)}!`;
+    if (alert.isPostCarrera) {
+        return `${hola} Cómo te fue en ${carreraEnFrase(alert.carreraName)}? Contanos cómo se portó la bici.`;
+    }
+    if (alert.isPreCarrera) {
+        return `${hola} Vi que se acerca ${carreraEnFrase(alert.carreraName)}, querés que le demos una revisada a la ${bici} antes de viajar?`;
+    }
+    return `${hola} Te escribo del taller para recordarte que toca revisar: ${alert.component} en tu ${bici}. Querés que coordinemos un turno?`;
 }

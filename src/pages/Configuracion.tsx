@@ -697,7 +697,7 @@ function RecordatoriosQueSalenSolos({ taller, setTaller, avisar, irAWhatsApp }: 
         if (error) { setModo(antes); avisar('error', 'No se pudo guardar: ' + error.message); return; }
         setTaller({ ...taller, recordatorios_envio: nuevo });
         avisar('ok', nuevo === 'solo'
-            ? 'Listo: los recordatorios salen solos a las 10, de lunes a sábado.'
+            ? 'Listo: los recordatorios salen solos a las 10 y media, de lunes a sábado.'
             : 'Listo: los recordatorios los mandás vos desde Retención.');
     };
 
@@ -732,7 +732,7 @@ function RecordatoriosQueSalenSolos({ taller, setTaller, avisar, irAWhatsApp }: 
                 </div>
             ) : modo === 'solo' ? (
                 <p className="text-xs text-green-800" data-salen-solos>
-                    Salen a las 10, de lunes a sábado: hasta 10 por día, uno por cliente por semana y nunca dos veces por lo mismo.
+                    Salen a las 10 y media, de lunes a sábado: hasta 10 por día, uno por cliente por semana y nunca dos veces por lo mismo.
                 </p>
             ) : null}
         >
@@ -742,7 +742,7 @@ function RecordatoriosQueSalenSolos({ taller, setTaller, avisar, irAWhatsApp }: 
                     cuando lo apretás, después de ver el texto.
                 </p>
                 <p>
-                    <strong>Salen solos:</strong> cada mañana a las 10 salen los que el panel marca
+                    <strong>Salen solos:</strong> cada mañana a las 10 y media salen los que el panel marca
                     como vencidos, con el mensaje de siempre (sin IA). No sale si la bici está en el
                     taller, si tiene turno, si pasó por el taller hace poco, si ya le escribieron por
                     eso, o si venció hace más de 30 días: esos quedan en Retención para hacerlos a mano.

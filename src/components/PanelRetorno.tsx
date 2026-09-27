@@ -55,6 +55,8 @@ const plata = (n: number) =>
 function nombreVariante(v: string | null): string {
     if (!v) return "Sin identificar";
     if (v.startsWith("ia_")) return "Mensaje personalizado";
+    // Los recordatorios que salen solos (27-sep-2026, `recordatorios-auto`).
+    if (v.startsWith("auto_")) return "Salió solo";
     if (v.startsWith("fijo_")) return "Mensaje de siempre";
     return v;
 }

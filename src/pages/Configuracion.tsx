@@ -15,7 +15,8 @@ import { NuevoBadge } from '@/components/NuevoBadge';
 import {
     Settings, Loader2, Save, UploadCloud, Plus, Edit2, Check, X, Users,
     AlertCircle, Sparkles, ListChecks, CheckCircle, Lock, Bell, HeartPulse,
-    GraduationCap, PlayCircle, PhoneCall, Eye, Bike, Hash, Printer, CalendarDays } from 'lucide-react';
+    GraduationCap, PlayCircle, PhoneCall, Eye, Bike, Hash, Printer, CalendarDays, Clock } from 'lucide-react';
+import { componerPlantilla } from '@/lib/plantillasDelSistema';
 import { useTourStore } from '@/components/OnboardingTour';
 import { resetTours } from '@/lib/tourSeen';
 import { ProductosOcultos } from '@/components/ProductosOcultos';
@@ -183,6 +184,18 @@ export default function Configuracion() {
                 </TabsContent>}
                 <TabsContent value="automaticos" className="mt-6 space-y-6">
                     <ComoEscribis taller={taller} setTaller={setTaller} avisar={avisar} />
+                    {/* Los recordatorios de desgaste: si los audita el mecánico o salen solos
+                        (Iara, 27-sep-2026). Del Pro para arriba, como el WhatsApp propio. */}
+                    {tieneFeature(taller, 'recordatorios_auto') && (
+                        <PanelAjustes>
+                            <RecordatoriosQueSalenSolos
+                                taller={taller}
+                                setTaller={setTaller}
+                                avisar={avisar}
+                                irAWhatsApp={() => { setActiveTab('whatsapp'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                            />
+                        </PanelAjustes>
+                    )}
                     {verWhatsApp && (
                         <div data-ajuste="automaticos" data-tour="config-automaticos" className="rounded-lg">
                             <MensajesAutomaticos taller={taller} avisar={avisar} irAWhatsApp={() => { setActiveTab('whatsapp'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} />
@@ -649,6 +662,97 @@ function ComoEscribis({ taller, setTaller, avisar }: {
                 )}
             </CardContent>
         </Card>
+    );
+}
+
+// ═════════════════════════════════════════════════════════════
+// LOS RECORDATORIOS DE DESGASTE: LOS MANDÁS VOS O SALEN SOLOS (27-sep-2026).
+//
+// Iara, textual: "que el mecánico de algunas cosas ni las tenga que auditar y sepa
+// que los mensajes se envían solos. Como que pueda decidir si lo quiere auditar o
+// no". El default es "Los mando yo" (lo de siempre): ningún taller cambia de
+// comportamiento hasta que su admin lo elige acá. Lo manda la Edge Function
+// `recordatorios-auto`, que además vuelve a chequear el plan, el WhatsApp y el
+// acceso: esta pantalla solo guarda lo que eligió.
+// ═════════════════════════════════════════════════════════════
+function RecordatoriosQueSalenSolos({ taller, setTaller, avisar, irAWhatsApp }: {
+    taller: TallerData;
+    setTaller: (t: TallerData) => void;
+    avisar: (tipo: 'ok' | 'error', msg: string) => void;
+    irAWhatsApp: () => void;
+}) {
+    const rol = useAuthStore(s => s.rol);
+    const esAdmin = rol?.toLowerCase()?.trim() === 'admin';
+    const [modo, setModo] = useState<'a_mano' | 'solo'>(taller.recordatorios_envio === 'solo' ? 'solo' : 'a_mano');
+    const [guardando, setGuardando] = useState(false);
+    const conWhatsApp = taller.wa_activo === true;
+
+    const guardar = async (nuevo: 'a_mano' | 'solo') => {
+        if (nuevo === modo) return;
+        const antes = modo;
+        setModo(nuevo);
+        setGuardando(true);
+        const { error } = await supabase.from('talleres').update({ recordatorios_envio: nuevo }).eq('id', taller.id);
+        setGuardando(false);
+        if (error) { setModo(antes); avisar('error', 'No se pudo guardar: ' + error.message); return; }
+        setTaller({ ...taller, recordatorios_envio: nuevo });
+        avisar('ok', nuevo === 'solo'
+            ? 'Listo: los recordatorios salen solos a las 10, de lunes a sábado.'
+            : 'Listo: los recordatorios los mandás vos desde Retención.');
+    };
+
+    return (
+        <FilaAjuste
+            id="recordatorios_auto"
+            icono={Clock}
+            titulo="Recordatorios de desgaste"
+            resumen="Los mandás vos o salen solos."
+            control={
+                <select
+                    value={modo}
+                    disabled={!esAdmin || guardando}
+                    onChange={e => void guardar(e.target.value as 'a_mano' | 'solo')}
+                    className="h-9 rounded-md border bg-background px-2 text-xs"
+                    aria-label="Cómo salen los recordatorios de desgaste"
+                >
+                    <option value="a_mano">Los mando yo</option>
+                    {/* Sin WhatsApp conectado no hay con qué mandarlos: la opción se
+                        ve, apagada, y el motivo va escrito abajo con el botón. */}
+                    <option value="solo" disabled={!conWhatsApp}>Salen solos</option>
+                </select>
+            }
+            aviso={!esAdmin ? (
+                <p className="text-xs text-muted-foreground">Lo cambia el administrador.</p>
+            ) : !conWhatsApp ? (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-amber-900">
+                    <span>{modo === 'solo' ? 'No está saliendo ninguno' : 'Para que salgan solos'}: falta conectar el WhatsApp.</span>
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs hover:text-amber-900" onClick={irAWhatsApp}>
+                        Conectar WhatsApp
+                    </Button>
+                </div>
+            ) : modo === 'solo' ? (
+                <p className="text-xs text-green-800" data-salen-solos>
+                    Salen a las 10, de lunes a sábado: hasta 10 por día, uno por cliente por semana y nunca dos veces por lo mismo.
+                </p>
+            ) : null}
+        >
+            <ComoFunciona className="mt-0">
+                <p>
+                    <strong>Los mando yo:</strong> los vencidos esperan en Retención y cada uno sale
+                    cuando lo apretás, después de ver el texto.
+                </p>
+                <p>
+                    <strong>Salen solos:</strong> cada mañana a las 10 salen los que el panel marca
+                    como vencidos, con el mensaje de siempre (sin IA). No sale si la bici está en el
+                    taller, si tiene turno, si pasó por el taller hace poco, si ya le escribieron por
+                    eso, o si venció hace más de 30 días: esos quedan en Retención para hacerlos a mano.
+                    En cada tarjeta ves si salió solo o por qué no.
+                </p>
+                <div className="rounded-lg bg-[#dcf8c6] p-3 text-sm text-slate-800" data-contenido>
+                    {componerPlantilla('recordatorio_mantenimiento', ['Martín', taller.nombre || 'tu taller', 'Cadena', 'Tarmac SL7'])}
+                </div>
+            </ComoFunciona>
+        </FilaAjuste>
     );
 }
 

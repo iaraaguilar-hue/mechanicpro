@@ -21,6 +21,12 @@ import type {
 //  · Recordatorio de componente → se guarda el `componente` en
 //    alertas_ocultas de alguna orden de esa bici.
 //  · Alerta de carrera → se guarda `carrera-{id}` en la orden.
+//
+// 🚩 ESPEJO (27-sep-2026): la parte de COMPONENTES (`baseAlerts`) vive también en
+// `supabase/functions/_shared/motor_retencion.ts` (`alertasDeComponentes`), porque
+// los recordatorios que salen solos tienen que elegir EXACTAMENTE lo que ve este
+// panel. Si se toca uno, el otro, y se corre
+// `node tools/paridad_motor_retencion.cjs` (repo mechanicpro-producto).
 // ─────────────────────────────────────────────────────────────
 
 export interface RetentionAlert {

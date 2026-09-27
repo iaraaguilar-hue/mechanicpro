@@ -191,6 +191,8 @@ export default function Workshop() {
     // 'ready' NO está acá: la bici finalizada queda en el Taller Activo como
     // "Listo para entregar" hasta que se aprieta "Entregar Bici" (feedback 11 a Fondo).
     const jobs = useMemo(() => {
+        // 🚩 Espejo en `_shared/recordatorios_auto.ts` (ESTADOS_CERRADOS): una bici con una
+        // orden que no está acá está en el taller, y su recordatorio no sale solo.
         const completedStatuses = ['completed', 'finalizado', 'entregado', 'old_completed', 'delivered'];
         const mapped = servicios
             .filter(s => !completedStatuses.includes((s.estado || '').toLowerCase()) && !s.eliminado_en)

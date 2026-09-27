@@ -15,6 +15,10 @@
 //
 // Todo es determinístico y auditable: estadística sobre los datos del
 // taller, cada número citable. La IA de acá es la cabeza, no una API.
+//
+// 🚩 `prediccionComponente` (con COMPONENTE_KEYWORDS, keywordDe y mediana) tiene
+// un espejo exacto en `supabase/functions/_shared/motor_retencion.ts` (27-sep-2026,
+// los recordatorios que salen solos). Si se toca uno, el otro.
 // ─────────────────────────────────────────────────────────────
 
 const MS_DIA = 86400000;

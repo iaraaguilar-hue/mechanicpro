@@ -52,6 +52,7 @@ export const AJUSTES: Ajuste[] = [
     { id: 'voz', titulo: 'Cómo hablás en los mensajes', tab: 'automaticos', palabras: 'tono voz estilo tuteo forma de hablar mensajes' },
     { id: 'ia_mensajes', titulo: 'Mensajes personalizados uno por uno', tab: 'automaticos', palabras: 'ia inteligencia artificial personalizados personalizar recordatorios historial', requiere: 'mensaje_ia' },
     { id: 'whatsapp', titulo: 'Conectar el WhatsApp del taller', tab: 'whatsapp', palabras: 'whatsapp numero conectar telefono celular coexistencia meta desconectar', requiere: 'whatsapp_propio' },
+    { id: 'recordatorios_auto', titulo: 'Recordatorios de desgaste: los mandás vos o salen solos', tab: 'automaticos', palabras: 'recordatorios desgaste vencimientos vencidos componentes cadena pastillas retencion salen solos automatico automaticos solo sin revisar auditar revisar antes aprobar mandar yo a mano', requiere: 'recordatorios_auto' },
     { id: 'automaticos', titulo: 'Mensajes que salen solos', tab: 'automaticos', palabras: 'automaticos automatico solo avisar lista comprobante al cliente entrega seguimiento dias despues', requiere: 'mensajes_automaticos' },
     { id: 'plantillas', titulo: 'Armar un mensaje nuevo (plantilla)', tab: 'automaticos', palabras: 'plantilla plantillas mensaje nuevo crear armar meta aprobar texto', requiere: 'mensajes_automaticos' },
     { id: 'turnos', titulo: 'Calendario de turnos', tab: 'preferencias', palabras: 'turnos turno calendario agenda agendar dar turno reservar dia semana cita citas horario cuaderno', requiere: 'turnos' },

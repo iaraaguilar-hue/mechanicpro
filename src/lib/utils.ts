@@ -62,6 +62,8 @@ export function hexToHslSpaceSeparated(hex: string): string {
     return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
+// 🚩 Espejo en `supabase/functions/_shared/motor_retencion.ts` (`diasHasta`): allá se
+// le pasa el día de Argentina porque el servidor corre en UTC. Si se toca uno, el otro.
 export const calculateDaysRemaining = (targetDateString: string): number => {
     if (!targetDateString) return 0;
 

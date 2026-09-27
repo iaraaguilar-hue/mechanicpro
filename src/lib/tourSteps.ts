@@ -343,7 +343,7 @@ const BIENVENIDA: PasoTour[] = [
         opcional: true,
         titulo: 'El mensaje ya escrito',
         cuerpo:
-            'Con "Contactar por WhatsApp" se abre el chat con el mensaje armado para ese cliente y ese componente. Con "Copiar Mensaje" lo llevás a donde quieras. Lo leés, lo cambiás si querés, y lo mandás.',
+            'Con "Escribir" ves el mensaje armado para ese cliente y ese componente tal cual le llega, y recién ahí lo mandás. Si lo querés llevar a otro lado, lo copiás.',
     },
     {
         id: 'retencion-proximos',

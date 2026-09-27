@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { PLANTILLAS_DEL_SISTEMA } from '@/lib/plantillasDelSistema';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, Send, X, Megaphone, ChevronDown, ChevronUp, CheckCircle2, AlertTriangle } from 'lucide-react';
@@ -235,19 +236,5 @@ function TextoDelMensaje({ plantilla, parametros }: { plantilla: string; paramet
     return <>{parametros.reduce((t, v, i) => t.replaceAll(`{{${i + 1}}}`, v), cuerpo)}</>;
 }
 
-/**
- * 🚩 Espejo del catálogo de `supabase/functions/_shared/plantillas.ts`.
- * Solo los cuerpos, y solo para MOSTRAR: el envío usa el de Meta. Si allá se
- * agrega una, acá también — igual que en MensajesAutomaticos.tsx.
- */
-const PLANTILLAS_DEL_SISTEMA: Record<string, string> = {
-    recordatorio_mantenimiento: 'Hola {{1}}! Te escribo de {{2}} para recordarte que toca revisar {{3}} en tu {{4}}. Querés que coordinemos un turno?',
-    comprobante_service: 'Hola {{1}}! Terminamos el service de tu {{2}} en {{3}}. Te dejamos el comprobante con el detalle de todo lo que hicimos. Gracias por confiar en nosotros!',
-    seguimiento_evento: 'Hola {{1}}! Cómo te fue en {{2}}? Contanos cómo se portó la bici.',
-    pre_carrera: 'Hola {{1}}! Vi que se acerca {{2}}, querés que le demos una revisada a tu {{3}} antes de viajar?',
-    recontacto_personal: 'Hola {{1}}! Cómo va? Te escribo yo, {{2}}, por tu bici. {{3}} Si querés lo vemos, escribime por acá.',
-    bici_lista_pdf: 'Hola {{1}}! Soy {{2}}, de {{3}}. Ya está lista tu {{4}}. Te paso el comprobante con el detalle del trabajo. {{5}} Cuando quieras la pasás a buscar.',
-    comprobante_entrega_pdf: 'Hola {{1}}! Soy {{2}}, de {{3}}. Te dejo el comprobante del service de tu {{4}}, con el detalle del trabajo. {{5}} Gracias por confiar en nosotros!',
-    aviso_tienda_entrega: 'Bici entregada: {{1}} de {{2}}. Va el comprobante del service para la gestión del cobro.',
-    seguimiento_service: 'Hola {{1}}! Soy {{2}}, de {{3}}. Te escribo por el service que le hicimos a tu {{4}} y quería saber cómo la venís sintiendo, contame si notaste algo raro.',
-};
+// El catálogo del sistema vive en `lib/plantillasDelSistema.ts` desde el 27-sep-2026
+// (lo usa también Retención para mostrar el texto antes de mandar).

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Campanas } from '@/components/Campanas';
 import { Link } from "react-router-dom";
 import { useDataStore, type SupabaseClient, type SupabaseBike } from "@/store/dataStore";
@@ -9,16 +9,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing, Flag, Copy, User, Loader2, MessageCircle } from "lucide-react";
+import { AlertTriangle, Phone, Calendar, CheckCircle2, BellRing, Flag, Copy, User, Loader2, MessageCircle, Send, Clock } from "lucide-react";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { buildRetentionAlerts, type RetentionAlert } from "@/lib/retentionAlerts";
 import { construirAvisosSuaves, CONFIG_SUAVES_DEFAULT, type AvisoSuave, type ResultadoSuaves } from "@/lib/avisosSuaves";
 import { clientesEnFuga, type ClienteEnFuga } from "@/lib/motorConCabeza";
-import { carreraEnFrase, nombreBiciAmigable, nombresBicisAmigables, primerNombre } from "@/lib/nombreAmigable";
+import { carreraEnFrase, nombreBiciParaMensaje, primerNombre } from "@/lib/nombreAmigable";
+import { componerPlantilla, parametrosDelRecordatorio } from "@/lib/plantillasDelSistema";
+import { motivoDeMeta } from "@/lib/motivoDeMeta";
 import { tieneFeature } from "@/lib/planFeatures";
 import PanelRetorno from "@/components/PanelRetorno";
 import BandejaRespuestas from "@/components/BandejaRespuestas";
 import { ComoFunciona } from '@/components/ComoFunciona';
-import { diaCalendario } from '@/lib/fechaAR';
+import { diaCalendario, instanteAR } from '@/lib/fechaAR';
 
 // Acceso rápido al perfil del cliente desde la alerta: si tenemos la bici,
 // abrimos esa bici (el perfil muestra igual al cliente con TODAS sus bicis en
@@ -34,30 +37,32 @@ function perfilHref(alert: RetentionAlert): string | null {
 // mecánico y le sirve el detalle); en el mensaje va el nombre corto, que
 // es el que usa el dueño. Se resuelve contra todas las bicis del cliente
 // porque si tiene dos Rockhopper, acortar lo dejaría sin saber cuál es.
+// 🚩 `nombreBiciParaMensaje` tiene espejo en el servidor: el recordatorio que sale
+// solo tiene que nombrar la bici igual que el que manda el mecánico.
 function useNombreBici() {
     const bicicletas = useDataStore(s => s.bicicletas);
-    return useCallback((alert: RetentionAlert): string => {
-        const bici = bicicletas.find(b => b.id === alert.bikeId);
-        if (!bici) return nombreBiciAmigable(null, alert.bikeModel);
-        const delCliente = bicicletas.filter(b => b.cliente_id === bici.cliente_id);
-        return nombresBicisAmigables(delCliente).get(bici.id)
-            ?? nombreBiciAmigable(bici.marca, bici.modelo);
-    }, [bicicletas]);
+    return useCallback(
+        (alert: RetentionAlert): string => nombreBiciParaMensaje(bicicletas, alert.bikeId, alert.bikeModel),
+        [bicicletas],
+    );
 }
 
 // El mensaje de siempre: el que sale cuando la IA está apagada o falló.
 // Vive en un solo lugar porque las dos vistas (tarjeta y tabla) tienen que
 // mandar exactamente lo mismo — antes la tabla abría wa.me con el texto
 // vacío para los avisos que no eran de carrera.
+//
+// 🔴 Sin signos de apertura (¡ ¿), como las plantillas aprobadas: regla de Iara del
+// 3-sep-2026, en un WhatsApp nadie los escribe (se sacaron de acá el 27-sep).
 function mensajeFijo(alert: RetentionAlert, bici: string): string {
-    const hola = `¡Hola ${primerNombre(alert.clientName)}!`;
+    const hola = `Hola ${primerNombre(alert.clientName)}!`;
     if (alert.isPostCarrera) {
-        return `${hola} ¿Cómo te fue en ${carreraEnFrase(alert.carreraName)}? Contanos cómo se portó la bici.`;
+        return `${hola} Cómo te fue en ${carreraEnFrase(alert.carreraName)}? Contanos cómo se portó la bici.`;
     }
     if (alert.isPreCarrera) {
-        return `${hola} Vi que se acerca ${carreraEnFrase(alert.carreraName)}, ¿querés que le demos una revisada a la ${bici} antes de viajar?`;
+        return `${hola} Vi que se acerca ${carreraEnFrase(alert.carreraName)}, querés que le demos una revisada a la ${bici} antes de viajar?`;
     }
-    return `${hola} Te escribo del taller para recordarte que toca revisar: ${alert.component} en tu ${bici}. ¿Querés que coordinemos un turno?`;
+    return `${hola} Te escribo del taller para recordarte que toca revisar: ${alert.component} en tu ${bici}. Querés que coordinemos un turno?`;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -74,8 +79,27 @@ function mensajeFijo(alert: RetentionAlert, bici: string): string {
 // solo por la API oficial y llegan los estados reales (entregado, leído).
 // Mientras no lo tenga, sigue el camino de siempre: abrir wa.me.
 //
-// 🚩 Si el envío por API falla, SE ABRE wa.me igual. Que se caiga la API no
-// puede dejar al taller sin poder contactar a su cliente.
+// 🔴 EN DOS PASOS DESDE EL 27-sep-2026: `preparar` arma el mensaje (con la IA si
+// está prendida) y devuelve el TEXTO EXACTO que le llega al cliente; `mandar` lo
+// manda. Antes era uno solo, y con el WhatsApp conectado el recordatorio salía sin
+// que el mecánico viera el texto (ni el fijo ni el de la IA), y "Copiar Mensaje"
+// copiaba otro texto que no era el que salía.
+//
+// 🚩 Si el envío por API falla, SE ABRE wa.me igual, con el mismo texto que se vio.
+// Que se caiga la API no puede dejar al taller sin poder contactar a su cliente.
+
+/** Lo que va a salir, ya armado. `texto` es lo que lee el cliente, palabra por palabra. */
+interface EnvioPreparado {
+    via: 'api' | 'wame';
+    plantilla?: string;
+    parametros?: string[];
+    texto: string;
+    variante: string;
+    generadoPorIA: boolean;
+    /** La línea que escribió la IA, si la escribió (es lo que se guarda como texto_enviado). */
+    lineaIA: string | null;
+}
+
 function useContactarWhatsApp() {
     const registrar = useDataStore(s => s.registrarContactoRetencion);
     const enviar = useDataStore(s => s.enviarWhatsAppPlantilla);
@@ -135,8 +159,7 @@ function useContactarWhatsApp() {
         return r.ok && r.linea ? r : null;
     };
 
-    // Devuelve 'enviado' | 'manual'. El llamador decide qué mostrar.
-    const contactar = async (alert: RetentionAlert, texto: string): Promise<'enviado' | 'manual'> => {
+    const preparar = async (alert: RetentionAlert, textoFijo: string): Promise<EnvioPreparado> => {
         const personal = await redactarPersonal(alert);
         const nombre = primerNombre(alert.clientName);
         // Los parámetros son lo único que el cliente lee: van con los nombres
@@ -144,24 +167,20 @@ function useContactarWhatsApp() {
         const bici = nombreBici(alert);
         const carrera = carreraEnFrase(alert.carreraName);
 
-        // El mensaje completo para el camino manual (wa.me). Es el MISMO
-        // texto que arma la plantilla aprobada de Meta: el cliente tiene
-        // que recibir lo mismo salga por donde salga.
-        const mensajePersonal = personal
-            ? `¡Hola ${nombre}! ¿Cómo va? Te escribo yo, ${personal.firma} de ${taller?.nombre || 'tu taller'}, por tu bici. ${personal.linea} Si querés lo vemos, escribime por acá.`
-            : null;
-
         if (!modoAuto) {
             // Sin la API de Meta el texto es libre: acá la personalización
             // entra entera, sin plantilla que la limite. El taller no tiene
             // que esperar a Meta para que sus mensajes dejen de sonar a robot.
-            const cuerpo = mensajePersonal ?? texto;
-            registrarManual(alert, undefined, {
+            const mensajePersonal = personal
+                ? `Hola ${nombre}! Cómo va? Te escribo yo, ${personal.firma} de ${taller?.nombre || 'tu taller'}, por tu bici. ${personal.linea} Si querés lo vemos, escribime por acá.`
+                : null;
+            return {
+                via: 'wame',
+                texto: mensajePersonal ?? textoFijo,
                 variante: personal?.variante ?? 'fijo_wame',
-                texto_enviado: cuerpo,
-            });
-            abrirWaMe(alert, cuerpo);
-            return 'manual';
+                generadoPorIA: !!personal,
+                lineaIA: personal?.linea ?? null,
+            };
         }
 
         // Con la API oficial, fuera de la ventana de 24hs Meta SOLO acepta
@@ -179,41 +198,229 @@ function useContactarWhatsApp() {
                 ? [nombre, carrera]
                 : alert.isPreCarrera
                     ? [nombre, carrera, bici]
-                    // El nombre del taller va en el mensaje: cuando lo manda un
-                    // sistema y no una persona, no decir de quién es se lee como spam.
-                    : [nombre, taller?.nombre || 'tu taller', alert.component, bici];
+                    // 🚩 Los mismos cuatro que manda solo `recordatorios-auto`.
+                    : parametrosDelRecordatorio(alert.clientName, taller?.nombre, alert.component, bici);
+
+        return {
+            via: 'api',
+            plantilla,
+            parametros,
+            // Lo que va a leer el cliente: el cuerpo aprobado con cada hueco lleno.
+            texto: componerPlantilla(plantilla, parametros) ?? textoFijo,
+            variante: personal?.variante ?? `fijo_${plantilla}`,
+            generadoPorIA: !!personal,
+            lineaIA: personal?.linea ?? null,
+        };
+    };
+
+    // Devuelve 'enviado' | 'manual'. El llamador decide qué mostrar.
+    const mandar = async (alert: RetentionAlert, envio: EnvioPreparado): Promise<'enviado' | 'manual'> => {
+        if (envio.via === 'wame') {
+            registrarManual(alert, undefined, { variante: envio.variante, texto_enviado: envio.texto });
+            abrirWaMe(alert, envio.texto);
+            return 'manual';
+        }
 
         const r = await enviar({
             proposito: alert.isPostCarrera ? 'evento' : 'retencion',
-            plantilla,
+            plantilla: envio.plantilla!,
             destino: alert.clientPhone,
-            parametros,
+            parametros: envio.parametros ?? [],
             cliente_id: alert.clientId ?? null,
             bicicleta_id: alert.bikeId ?? null,
             servicio_id: alert.servicioId ?? null,
-            variante: personal?.variante ?? `fijo_${plantilla}`,
-            generado_por_ia: !!personal,
+            variante: envio.variante,
+            generado_por_ia: envio.generadoPorIA,
         });
 
         if (r.ok) {
-            registrarManual(alert, r.mensaje_id, {
-                variante: personal?.variante ?? `fijo_${plantilla}`,
-                texto_enviado: personal ? personal.linea : null,
-            });
+            registrarManual(alert, r.mensaje_id, { variante: envio.variante, texto_enviado: envio.lineaIA });
             return 'enviado';
         }
 
-        // 🚩 Si el envío por API falla, se abre wa.me igual: que se caiga la
-        // API no puede dejar al taller sin poder contactar a su cliente.
+        // 🚩 Si el envío por API falla, se abre wa.me igual, con el texto que se vio.
         registrarManual(alert, undefined, {
-            variante: personal?.variante ?? 'fijo_wame',
-            texto_enviado: mensajePersonal ?? texto,
+            variante: envio.generadoPorIA ? envio.variante : 'fijo_wame',
+            texto_enviado: envio.texto,
         });
-        abrirWaMe(alert, mensajePersonal ?? texto);
+        abrirWaMe(alert, envio.texto);
         return 'manual';
     };
 
-    return { modoAuto, contactar };
+    // Sin el WhatsApp conectado, un solo paso como siempre: el texto lo ve en
+    // WhatsApp antes de apretar enviar.
+    const contactar = async (alert: RetentionAlert, textoFijo: string) => mandar(alert, await preparar(alert, textoFijo));
+
+    return { modoAuto, preparar, mandar, contactar };
+}
+
+// ─────────────────────────────────────────────────────────────
+// ANTES DE MANDAR, EL TEXTO (27-sep-2026).
+//
+// Con el WhatsApp conectado, "Escribir recordatorio" ya no manda: muestra el
+// mensaje tal cual le llega al cliente y recién ahí "Mandar". El que lo manda lo
+// firma: tiene que poder leerlo. La tarjeta y la tabla de próximos usan lo mismo.
+// ─────────────────────────────────────────────────────────────
+function useEnvioConVistaPrevia(onEnviado?: (alert: RetentionAlert) => void) {
+    const { modoAuto, preparar, mandar, contactar } = useContactarWhatsApp();
+    const [previa, setPrevia] = useState<{ alert: RetentionAlert; envio: EnvioPreparado } | null>(null);
+    const [ocupado, setOcupado] = useState<string | null>(null);
+    const [mandando, setMandando] = useState(false);
+    // Lo ya armado no se vuelve a pedir: cerrar y volver a abrir muestra el MISMO
+    // texto (y no gasta otra vez la IA).
+    const armados = useRef(new Map<string, EnvioPreparado>());
+
+    const escribir = async (alert: RetentionAlert, textoFijo: string): Promise<'enviado' | 'manual' | 'previa'> => {
+        setOcupado(alert.id);
+        try {
+            if (!modoAuto) return await contactar(alert, textoFijo);
+            let envio = armados.current.get(alert.id);
+            if (!envio) {
+                envio = await preparar(alert, textoFijo);
+                armados.current.set(alert.id, envio);
+            }
+            setPrevia({ alert, envio });
+            return 'previa';
+        } finally {
+            setOcupado(null);
+        }
+    };
+
+    const dialogo = previa ? (
+        <DialogoAntesDeMandar
+            alert={previa.alert}
+            envio={previa.envio}
+            mandando={mandando}
+            onCerrar={() => setPrevia(null)}
+            onMandar={async () => {
+                setMandando(true);
+                const r = await mandar(previa.alert, previa.envio);
+                setMandando(false);
+                setPrevia(null);
+                if (r === 'enviado') onEnviado?.(previa.alert);
+            }}
+        />
+    ) : null;
+
+    return { modoAuto, escribir, ocupado, dialogo };
+}
+
+function DialogoAntesDeMandar({ alert, envio, mandando, onMandar, onCerrar }: {
+    alert: RetentionAlert;
+    envio: EnvioPreparado;
+    mandando: boolean;
+    onMandar: () => void;
+    onCerrar: () => void;
+}) {
+    const [copiado, setCopiado] = useState(false);
+    const copiar = async () => {
+        try {
+            await navigator.clipboard.writeText(envio.texto);
+            setCopiado(true);
+            setTimeout(() => setCopiado(false), 2000);
+        } catch (e) {
+            console.error('Error al copiar al portapapeles', e);
+        }
+    };
+    return (
+        <Dialog open onOpenChange={(o) => { if (!o && !mandando) onCerrar(); }}>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Así le llega a {primerNombre(alert.clientName) || 'tu cliente'}</DialogTitle>
+                </DialogHeader>
+                <div className="rounded-lg bg-[#dcf8c6] p-3 text-sm text-slate-800 whitespace-pre-wrap" data-mensaje-previo data-contenido>
+                    {envio.texto}
+                </div>
+                {envio.generadoPorIA && (
+                    <p className="text-xs text-muted-foreground">La línea del medio está escrita con su historial.</p>
+                )}
+                <DialogFooter className="gap-2 sm:gap-2">
+                    <Button variant="outline" onClick={copiar} disabled={mandando}>
+                        {copiado ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                        {copiado ? 'Copiado' : 'Copiar mensaje'}
+                    </Button>
+                    <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={onMandar} disabled={mandando}>
+                        {mandando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                        Mandar
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────
+// LOS QUE SALEN SOLOS (27-sep-2026): qué pasó con cada uno.
+//
+// La Edge Function `recordatorios-auto` anota cada recordatorio que miró en
+// `recordatorios_auto` (uno por ciclo: el día en que vence). Acá se lee para que la
+// tarjeta diga "Salió solo el …" en vez del botón, o por qué no salió y deje el
+// botón para hacerlo a mano.
+// ─────────────────────────────────────────────────────────────
+interface FilaAuto {
+    recordatorio_id: string;
+    vence_el: string;
+    estado: 'omitido' | 'enviando' | 'enviado' | 'fallo';
+    motivo: string | null;
+    dia: string;
+    actualizado_at: string;
+    mensajes_whatsapp?: { estado?: string | null; error_codigo?: string | null; error_detalle?: string | null; enviado_at?: string | null }
+        | { estado?: string | null; error_codigo?: string | null; error_detalle?: string | null; enviado_at?: string | null }[]
+        | null;
+}
+
+function useRecordatoriosAuto(activo: boolean) {
+    const taller_id = useAuthStore(s => s.taller_id);
+    const [filas, setFilas] = useState<FilaAuto[]>([]);
+    useEffect(() => {
+        if (!activo || !taller_id) return;
+        let vivo = true;
+        // Lo que ya salió (o se intentó) de cualquier día, y los motivos de hoy y
+        // ayer: un omitido viejo ya no dice nada, se vuelve a mirar cada mañana.
+        supabase.from('recordatorios_auto')
+            .select('recordatorio_id, vence_el, estado, motivo, dia, actualizado_at, mensajes_whatsapp(estado, error_codigo, error_detalle, enviado_at)')
+            .eq('taller_id', taller_id)
+            .or(`estado.neq.omitido,dia.gte.${sumarDias(hoyAR(), -1)}`)
+            // Si la tabla no está (o falla), la pantalla sigue como siempre: sin
+            // estado automático no se esconde ningún botón.
+            .then(({ data, error }) => { if (vivo) setFilas(error ? [] : ((data ?? []) as FilaAuto[])); });
+        return () => { vivo = false; };
+    }, [activo, taller_id]);
+    return useMemo(() => {
+        const hoy = hoyAR();
+        return {
+            porCiclo: new Map(filas.map(f => [`${f.recordatorio_id}|${String(f.vence_el).slice(0, 10)}`, f])),
+            hoySalieron: filas.filter(f => f.estado === 'enviado' && f.dia === hoy).length,
+        };
+    }, [filas]);
+}
+
+/** Un día de calendario ± N días, sin pasar por la hora local. */
+function sumarDias(dia: string, n: number): string {
+    const d = new Date(`${dia}T12:00:00.000Z`);
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+}
+
+type EstadoAuto = { salio: boolean; texto: string } | null;
+
+function estadoAutoDe(fila: FilaAuto | undefined, alert: RetentionAlert, modoSolo: boolean): EstadoAuto {
+    if (fila) {
+        const msj = Array.isArray(fila.mensajes_whatsapp) ? fila.mensajes_whatsapp[0] : fila.mensajes_whatsapp;
+        if (fila.estado === 'enviado') {
+            // Meta lo aceptó y después avisó que no lo pudo entregar (webhook).
+            if (msj?.estado === 'failed') {
+                return { salio: false, texto: `No le llegó: ${motivoDeMeta(msj.error_codigo, msj.error_detalle).motivo}.` };
+            }
+            return { salio: true, texto: `Salió solo el ${instanteAR(msj?.enviado_at ?? fila.actualizado_at)}` };
+        }
+        if (fila.estado === 'fallo') return { salio: false, texto: `No salió solo: ${fila.motivo ?? 'WhatsApp lo rechazó'}.` };
+        if (fila.estado === 'enviando') return { salio: false, texto: 'No sabemos si salió solo: fijate en el chat antes de mandarlo.' };
+        if (fila.estado === 'omitido' && modoSolo && fila.dia === hoyAR()) return { salio: false, texto: `Hoy no salió solo: ${fila.motivo}.` };
+    }
+    // Prender "Salen solos" no dispara lo viejo: eso queda acá, para hacerlo a mano.
+    if (modoSolo && alert.daysRemaining < -30) return { salio: false, texto: 'Venció hace más de 30 días: este no sale solo.' };
+    return null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -290,11 +497,16 @@ export default function RetentionEngine() {
     const servicios = useDataStore(s => s.servicios);
     const carreras = useDataStore(s => s.carreras);
     const isHydrating = useDataStore(s => s.isHydrating);
-    const { modoAuto, contactar } = useContactarWhatsApp();
+    // Con el WhatsApp conectado, el botón de la tabla muestra el texto antes de mandar.
+    const { modoAuto, escribir, ocupado, dialogo } = useEnvioConVistaPrevia();
     const nombreBici = useNombreBici();
-    const [enviando, setEnviando] = useState<string | null>(null);
 
     const taller = useAuthStore(s => s.taller);
+    // Los recordatorios que salen solos (27-sep-2026). `modoSolo` es lo que eligió
+    // el admin; si además falta el WhatsApp, la franja lo dice.
+    const conAuto = tieneFeature(taller, 'recordatorios_auto');
+    const modoSolo = conAuto && taller?.recordatorios_envio === 'solo';
+    const auto = useRecordatoriosAuto(conAuto);
     // Idea 5 (Pro/Expert): la fecha del aviso sale del ritmo real de ESE
     // ciclista cuando su historial da base; si no, el plazo fijo de siempre.
     const predictivo = tieneFeature(taller, 'motor_predictivo');
@@ -358,6 +570,10 @@ export default function RetentionEngine() {
                 <p className="text-muted-foreground mt-1">Gestiona los vencimientos de componentes y genera re-compras.</p>
             </div>
 
+            {/* Que el mecánico SEPA que salen solos, arriba de todo: si no lo ve,
+                le escribe a mano al mismo cliente que ya recibió el automático. */}
+            {modoSolo && <FranjaSalenSolos conWhatsApp={modoAuto} hoySalieron={auto.hoySalieron} />}
+
             {/* El resultado va arriba del trabajo: si el taller entra y lo
                 primero que ve es una lista de pendientes, el sistema le pide.
                 Si ve lo que le trajo, el sistema le da. */}
@@ -403,7 +619,11 @@ export default function RetentionEngine() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {urgentAlerts.map((alert) => (
-                            <AlertCard key={alert.id} alert={alert} />
+                            <AlertCard
+                                key={alert.id}
+                                alert={alert}
+                                estadoAuto={estadoAutoDe(auto.porCiclo.get(`${alert.id}|${alert.dueDate.slice(0, 10)}`), alert, modoSolo)}
+                            />
                         ))}
                     </div>
                 </div>
@@ -476,15 +696,11 @@ export default function RetentionEngine() {
                                             <Button
                                                 variant="ghost" size="sm"
                                                 className="h-8 text-green-600 hover:text-green-700 hover:bg-green-50"
-                                                title={modoAuto ? 'Enviar el recordatorio por WhatsApp' : 'Abrir WhatsApp con el mensaje'}
-                                                disabled={enviando === alert.id}
-                                                onClick={async () => {
-                                                    setEnviando(alert.id);
-                                                    await contactar(alert, mensajeFijo(alert, nombreBici(alert)));
-                                                    setEnviando(null);
-                                                }}
+                                                title={modoAuto ? 'Ver el recordatorio y mandarlo por WhatsApp' : 'Abrir WhatsApp con el mensaje'}
+                                                disabled={ocupado === alert.id}
+                                                onClick={() => { void escribir(alert, mensajeFijo(alert, nombreBici(alert))); }}
                                             >
-                                                {enviando === alert.id
+                                                {ocupado === alert.id
                                                     ? <Loader2 className="h-4 w-4 animate-spin" />
                                                     : <Phone className="h-4 w-4" />}
                                             </Button>
@@ -496,6 +712,32 @@ export default function RetentionEngine() {
                     </div>
                 </div>
             )}
+            {dialogo}
+        </div>
+    );
+}
+
+// La franja de arriba de Retención cuando el taller eligió "Salen solos".
+function FranjaSalenSolos({ conWhatsApp, hoySalieron }: { conWhatsApp: boolean; hoySalieron: number }) {
+    if (!conWhatsApp) {
+        // Eligió "Salen solos" y el WhatsApp se desconectó (o nunca se conectó): no
+        // sale nada, y eso se dice con el botón que lo destraba.
+        return (
+            <div data-franja-auto className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <span className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 shrink-0" /> Los recordatorios no están saliendo: falta conectar el WhatsApp.</span>
+                <Button asChild size="sm" variant="outline" className="h-8 bg-white hover:text-amber-900">
+                    <Link to="/configuracion?ajuste=whatsapp">Conectar WhatsApp</Link>
+                </Button>
+            </div>
+        );
+    }
+    return (
+        <div data-franja-auto className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
+            <span className="flex items-center gap-2">
+                <Clock className="h-4 w-4 shrink-0" />
+                Los recordatorios salen solos a las 10 · hoy {hoySalieron === 1 ? 'salió 1' : `salieron ${hoySalieron}`}
+            </span>
+            <Link to="/configuracion?ajuste=recordatorios_auto" className="text-xs text-green-800 underline underline-offset-2">Cambiar</Link>
         </div>
     );
 }
@@ -699,18 +941,18 @@ function SeccionFuga({ fuga }: { fuga: { enRiesgo: ClienteEnFuga[]; conBase: num
     );
 }
 
-function AlertCard({ alert }: { alert: RetentionAlert }) {
+function AlertCard({ alert, estadoAuto }: { alert: RetentionAlert; estadoAuto?: EstadoAuto }) {
     const [isCopied, setIsCopied] = useState(false);
     const [isDismissing, setIsDismissing] = useState(false);
     const dismissAlert = useDataStore(s => s.dismissAlert);
-    const { modoAuto, contactar } = useContactarWhatsApp();
-    const nombreBici = useNombreBici();
-    const [enviando, setEnviando] = useState(false);
     const [enviado, setEnviado] = useState(false);
+    const { modoAuto, escribir, ocupado, dialogo } = useEnvioConVistaPrevia(() => setEnviado(true));
+    const nombreBici = useNombreBici();
+    const enviando = ocupado === alert.id;
 
-    // El texto de siempre. Es lo que se copia con el botón y lo que sale si
-    // la IA está apagada; cuando está prendida, el mensaje real lo escribe
-    // la Edge Function con el historial del cliente.
+    // El texto de siempre. Sin el WhatsApp conectado es lo que se copia y lo que
+    // abre wa.me si la IA está apagada. Con el WhatsApp conectado, lo que se ve y se
+    // copia es el texto EXACTO que va a salir (en el diálogo antes de mandar).
     const messageText = mensajeFijo(alert, nombreBici(alert));
 
     const handleCopy = async () => {
@@ -739,6 +981,10 @@ function AlertCard({ alert }: { alert: RetentionAlert }) {
     };
 
     if (isDismissing) return null; // Optimistic hide at component level to ensure unmount
+
+    // Salió solo: la tarjeta lo dice en lugar del botón. Volver a escribirle por lo
+    // mismo es exactamente el mensaje repetido que lo hace leer como un robot.
+    const salioSolo = estadoAuto?.salio === true;
 
     return (
         <Card className={`border-l-4 shadow-sm hover:shadow-md transition-shadow ${alert.isPostCarrera ? 'border-l-violet-500 bg-violet-50/50' : 'border-l-red-500 bg-red-50/50'}`}>
@@ -779,38 +1025,54 @@ function AlertCard({ alert }: { alert: RetentionAlert }) {
                         </div>
                     )}
                 </div>
+                {/* Lo que pasó con el envío automático, si el taller lo tiene. Es dato
+                    de ESTE cliente (no ayuda): va con data-contenido. */}
+                {estadoAuto && (
+                    <p
+                        data-estado-auto={salioSolo ? 'salio' : 'no_salio'}
+                        data-contenido
+                        className={`flex items-start gap-1.5 rounded-md border px-2 py-1.5 text-xs ${salioSolo ? 'border-green-200 bg-green-50 text-green-800' : 'border-amber-200 bg-amber-50 text-amber-900'}`}
+                    >
+                        {salioSolo ? <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0" /> : <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />}
+                        <span>{estadoAuto.texto}</span>
+                    </p>
+                )}
                 <div data-tour="retencion-contactar" className="flex flex-col gap-2">
-                    <Button
-                        className={`w-full font-semibold ${enviado ? 'bg-slate-400 hover:bg-slate-400 text-white' : alert.isPostCarrera ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
-                        disabled={enviando || enviado}
-                        onClick={async () => {
-                            setEnviando(true);
-                            const r = await contactar(alert, messageText);
-                            setEnviando(false);
-                            // Solo se marca "enviado" cuando salió por la API. Si cayó
-                            // a wa.me, el envío lo termina la persona en su WhatsApp y
-                            // el sistema no puede afirmar que se mandó.
-                            if (r === 'enviado') setEnviado(true);
-                        }}
-                    >
-                        {/* "Escribir" va en el rótulo a propósito: las instrucciones que se le
-                            entregaron a Meta en el App Review dicen textual "press "Escribir"",
-                            y esa solicitud ya no se puede editar. El resto de la frase queda
-                            porque para el mecánico "Escribir" a secas no dice qué se escribe. */}
-                        {enviando
-                            ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enviando...</>
-                            : enviado
-                                ? <><CheckCircle2 className="mr-2 h-4 w-4" /> Mensaje enviado</>
-                                : <><Phone className="mr-2 h-4 w-4" /> {modoAuto ? 'Escribir recordatorio' : 'Escribir por WhatsApp'}</>}
-                    </Button>
-                    <Button
-                        variant="outline"
-                        className={`w-full font-semibold transition-colors ${isCopied ? 'border-green-500 text-green-600 bg-green-50' : 'border-slate-300 text-slate-700'}`}
-                        onClick={handleCopy}
-                    >
-                        {isCopied ? <CheckCircle2 className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
-                        {isCopied ? "¡Copiado!" : "Copiar Mensaje"}
-                    </Button>
+                    {!salioSolo && (
+                        <Button
+                            className={`w-full font-semibold ${enviado ? 'bg-slate-400 hover:bg-slate-400 text-white' : alert.isPostCarrera ? 'bg-violet-600 hover:bg-violet-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
+                            disabled={enviando || enviado}
+                            onClick={async () => {
+                                const r = await escribir(alert, messageText);
+                                // Solo se marca "enviado" cuando salió por la API (eso lo hace
+                                // el diálogo al mandar). Si cayó a wa.me, el envío lo termina
+                                // la persona en su WhatsApp y el sistema no puede afirmarlo.
+                                if (r === 'enviado') setEnviado(true);
+                            }}
+                        >
+                            {/* "Escribir" va en el rótulo a propósito: las instrucciones que se le
+                                entregaron a Meta en el App Review dicen textual "press "Escribir"",
+                                y esa solicitud ya no se puede editar. El resto de la frase queda
+                                porque para el mecánico "Escribir" a secas no dice qué se escribe. */}
+                            {enviando
+                                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {modoAuto ? 'Armando el mensaje...' : 'Enviando...'}</>
+                                : enviado
+                                    ? <><CheckCircle2 className="mr-2 h-4 w-4" /> Mensaje enviado</>
+                                    : <><Phone className="mr-2 h-4 w-4" /> {modoAuto ? 'Escribir recordatorio' : 'Escribir por WhatsApp'}</>}
+                        </Button>
+                    )}
+                    {/* Con el WhatsApp conectado se copia desde el diálogo, que tiene el
+                        texto que de verdad sale. Acá copiaría el de wa.me, que es otro. */}
+                    {!modoAuto && (
+                        <Button
+                            variant="outline"
+                            className={`w-full font-semibold transition-colors ${isCopied ? 'border-green-500 text-green-600 bg-green-50' : 'border-slate-300 text-slate-700'}`}
+                            onClick={handleCopy}
+                        >
+                            {isCopied ? <CheckCircle2 className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+                            {isCopied ? "¡Copiado!" : "Copiar Mensaje"}
+                        </Button>
+                    )}
                     {perfilHref(alert) && (
                         <Button variant="outline" className="w-full font-semibold border-slate-300 text-slate-700" asChild>
                             <Link to={perfilHref(alert)!}>
@@ -830,6 +1092,7 @@ function AlertCard({ alert }: { alert: RetentionAlert }) {
                         Ocultar aviso
                     </Button>
                 </div>
+                {dialogo}
             </CardContent>
         </Card>
     );

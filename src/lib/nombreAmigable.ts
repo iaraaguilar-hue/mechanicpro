@@ -20,7 +20,11 @@
 // IA). Nunca en la ficha, el remito ni el historial.
 //
 // 🚩 `mensaje-ia/index.ts` tiene su copia (Deno no importa de acá). Si se
-// toca esto, se toca allá.
+// toca esto, se toca allá. Y `supabase/functions/_shared/motor_retencion.ts`
+// tiene otra (primerNombre, nombreBiciAmigable, nombresBicisAmigables y
+// nombreBiciParaMensaje): la usan los recordatorios que salen solos, y el
+// cliente tiene que leer lo mismo que si se lo mandara el mecánico. Paridad:
+// `node tools/paridad_motor_retencion.cjs` (repo mechanicpro-producto).
 // ─────────────────────────────────────────────────────────────
 
 // Adjetivos de gama y de armado. Distinguen dos SKU en una lista de
@@ -141,6 +145,27 @@ export function nombresBicisAmigables<T extends { id: string; marca?: string | n
         }
     }
     return corto;
+}
+
+/**
+ * El nombre de la bici de un recordatorio, como va en el mensaje al cliente:
+ * el corto de ESA bici, resuelto contra todas las del cliente (si tiene dos
+ * Rockhopper, acortar lo dejaría sin saber cuál es).
+ *
+ * Sin modelo ni marca queda "bici" y no "tu bici": los textos ya dicen "en tu
+ * {{4}}" y "a la {bici}", y salía "en tu tu bici" (27-sep-2026).
+ * 🚩 Espejo en `supabase/functions/_shared/motor_retencion.ts`.
+ */
+export function nombreBiciParaMensaje(
+    bicicletas: { id: string; cliente_id: string; marca?: string | null; modelo?: string | null }[],
+    bikeId: string | null | undefined,
+    bikeModel: string | null | undefined,
+): string {
+    const bici = bicicletas.find(b => b.id === bikeId);
+    if (!bici) return nombreBiciAmigable(null, bikeModel, "bici");
+    const delCliente = bicicletas.filter(b => b.cliente_id === bici.cliente_id);
+    return nombresBicisAmigables(delCliente, "bici").get(bici.id)
+        ?? nombreBiciAmigable(bici.marca, bici.modelo, "bici");
 }
 
 // El nombre formal de una carrera es el del reglamento, no el que usa el

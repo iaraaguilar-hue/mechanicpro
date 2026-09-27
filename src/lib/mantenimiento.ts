@@ -37,6 +37,8 @@ export interface ConfigMantenimiento {
     postventa: ConfigPostventa;
 }
 
+// 🚩 Los nombres tienen espejo en `supabase/functions/_shared/recordatorios_auto.ts`
+// (COMPONENTES_BASE): un recordatorio de un componente que no está en la lista no sale solo.
 export const COMPONENTES_BASE: ComponenteDiagnostico[] = [
     { nombre: 'Cadena', meses: null },
     { nombre: 'Piñón/Cassette', meses: null },

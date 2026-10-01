@@ -83,6 +83,60 @@ export function claveProducto(texto: string): string {
 }
 
 /**
+ * El código sin separadores: "21023-0613", "21023 0613" y "210230613" son el
+ * mismo SKU. El mecánico lo copia de la etiqueta y el guion se lo saltea casi
+ * siempre: comparando con guion, el buscador encontraba el 0,2% de los SKU
+ * escritos así (medido sobre los 1.952 de Probikes, 1-oct-2026).
+ */
+export function skuCompacto(texto: string): string {
+    return claveProducto(texto).replace(/ /g, '');
+}
+
+/** Cómo coincidió lo escrito con el SKU de un producto. */
+type CoincidenciaSku = 'entero' | 'principio' | 'pedazo';
+
+/**
+ * Si lo escrito es el SKU del producto, o parte de él, y dónde empieza (en la
+ * forma compacta). Recibe la consulta ya normalizada de las dos maneras para no
+ * recalcularla por cada uno de los miles de productos.
+ *
+ *   · entero: el código completo, con o sin guiones.
+ *   · principio: como siempre, el código desde el arranque. Sin guiones solo si
+ *     lo escrito tiene un número: "mon" no es el principio de MO-NPH140 (un
+ *     sellador Muc-Off), aunque sin el guion lo parezca; "2102306" sí es el
+ *     principio de 21023-0613.
+ *   · pedazo: del medio o del final, que es como se lee una etiqueta de Shimano
+ *     ("M8100" de EPDM8100) o los últimos números de una de Specialized
+ *     ("0613" de 21023-0613). Con 4 caracteres o más y algún número (tres
+ *     letras sueltas aparecen adentro de cientos de códigos sin querer decir
+ *     nada), y adentro de UN tramo del código: "1290" no está en 2812-9050,
+ *     aunque sin el guion lo parezca.
+ *
+ * La usan el puntaje Y el resaltado: si midieran distinto, la fila marcaría en
+ * negrita un SKU que no fue el motivo por el que apareció.
+ */
+function coincidirSku(
+    skuProducto: string | null | undefined,
+    q: string,
+    consultaSku: string
+): { tipo: CoincidenciaSku; donde: number } | null {
+    if (!skuProducto || !consultaSku) return null;
+    const sku = skuCompacto(skuProducto);
+    if (!sku) return null;
+    if (sku === consultaSku) return { tipo: 'entero', donde: 0 };
+    if (claveProducto(skuProducto).startsWith(q)) return { tipo: 'principio', donde: 0 };
+    if (consultaSku.length < 4 || !/\d/.test(consultaSku)) return null;
+    if (sku.startsWith(consultaSku)) return { tipo: 'principio', donde: 0 };
+    let corrido = 0;
+    for (const tramo of claveProducto(skuProducto).split(' ')) {
+        const i = tramo.indexOf(consultaSku);
+        if (i >= 0) return { tipo: 'pedazo', donde: corrido + i };
+        corrido += tramo.length;
+    }
+    return null;
+}
+
+/**
  * Normaliza CONSERVANDO LAS POSICIONES: el resultado tiene exactamente el mismo
  * largo que la entrada, carácter por carácter. `claveProducto` no sirve para
  * resaltar porque colapsa los espacios y corre los índices; esta sí, así que el
@@ -182,15 +236,20 @@ export function buscarProductos(
     }
 
     const terminos = q.split(' ');
+    const consultaSku = skuCompacto(consulta);
     const estrictos: Candidato[] = [];
+    // Los que solo aparecen por un pedazo de su SKU van DESPUÉS de todo lo que
+    // coincide por nombre: si lo escrito está en el nombre de algo, era una
+    // búsqueda por nombre. Rescatan lo que el nombre no encuentra, no compiten.
+    const porPedazoDeSku: Candidato[] = [];
 
     for (const p of universo) {
         const tokens = p.clave.split(' ');
-        const skuNorm = p.sku ? claveProducto(p.sku) : '';
 
         // El SKU se busca entero, no por palabras: quien lo escribe (o lo lee
         // con un lector de códigos) sabe exactamente qué quiere.
-        const matchSku = !!skuNorm && (skuNorm === q || skuNorm.startsWith(q));
+        const sku = coincidirSku(p.sku, q, consultaSku);
+        const matchSku = !!sku;
 
         let cobertura = 0;
         let todosMatchean = true;
@@ -206,8 +265,22 @@ export function buscarProductos(
 
         if (!todosMatchean && !matchSku) continue;
 
+        if (!todosMatchean && sku?.tipo === 'pedazo') {
+            porPedazoDeSku.push({
+                producto: p,
+                score: puntajeFrecuencia(p.veces_usado) + puntajeRecencia(p.ultima_vez, ahora),
+            });
+            continue;
+        }
+
         let score = todosMatchean ? cobertura : 0;
-        if (matchSku) score += 120;
+        // El código entero pesa más que su principio: con "49" tiene que salir
+        // el producto cuyo SKU ES 49, no los que empiezan con 49. Un pedazo no
+        // suma cuando el nombre también coincide: si sumara, "r8000" dejaba de
+        // traer primero el piñón que el taller usa siempre para traer unos
+        // pedales con R8000 en el código.
+        if (sku?.tipo === 'entero') score += 150;
+        else if (sku?.tipo === 'principio') score += 120;
         // El nombre arranca con lo que escribió → casi siempre es lo que busca.
         if (p.clave.startsWith(q)) score += 40;
         else if (tokens[0]?.startsWith(terminos[0])) score += 15;
@@ -219,7 +292,11 @@ export function buscarProductos(
         estrictos.push({ producto: p, score });
     }
 
-    estrictos.sort((a, b) => b.score - a.score || a.producto.nombre.localeCompare(b.producto.nombre));
+    const porPuntaje = (a: Candidato, b: Candidato) =>
+        b.score - a.score || a.producto.nombre.localeCompare(b.producto.nombre);
+    estrictos.sort(porPuntaje);
+    porPedazoDeSku.sort(porPuntaje);
+    estrictos.push(...porPedazoDeSku);
 
     // ── Segunda pasada: errores de tipeo ─────────────────────────────────────
     // Solo si la estricta casi no trajo nada, porque es la cara. El bloqueo por
@@ -309,4 +386,33 @@ export function resaltar(nombreCrudo: string, consulta: string): Tramo[] {
         }
     }
     return tramos;
+}
+
+/**
+ * Lo mismo para el SKU que se muestra abajo del nombre: marca el pedazo del
+ * código que coincidió con lo escrito, salteando guiones y espacios ("2102306"
+ * marca "21023-06" en "21023-0613"). Si el producto no apareció por su SKU, no
+ * marca nada.
+ */
+export function resaltarSku(skuCrudo: string | null | undefined, consulta: string): Tramo[] {
+    if (!skuCrudo) return [];
+    const sku = skuCrudo.normalize('NFC');
+    const consultaSku = skuCompacto(consulta);
+    const coincidencia = coincidirSku(sku, claveProducto(consulta), consultaSku);
+    if (!coincidencia) return [{ texto: sku, match: false }];
+    const donde = coincidencia.donde;
+
+    // Posición en el SKU real de cada carácter de la forma compacta.
+    const norm = normalizarPosicional(sku);
+    const posiciones: number[] = [];
+    for (let i = 0; i < norm.length; i++) if (norm[i] !== ' ') posiciones.push(i);
+    const desde = posiciones[donde];
+    const hasta = posiciones[donde + consultaSku.length - 1];
+    if (desde === undefined || hasta === undefined) return [{ texto: sku, match: false }];
+
+    return [
+        { texto: sku.slice(0, desde), match: false },
+        { texto: sku.slice(desde, hasta + 1), match: true },
+        { texto: sku.slice(hasta + 1), match: false },
+    ].filter(t => t.texto);
 }

@@ -30,9 +30,9 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const { execFileSync } = require('child_process');
-const { chromium } = require('/Users/iaraaguilar/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core');
+const { chromium } = require('./qa_playwright.cjs');
 const EXEC = process.env.PW_CHROME
-    || '/Users/iaraaguilar/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell';
+    || require('./qa_playwright.cjs').navegador;
 const BASE = process.env.MP_URL || 'http://localhost:5173/';
 const DEMO_ID = '2e58d4b0-23c6-46a5-a127-72979613ac79';
 const SECRETOS = '/Users/iaraaguilar/Documents/estudio_iara/.secrets/supabase_mp.json';

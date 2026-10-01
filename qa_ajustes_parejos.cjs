@@ -20,10 +20,10 @@
  *   npm run dev  ·  MP_DEMO_PASSWORD=… node qa_ajustes_parejos.cjs
  *   …            ·  node qa_ajustes_parejos.cjs --control-negativo
  */
-const { chromium } = require('/Users/iaraaguilar/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core');
+const { chromium } = require('./qa_playwright.cjs');
 const fs = require('fs');
 const EXEC = process.env.PW_CHROME
-    || '/Users/iaraaguilar/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell';
+    || require('./qa_playwright.cjs').navegador;
 const BASE = process.env.MP_URL || 'http://localhost:5173/';
 const DEMO_PASS = process.env.DEMO_PASS || process.env.MP_DEMO_PASSWORD;
 const CONTROL = process.argv.includes('--control-negativo');

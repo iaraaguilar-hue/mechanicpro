@@ -8,7 +8,7 @@
  * algo", sino que lo PRIMERO de la lista sea lo que el mecánico iba a elegir:
  * con 5.400 productos, un buscador que acierta en el puesto 7 no sirve.
  */
-import { claveProducto, buscarProductos, resaltar, type ProductoTaller } from './buscadorProductos';
+import { claveProducto, buscarProductos, resaltar, resaltarSku, type ProductoTaller } from './buscadorProductos';
 
 let passed = 0, failed = 0;
 const fails: string[] = [];
@@ -77,6 +77,46 @@ ok(buscar(CAT_B, '   ').length === 0, 'B7: espacios = consulta vacía (y nadie t
 // El SKU se busca entero: quien lo escribe sabe exactamente qué quiere.
 ok(primero(CAT_B, 'Y8VJ98010') === 'PASTILLAS DE FRENO DE RESINA SHIMANO B05S', 'B8: por SKU exacto');
 ok(primero(CAT_B, 'ICNHG601') === 'CADENA 11V SHIMANO CN-HG601-11', 'B9: por SKU parcial');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// S. Por SKU como lo escribe el mecánico (1-oct-2026). Los códigos son reales de
+//    Probikes. Antes, sin el guion se encontraba el 0,2% y por un pedazo ~1%.
+// ─────────────────────────────────────────────────────────────────────────────
+const CAT_S = [
+    p('ROVAL RAPIDE RD COCKPIT CARB/BLK 31.8X38', { sku: '21023-0613' }),
+    p('ROVAL RAPIDE RD COCKPIT CARB/BLK 31.8X40', { sku: '21023-0626' }),
+    p('PEDALES AUTOMATICOS SPD MTB SHIMANO PD-M8100', { sku: 'EPDM8100' }),
+    p('CADENA KMC 10V NEGRA', { sku: '49' }),
+    p('FLASHBACK TAILLIGHT', { sku: '49120-2400' }),
+    p('SELLADOR TUBELESS MUC-OFF NO PUNCTURE', { sku: 'MO-NPH140' }),
+    p('MONOPLATO DIRECT MOUNT BARAL BOOST 3MM', { sku: 'DMSHRD36T3LT', veces_usado: 4 }),
+    p('PIÑON SRAM 12V RUTA XG-1290 10-28D XDR', { sku: 'SRCS02418087001' }),
+    p('SINGLE BOLT CLAMP BLK 7+9MM', { sku: '2812-9050', veces_usado: 20, ultima_vez: hace(3) }),
+    p('PIÑON A CASSETTE SHIMANO ULTEGRA CS-R8000', { veces_usado: 9, ultima_vez: hace(10) }),
+    p('PEDALES AUTOMATICOS RUTA SHIMANO PD-R8000', { sku: 'IPDR8000' }),
+];
+ok(primero(CAT_S, '21023-0613') === 'ROVAL RAPIDE RD COCKPIT CARB/BLK 31.8X38', 'S1: SKU tal cual');
+ok(primero(CAT_S, '210230613') === 'ROVAL RAPIDE RD COCKPIT CARB/BLK 31.8X38', 'S2: SKU sin el guion');
+ok(primero(CAT_S, '21023 0626') === 'ROVAL RAPIDE RD COCKPIT CARB/BLK 31.8X40', 'S3: SKU con espacio en vez de guion');
+ok(primero(CAT_S, 'epdm8100') === 'PEDALES AUTOMATICOS SPD MTB SHIMANO PD-M8100', 'S4: SKU en minúsculas');
+ok(primero(CAT_S, '0626') === 'ROVAL RAPIDE RD COCKPIT CARB/BLK 31.8X40', 'S5: el último tramo del SKU');
+ok(primero(CAT_S, 'm8100') === 'PEDALES AUTOMATICOS SPD MTB SHIMANO PD-M8100', 'S6: el modelo adentro de un código Shimano');
+ok(primero(CAT_S, '49') === 'CADENA KMC 10V NEGRA', 'S7: el SKU entero le gana a los que empiezan igual');
+// Lo que NO tiene que pasar al sacar los guiones:
+ok(!buscar(CAT_S, 'mon').some(x => x.sku === 'MO-NPH140'), 'S8: "mon" no es el principio de MO-NPH140');
+ok(primero(CAT_S, 'mon') === 'MONOPLATO DIRECT MOUNT BARAL BOOST 3MM', 'S9: "mon" sigue trayendo el monoplato');
+ok(!buscar(CAT_S, '1290').some(x => x.sku === '2812-9050'), 'S10: "1290" no se arma cruzando el guion de 2812-9050');
+ok(primero(CAT_S, '1290') === 'PIÑON SRAM 12V RUTA XG-1290 10-28D XDR', 'S11: "1290" trae el piñón por su nombre');
+ok(primero(CAT_S, 'r8000') === 'PIÑON A CASSETTE SHIMANO ULTEGRA CS-R8000',
+    'S12: un pedazo de SKU no le gana a lo que el taller usa y coincide por nombre');
+ok(!buscar(CAT_S, 'pave').length || buscar(CAT_S, 'pave').every(x => claveProducto(x.nombre).includes('pave')),
+    'S13: letras sueltas no buscan adentro de los códigos');
+// Resaltado del SKU: reconstruye el código exacto y marca lo que coincidió.
+const tsku = (sku: string, q: string) => resaltarSku(sku, q).map(t => (t.match ? `[${t.texto}]` : t.texto)).join('');
+ok(tsku('21023-0613', '2102306') === '[21023-06]13', 'S14: resalta salteando el guion');
+ok(tsku('EPDM8100', 'm8100') === 'EPD[M8100]', 'S15: resalta el modelo adentro');
+ok(tsku('2812-9050', '1290') === '2812-9050', 'S16: no resalta lo que no fue el motivo');
+ok(tsku('21023-0613', 'cockpit') === '21023-0613', 'S17: búsqueda por nombre no marca el SKU');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // C. 🔴 EL NÚCLEO: lo que ESTE taller más usa va primero.

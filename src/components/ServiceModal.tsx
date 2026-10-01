@@ -422,6 +422,9 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
     onBack: () => void
 }) {
     const [catalogoServicios, setCatalogoServicios] = useState<any[]>([]);
+    // Solo el taller que importó su catálogo del ERP tiene códigos: al resto
+    // no se le habla de un SKU que no existe en su sistema.
+    const catalogoConSku = useDataStore(s => s.productos.some(p => !!p.sku));
     const [serviceType, setServiceType] = useState<string>("");
     const [notes, setNotes] = useState("");
     // Notas internas del taller: NUNCA salen en el comprobante ni en los
@@ -970,7 +973,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                                         <BuscadorProducto
                                             value={item.description}
                                             categoria={item.category === 'labor' ? 'labor' : 'part'}
-                                            placeholder={item.category === 'labor' ? 'Buscá el trabajo o escribilo' : 'Buscá el repuesto o escribilo'}
+                                            placeholder={item.category === 'labor' ? 'Buscá el trabajo o escribilo' : catalogoConSku ? 'Buscá el repuesto por nombre o SKU' : 'Buscá el repuesto o escribilo'}
                                             onChange={(nombre) => updateItem(item.id, 'description', nombre)}
                                             onSeleccionar={(p) => {
                                                 // El precio se completa solo, pero NUNCA pisa uno ya

@@ -35,10 +35,10 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { chromium, devices } = require('/Users/iaraaguilar/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core');
+const { chromium, devices } = require('./qa_playwright.cjs');
 
 const EXEC = process.env.PW_CHROME
-    || '/Users/iaraaguilar/Library/Caches/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-mac-arm64/chrome-headless-shell';
+    || require('./qa_playwright.cjs').navegador;
 const BASE = process.env.MP_URL || 'http://localhost:5173/';
 const DEMO_PASS = process.env.DEMO_PASS || process.env.MP_DEMO_PASSWORD;
 const DEMO = '2e58d4b0-23c6-46a5-a127-72979613ac79';

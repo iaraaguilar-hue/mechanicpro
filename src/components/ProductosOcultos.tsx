@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { EyeOff, Eye, Search, Loader2 } from 'lucide-react';
 import { ComoFunciona } from '@/components/ComoFunciona';
+import { skuCompacto } from '@/lib/buscadorProductos';
 
 interface Oculto {
     id: string;
@@ -78,8 +79,12 @@ export function ProductosOcultos({ avisar }: { avisar: (tipo: 'ok' | 'error', ms
         avisar('ok', `"${o.nombre}" vuelve a aparecer en el buscador.`);
     };
 
+    // Por nombre o por SKU, con o sin guiones: el código es lo que se ve en la
+    // fila y es lo primero que alguien copia para buscar uno.
     const visibles = filtro.trim()
-        ? ocultos.filter(o => o.nombre.toLowerCase().includes(filtro.trim().toLowerCase()))
+        ? ocultos.filter(o =>
+            o.nombre.toLowerCase().includes(filtro.trim().toLowerCase()) ||
+            (!!o.sku && !!skuCompacto(filtro) && skuCompacto(o.sku).includes(skuCompacto(filtro))))
         : ocultos;
 
     return (

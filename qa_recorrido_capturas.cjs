@@ -2,9 +2,9 @@
 // celular, y deja captura de página entera + inventario de botones/pestañas por pantalla.
 // La auditoría se hace sobre lo que se VE, no sobre el código.
 //   npm run dev   ·   DEMO_PASS=… OUT=/ruta/capturas node qa_recorrido_capturas.cjs
-const { chromium } = require('/Users/iaraaguilar/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core');
+const { chromium } = require('./qa_playwright.cjs');
 const fs = require('fs');
-const EXEC = '/Users/iaraaguilar/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell';
+const EXEC = require('./qa_playwright.cjs').navegador;
 const BASE = process.env.MP_URL || 'http://localhost:5173/';
 // El .env del Demo la llama MP_DEMO_PASSWORD; aca se pedia DEMO_PASS. Acepta los dos.
 const DEMO_PASS = process.env.DEMO_PASS || process.env.MP_DEMO_PASSWORD;

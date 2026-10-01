@@ -15,10 +15,10 @@
  * 🔴 El Taller Demo es la cuenta de las demos comerciales: los colores se
  * restauran en un finally pase lo que pase.
  */
-const { chromium } = require('/Users/iaraaguilar/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core');
+const { chromium } = require('./qa_playwright.cjs');
 const fs = require('fs');
 const EXEC = process.env.PW_CHROME
-    || '/Users/iaraaguilar/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell';
+    || require('./qa_playwright.cjs').navegador;
 const cfg = JSON.parse(fs.readFileSync('/Users/iaraaguilar/Documents/estudio_iara/.secrets/supabase_mp.json', 'utf8'));
 const DEMO = '2e58d4b0-23c6-46a5-a127-72979613ac79';
 const PISO = 3;   // el mínimo WCAG para texto grande o en negrita

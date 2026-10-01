@@ -18,9 +18,9 @@
  * equivocado este script daba «no cambió nada» sobre una pantalla que había
  * cambiado por completo.
  */
-const { chromium } = require('/Users/iaraaguilar/.npm/_npx/e41f203b7505f1fb/node_modules/playwright-core');
+const { chromium } = require('./qa_playwright.cjs');
 const EXEC = process.env.PW_CHROME
-    || '/Users/iaraaguilar/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell';
+    || require('./qa_playwright.cjs').navegador;
 const BASE = process.env.MP_URL || 'http://localhost:5173/';
 const CONTROL = process.argv.includes('--control-negativo');
 

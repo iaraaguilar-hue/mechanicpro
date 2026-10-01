@@ -35,7 +35,7 @@ import { useMemo, useRef, useState, useEffect, useCallback, useId } from 'react'
 import { createPortal } from 'react-dom';
 import { Input } from '@/components/ui/input';
 import { useDataStore } from '@/store/dataStore';
-import { buscarProductos, resaltar, claveProducto, type ProductoTaller } from '@/lib/buscadorProductos';
+import { buscarProductos, resaltar, resaltarSku, claveProducto, skuCompacto, type ProductoTaller } from '@/lib/buscadorProductos';
 import { Search, Package, Wrench, CornerDownLeft, TrendingUp, EyeOff, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -82,9 +82,12 @@ export function BuscadorProducto({
 
     const sinConsulta = !claveProducto(value);
     // La fila de "usar lo que escribí" solo aparece si el texto no es ya,
-    // exactamente, alguno de los resultados: repetirlo sería ruido.
+    // exactamente, alguno de los resultados: repetirlo sería ruido. Lo mismo si
+    // es el SKU entero de uno: nadie quiere un repuesto llamado "21023-0613".
     const mostrarTextoLibre =
-        !!value.trim() && !resultados.some(r => r.clave === claveProducto(value));
+        !!value.trim() && !resultados.some(r =>
+            r.clave === claveProducto(value) ||
+            (!!r.sku && skuCompacto(r.sku) === skuCompacto(value)));
     const totalFilas = resultados.length + (mostrarTextoLibre ? 1 : 0);
 
     // ── Posición del panel ───────────────────────────────────────────────────
@@ -332,6 +335,7 @@ function FilaProducto({
     onOcultar?: () => void;
 }) {
     const tramos = resaltar(producto.nombre, consulta);
+    const tramosSku = resaltarSku(producto.sku, consulta);
 
     return (
         <div
@@ -369,7 +373,11 @@ function FilaProducto({
                         {producto.sku && (
                             <span className="flex min-w-0 items-center gap-1 font-mono">
                                 <Tag className="h-2.5 w-2.5 shrink-0" />
-                                <span className="truncate">{producto.sku}</span>
+                                <span className="truncate">
+                                    {tramosSku.map((t, i) => (
+                                        <span key={i} className={t.match ? 'font-bold text-primary' : undefined}>{t.texto}</span>
+                                    ))}
+                                </span>
                             </span>
                         )}
                     </span>

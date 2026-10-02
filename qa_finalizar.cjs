@@ -144,6 +144,13 @@ const mal = (t) => { console.log('  ❌ ' + t); fallos.push(t); };
         const motivo = page.locator('[data-motivo-apagado]');
         (await motivo.count() && await motivo.isVisible()) ? ok(`dice por qué: "${(await motivo.innerText()).trim()}"`) : mal('el botón apagado no dice por qué a la vista');
 
+        // 2-bis. En 1280×720 la lista (arriba) y el botón (abajo) tienen que verse juntos, sin
+        // bajar: el revisor del 2-oct vio que el botón y su motivo quedaban al fondo de la ventana.
+        const enPantalla = (loc) => loc.evaluate(el => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; });
+        (await enPantalla(verde)) && (await enPantalla(motivo)) && (await enPantalla(bloque))
+            ? ok('la lista para tildar, el botón y su motivo se ven juntos sin bajar')
+            : mal('hay que bajar para ver el botón o su motivo mientras se tilda');
+
         // 3. tildar ahí mismo
         for (let i = 0; i < 20; i++) {
             const caja = bloque.locator('button[role=checkbox][data-state=unchecked]').first();

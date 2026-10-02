@@ -165,7 +165,7 @@ export function VentaDeMostrador({ open, onClose, inicial, onListo }: Props) {
                     </DialogTitle>
                     {inicial?.facturadaA && !listo && (
                         <p className="text-sm text-muted-foreground">
-                            Se facturó a {inicial.facturadaA}. Poné el nombre de quien la usa.
+                            Se facturó a {inicial.facturadaA.replace(/\.$/, '')}. ¿De quién es la bici?
                         </p>
                     )}
                 </DialogHeader>
@@ -193,7 +193,7 @@ export function VentaDeMostrador({ open, onClose, inicial, onListo }: Props) {
                     <div className="space-y-5">
                         {/* ── Quién la compró ── */}
                         <section className="space-y-2">
-                            <Label className="text-sm font-semibold">Quién la compró</Label>
+                            <Label className="text-sm font-semibold">{inicial ? 'Dueño' : 'Quién la compró'}</Label>
                             {elegido ? (
                                 <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2">
                                     <div className="min-w-0">
@@ -241,8 +241,12 @@ export function VentaDeMostrador({ open, onClose, inicial, onListo }: Props) {
                                 <Input value={marca} onChange={e => setMarca(e.target.value)} placeholder="Marca" />
                                 <Input value={modelo} onChange={e => setModelo(e.target.value)} placeholder="Modelo" />
                             </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <Input value={talle} onChange={e => setTalle(e.target.value)} placeholder="Talle (opcional)" />
+                            {/* Los dos con su título arriba, para que la fila quede pareja (2-oct-2026). */}
+                            <div className="grid grid-cols-2 gap-2 items-end">
+                                <label className="flex flex-col text-xs text-muted-foreground gap-1">
+                                    Talle (opcional)
+                                    <Input value={talle} onChange={e => setTalle(e.target.value)} placeholder="M, 54…" />
+                                </label>
                                 <label className="flex flex-col text-xs text-muted-foreground gap-1">
                                     Fecha de venta
                                     <Input type="date" value={fechaVenta} onChange={e => cambiarVenta(e.target.value)} max={hoy} />

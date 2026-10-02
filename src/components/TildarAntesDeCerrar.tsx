@@ -70,7 +70,7 @@ export function TildarAntesDeCerrar({ servicio, verDerivadas, verLibres, bloquea
     const fila = (clave: string, texto: string, hecho: boolean, onToggle: () => void) => (
         <label key={clave} className="flex items-center gap-2.5 py-1.5 px-2 rounded-md hover:bg-white cursor-pointer">
             <Checkbox checked={hecho} onCheckedChange={onToggle} disabled={guardando} />
-            <span className={`text-sm ${hecho ? 'text-slate-500 line-through' : 'text-slate-800'}`}>{texto}</span>
+            <span className={`text-sm ${hecho ? 'text-slate-500' : 'text-slate-800'}`}>{texto}</span>
         </label>
     );
 

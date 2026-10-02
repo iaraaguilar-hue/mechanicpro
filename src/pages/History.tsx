@@ -401,10 +401,16 @@ export default function History() {
                 </div>
             </div>
 
-            {/* Filters Bar */}
-            <div data-tour="historial-buscador" className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col xl:flex-row gap-6 items-start xl:items-center justify-between">
+            {/* Filters Bar
+                🔴 2-oct-2026: los cuatro filtros (240 + 3×180 px) y el buscador (mín. 200) no entran
+                en una fila hasta ~1500 px de pantalla. Antes iban en fila desde 1280 y lo que no
+                entraba lo pagaba el menú de la izquierda (quedaba en 25 px: lo vio Leandro); con
+                el menú arreglado, el buscador se salía de la caja. Ahora el buscador va en su
+                propia línea hasta 2xl y los filtros se parten si no entran. Candado:
+                qa_barra_lateral.cjs (nada se sale del contenido). */}
+            <div data-tour="historial-buscador" className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 flex flex-col 2xl:flex-row gap-4 2xl:gap-6 items-stretch 2xl:items-center justify-between">
 
-                <div className="flex flex-col lg:flex-row gap-4 w-full xl:w-auto items-start lg:items-center">
+                <div className="flex flex-col lg:flex-row lg:flex-wrap gap-4 w-full 2xl:w-auto items-start lg:items-center">
                     {/* Date Picker */}
                     <div className="grid gap-2 relative">
                         <Popover>
@@ -521,7 +527,7 @@ export default function History() {
                 </div>
 
                 {/* Search - Expanded */}
-                <div className="relative flex-1 w-full lg:w-auto min-w-[200px]">
+                <div className="relative w-full 2xl:flex-1 2xl:w-auto min-w-[200px]">
                     <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
                     <Input
                         type="search"

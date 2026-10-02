@@ -1548,14 +1548,15 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                         <div data-tour="finalizar-resumen" className="space-y-2">
                             <Label>Detalle de Costos (Resumen)</Label>
                             <div className="bg-slate-50 rounded-lg p-4 border flex flex-col gap-2 h-32 overflow-y-auto">
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="text-slate-600">Service Base ({service.tipo_servicio})</span>
-                                    <span className="font-mono font-bold">$ {service.precio_base?.toLocaleString("es-AR") || 0}</span>
+                                {/* El precio nunca se parte en dos líneas; el nombre puede usar dos (2-oct-2026). */}
+                                <div className="flex justify-between items-start gap-3 text-sm">
+                                    <span className="min-w-0 text-slate-600">Service Base ({service.tipo_servicio})</span>
+                                    <span className="shrink-0 whitespace-nowrap font-mono font-bold">$ {service.precio_base?.toLocaleString("es-AR") || 0}</span>
                                 </div>
                                 {service.items_extra?.map((item: any, idx: number) => (
-                                    <div key={item.id || idx} className="flex justify-between items-center text-sm">
-                                        <span className="text-slate-600 truncate max-w-[180px]">{item.descripcion}</span>
-                                        <span className="font-mono">$ {item.precio?.toLocaleString("es-AR") || 0}</span>
+                                    <div key={item.id || idx} className="flex justify-between items-start gap-3 text-sm">
+                                        <span className="min-w-0 text-slate-600 line-clamp-2">{item.descripcion}</span>
+                                        <span className="shrink-0 whitespace-nowrap font-mono">$ {item.precio?.toLocaleString("es-AR") || 0}</span>
                                     </div>
                                 ))}
                                 <div className="border-t border-slate-200 mt-auto pt-2 flex justify-between items-center">
@@ -1664,7 +1665,10 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                     {!isCompleted && <SegundoParDeOjos servicioId={job.service_id} />}
                 </div>
 
-                <DialogFooter data-tour="finalizar-boton" className="gap-2 sm:gap-0">
+                {/* El pie queda FIJO abajo mientras se baja (2-oct-2026): en una pantalla de 720 de
+                    alto la lista para tildar (arriba) y el botón verde (abajo) no se veían juntos, y
+                    el motivo de "por qué está apagado" quedaba al fondo de toda la ventana. */}
+                <DialogFooter data-tour="finalizar-boton" className="sticky -bottom-6 z-10 -mx-6 -mb-6 gap-2 border-t bg-background px-6 py-3 sm:gap-0">
                     <Button variant="outline" onClick={onClose}>Cancelar</Button>
                     {/* La A4 que se corta al medio (Alejo, 11 a Fondo): arriba el comprobante
                         del cliente, abajo el checklist del taller. No reemplaza al comprobante

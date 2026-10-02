@@ -329,7 +329,9 @@ export default function Metrics() {
 
     // ─── Shared Header ────────────────────────────────────────────────────────
     const header = (
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex flex-col md:flex-row md:flex-wrap justify-between items-start md:items-center gap-4">
+          {/* `flex-wrap`: el título y el rango de fechas (~450 px) no entran en una fila con el
+              menú a 800 px de pantalla; se salían 64 px (2-oct-2026, qa_barra_lateral). */}
             <div data-tour="metricas">
                 <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
                     <BarChart3 className="h-8 w-8 text-primary" />

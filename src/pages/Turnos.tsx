@@ -289,13 +289,15 @@ export default function Turnos() {
                             data-dia={dia}
                             className={`flex flex-col rounded-lg border bg-white ${esHoy ? 'border-slate-900' : 'border-slate-200'} ${pasado ? 'opacity-70' : ''}`}
                         >
-                            <header className={`flex items-center justify-between gap-2 border-slate-100 px-3 py-2 ${delDia.length ? 'border-b' : 'lg:border-b'}`}>
+                            {/* `flex-wrap` + `ml-auto`: a 1024 px cada día mide ~130 px y «VIE 2 HOY Libre +»
+                                no entra; sin partirse, el + quedaba montado sobre el borde (2-oct-2026). */}
+                            <header className={`flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-slate-100 px-3 py-2 ${delDia.length ? 'border-b' : 'lg:border-b'}`}>
                                 <div className="flex items-baseline gap-1.5">
                                     <span className="text-[11px] font-semibold tracking-wider text-slate-500">{et.corto}</span>
                                     <span className="text-lg font-bold leading-none text-slate-900">{et.numero}</span>
                                     {esHoy && <span className="rounded bg-slate-900 px-1.5 py-0.5 text-[10px] font-bold text-white">HOY</span>}
                                 </div>
-                                <div className="flex items-center gap-1">
+                                <div className="ml-auto flex items-center gap-1">
                                     <span className="text-[11px] text-slate-500">
                                         {reservadoEntero ? 'Reservado' : enPie.length ? cuantosTurnos(enPie.length) : 'Libre'}
                                     </span>

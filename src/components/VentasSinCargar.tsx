@@ -193,7 +193,7 @@ export function VentasSinCargar() {
                         <div className={aConfirmar.length ? 'border-t border-slate-100 pt-2' : 'pt-2'}>
                             <button type="button" onClick={() => setVerInfo((x) => !x)} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800">
                                 {verInfo ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                                {aConfirmar.length ? `Otras ${informativas.length} que no se cargaron, sin nada que hacer` : `Ver las ${informativas.length}: no hay nada que hacer`}
+                                {`${aConfirmar.length ? `${informativas.length} más` : `Ver las ${informativas.length}`} que no hace falta cargar`}
                             </button>
                             {verInfo && (
                                 <ul className="mt-1.5 space-y-1">

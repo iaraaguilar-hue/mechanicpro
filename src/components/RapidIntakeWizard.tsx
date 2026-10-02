@@ -50,7 +50,9 @@ export function RapidIntakeWizard({ onComplete, trigger }: RapidIntakeWizardProp
         <>
             {/* Trigger Button */}
             {trigger ? (
-                <div onClick={startFlow}>{trigger}</div>
+                // `contents`: el botón queda como hijo directo de la fila que lo contiene, así
+                // puede repartirse el ancho con los de al lado en el celular (2-oct-2026).
+                <div className="contents" onClick={startFlow}>{trigger}</div>
             ) : (
                 <Button onClick={startFlow} className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-6">
                     <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Cliente (Rápido)

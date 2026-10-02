@@ -255,9 +255,17 @@ export default function BikeDetail() {
                     {/* Active Bike Actions Bar */}
                     {activeBike && (
                         <div className="pt-2 space-y-2">
-                            <div className="flex justify-between items-center">
-                                <div className="text-sm text-slate-500">
-                                    Transmisión: <span className="font-medium text-slate-900">{activeBike.transmision || "N/A"}</span>
+                            <div className="flex flex-wrap justify-between items-center gap-3">
+                                {/* El talle (`bicicletas.talle`) se cargaba en la venta de mostrador y en el
+                                    alta de la bici, pero ninguna pantalla lo mostraba (2-oct-2026). Si no
+                                    está cargado no va la fila: nada de "—" ni "Sin talle".
+                                    La fila se parte: en el celular, si los datos no entran al lado de
+                                    "Iniciar Service", el botón baja en vez de cortar "Transmisión: / N/A". */}
+                                <div className="text-sm text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
+                                    <span>Transmisión: <span className="font-medium text-slate-900">{activeBike.transmision || "N/A"}</span></span>
+                                    {activeBike.talle?.trim() && (
+                                        <span>Talle: <span className="font-medium text-slate-900">{activeBike.talle.trim()}</span></span>
+                                    )}
                                 </div>
                                 <Button data-tour="garage-iniciar" size="default" className="shadow-sm bg-blue-600 hover:bg-blue-700" onClick={() => setIsServiceDialogOpen(true)}>
                                     <Wrench className="mr-2 h-4 w-4" /> Iniciar Service

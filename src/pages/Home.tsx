@@ -95,7 +95,9 @@ export default function Home() {
     };
 
     return (
-        <div className="space-y-8 max-w-7xl mx-auto py-8 px-6 animate-in fade-in duration-500">
+        <div className="space-y-8 max-w-7xl mx-auto py-8 md:px-6 animate-in fade-in duration-500">
+            {/* En el celular el margen lo pone el <main> (p-4), como en Taller Activo y la ficha:
+                el px-6 de acá se sumaba y dejaba 280 px útiles en un teléfono de 360 (2-oct-2026). */}
 
 
             {/* Header */}
@@ -128,17 +130,21 @@ export default function Home() {
                 pierde. Se esconde sola cuando no hay ninguna. */}
             <VentasSinCargar />
 
-            <div data-tour="clientes" className="flex justify-between items-center">
+            {/* Título y botones en una fila que SE PARTE: en un celular de 414 px no entraban
+                los tres en una línea (la pantalla medía 449 px, "Nuevo Cliente" salía cortado y
+                los modales perdían el borde derecho; 2-oct-2026). En el celular los botones
+                bajan a su propia fila y se reparten el ancho; si tampoco entran, uno abajo del otro. */}
+            <div data-tour="clientes" className="flex flex-wrap justify-between items-center gap-3">
                 <h2 className="text-xl font-medium text-slate-600">Tus clientes y sus bicis</h2>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                     {/* Leira, 14-sep-2026: la venta de mostrador deja agendados el ajuste y el primer service. */}
-                    <Button variant="outline" className="font-medium" onClick={() => setVentaOpen(true)}>
+                    <Button variant="outline" className="font-medium flex-1 sm:flex-none" onClick={() => setVentaOpen(true)}>
                         <Bike className="mr-2 h-4 w-4" /> Vendí una bici
                     </Button>
                     <RapidIntakeWizard
                         onComplete={() => handleRefresh()}
                         trigger={
-                            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-6">
+                            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-4 md:px-6 flex-1 sm:flex-none">
                                 <PlusCircle className="mr-2 h-4 w-4" /> Nuevo Cliente
                             </Button>
                         }

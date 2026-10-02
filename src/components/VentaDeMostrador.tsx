@@ -111,7 +111,7 @@ export function VentaDeMostrador({ open, onClose }: Props) {
             }
             const bici = await createBicicleta({
                 taller_id, cliente_id: cid!, marca: marca.trim(), modelo: modelo.trim(),
-                talle: talle.trim() || undefined, fecha_compra: fechaVenta,
+                talle: talle.trim().toUpperCase() || undefined, fecha_compra: fechaVenta,  // en mayúscula, como el alta y la edición de la bici
             });
             const avisos = [
                 conAjuste && fechaAjuste ? { tipo: 'ajuste', fecha: fechaAjuste } : null,

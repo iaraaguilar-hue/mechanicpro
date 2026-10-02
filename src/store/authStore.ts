@@ -53,6 +53,13 @@ export interface TallerData {
     acceso_suspendido_at?: string | null;
     acceso_suspendido_motivo?: string | null;
     /**
+     * La prueba gratuita (2-oct-2026): `prueba_dias` desde `prueba_inicio_at`, que es la
+     * primera carga del taller (la pone un trigger). NULL en días = paga. Se lee siempre
+     * por `src/lib/pruebaGratuita.ts`. Lo cambia solo el super admin.
+     */
+    prueba_dias?: number | null;
+    prueba_inicio_at?: string | null;
+    /**
      * El calendario de turnos (Juan Otero, Private Garage, 25-sep-2026). Opt-in: casi
      * ningún taller da turnos. `leer_whatsapp` = la app carga 'a_confirmar' los turnos
      * que se acuerdan en la charla del WhatsApp conectado.

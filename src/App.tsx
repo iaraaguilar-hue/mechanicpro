@@ -34,6 +34,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { NovedadesPopup } from "@/components/NovedadesPopup";
 import { OnboardingTour } from "@/components/OnboardingTour";
 import { AccesoSuspendido } from "@/components/AccesoSuspendido";
+import { accesoCortado, estadoPrueba } from "@/lib/pruebaGratuita";
 
 function AppContent() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -134,22 +135,40 @@ function AppContent() {
     };
   }, []);
 
-  // Acceso suspendido (25-sep-2026, Leira al terminar la prueba). El taller se
-  // lee al entrar, pero la compu de un taller deja la app abierta el día entero
-  // (el cierre por inactividad es a las 6 horas). Se vuelve a mirar cada 5 minutos
-  // y al volver a la pestaña: solo esas dos columnas de UNA fila.
+  // Acceso suspendido (25-sep-2026, Leira al terminar la prueba) y prueba gratuita
+  // (2-oct-2026: 15 días desde la primera carga). El taller se lee al entrar, pero la
+  // compu de un taller deja la app abierta el día entero (el cierre por inactividad es
+  // a las 6 horas). Se vuelve a mirar cada 5 minutos y al volver a la pestaña: solo las
+  // columnas del acceso, de UNA fila. `ahora` hace que el cartel aparezca cuando vence
+  // la prueba aunque la base todavía no haya marcado el corte (el cron pasa cada 15 min).
+  // Se sigue mirando CON el cartel puesto: si se le devuelve el acceso (pasó a pagar),
+  // la pestaña abierta vuelve a la app sola.
+  const [ahora, setAhora] = useState(() => Date.now());
+  const cortado = !!taller && accesoCortado(taller, ahora);
+  const prueba = taller ? estadoPrueba(taller, ahora) : null;
+  const venceEn = prueba?.tipo === 'corriendo' ? Date.parse(prueba.vence) : null;
   useEffect(() => {
-    if (!session || !taller?.id || taller.acceso_suspendido_at) return;
+    if (venceEn == null) return;
+    // El tope de setTimeout son ~24 días; una prueba más larga se reprograma al despertar.
+    const espera = Math.min(Math.max(venceEn - Date.now(), 0) + 1000, 2_000_000_000);
+    const reloj = setTimeout(() => setAhora(Date.now()), espera);
+    return () => clearTimeout(reloj);
+  }, [venceEn, ahora]);
+  useEffect(() => {
+    if (!session || !taller?.id) return;
     const tallerId = taller.id;
     const revisar = async () => {
+      setAhora(Date.now());
       const { data } = await supabase
         .from('talleres')
-        .select('acceso_suspendido_at, acceso_suspendido_motivo')
+        .select('acceso_suspendido_at, acceso_suspendido_motivo, prueba_dias, prueba_inicio_at')
         .eq('id', tallerId)
         .single();
-      if (!data?.acceso_suspendido_at) return;
+      if (!data) return;
       const actual = useAuthStore.getState().taller;
-      if (actual?.id === tallerId) setTaller({ ...actual, ...data });
+      if (actual?.id !== tallerId) return;
+      const cambio = (Object.keys(data) as (keyof typeof data)[]).some(k => actual[k] !== data[k]);
+      if (cambio) setTaller({ ...actual, ...data });
     };
     const intervalo = setInterval(revisar, 5 * 60 * 1000);
     const alVolver = () => { if (document.visibilityState === 'visible') revisar(); };
@@ -158,7 +177,7 @@ function AppContent() {
       clearInterval(intervalo);
       document.removeEventListener('visibilitychange', alVolver);
     };
-  }, [session, taller?.id, taller?.acceso_suspendido_at]);
+  }, [session, taller?.id]);
 
   const handleLogout = async () => {
     // CRITICAL: Wipe stores BEFORE signOut to prevent cross-tenant data leakage
@@ -179,7 +198,7 @@ function AppContent() {
 
   // Con el acceso cortado no se ve NADA de la app: solo el cartel y cerrar
   // sesión. El super admin pasa (es quien lo pone y lo saca).
-  if (taller?.acceso_suspendido_at && rol !== 'super_admin') {
+  if (taller && cortado && rol !== 'super_admin') {
     return <AccesoSuspendido taller={taller} onLogout={handleLogout} />;
   }
 

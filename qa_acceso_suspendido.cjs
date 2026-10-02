@@ -6,7 +6,8 @@
  *   2. Con la app ABIERTA, se suspende → al volver a la pestaña aparece el cartel
  *      y desaparece la app (la compu del taller no se recarga en todo el día).
  *   3. Entrando de cero con la suspensión puesta → solo el cartel (compu y celular).
- *   4. El admin del taller NO puede sacarse la suspensión por su cuenta (trigger).
+ *   4. El admin del taller NO puede sacarse la suspensión por su cuenta (trigger),
+ *      ni tocarse la prueba gratuita (2-oct-2026).
  *   5. «Cerrar sesión» vuelve al login.
  * Y SIEMPRE, en un finally, deja el Demo como estaba: es el de las demos comerciales.
  *
@@ -42,9 +43,12 @@ async function rest(metodo, ruta, { clave = SERVICE, jwt = SERVICE, body } = {})
     });
     return { status: r.status, data: await r.json().catch(() => null) };
 }
-const estadoDemo = async () => (await rest('GET', `talleres?id=eq.${DEMO_ID}&select=nombre,horas_para_llamar,acceso_suspendido_at,acceso_suspendido_motivo`)).data[0];
+const estadoDemo = async () => (await rest('GET', `talleres?id=eq.${DEMO_ID}&select=nombre,horas_para_llamar,acceso_suspendido_at,acceso_suspendido_motivo,prueba_dias,prueba_inicio_at`)).data[0];
 const suspender = () => rest('PATCH', `talleres?id=eq.${DEMO_ID}`, { body: { acceso_suspendido_at: new Date().toISOString(), acceso_suspendido_motivo: 'prueba_finalizada' } });
-const restaurar = () => rest('PATCH', `talleres?id=eq.${DEMO_ID}`, { body: { acceso_suspendido_at: null, acceso_suspendido_motivo: null } });
+const restaurar = (antes) => rest('PATCH', `talleres?id=eq.${DEMO_ID}`, { body: {
+    acceso_suspendido_at: null, acceso_suspendido_motivo: null,
+    prueba_dias: antes.prueba_dias ?? null, prueba_inicio_at: antes.prueba_inicio_at ?? null,
+} });
 
 async function entrar(b, viewport) {
     const page = await b.newPage({ viewport });
@@ -61,7 +65,10 @@ async function entrar(b, viewport) {
 const seVe = (page, texto) => page.evaluate((t) => [...document.querySelectorAll('h1,h2,a,button,p,span,div')]
     .some(e => e.childElementCount === 0 && (e.textContent || '').trim().toLowerCase() === t.toLowerCase()
         && e.checkVisibility({ opacityProperty: true, visibilityProperty: true })), texto);
-const cartel = (page) => seVe(page, 'Su prueba gratuita ha finalizado');
+// El título cambió el 2-oct-2026 (cartel impersonal, Rami): con motivo prueba_finalizada
+// es 'Terminó el período de prueba'; sin motivo, 'El acceso a esta cuenta está pausado'.
+const cartel = async (page) => (await seVe(page, 'Terminó el período de prueba'))
+    || (await seVe(page, 'El acceso a esta cuenta está pausado'));
 const app = (page) => seVe(page, 'Taller Activo');
 
 (async () => {
@@ -110,11 +117,18 @@ const app = (page) => seVe(page, 'Taller Activo');
         const sigue = await estadoDemo();
         ok(intento.status >= 400 && !!sigue.acceso_suspendido_at,
             `4. el usuario del taller no puede sacarse la suspensión (HTTP ${intento.status}: ${JSON.stringify(intento.data).slice(0, 90)})`);
+        // 4-bis (2-oct-2026): tampoco puede tocarse la prueba gratuita (darse días, atrasar el reloj).
+        const dias = await rest('PATCH', `talleres?id=eq.${DEMO_ID}`, { clave: ANON, jwt: tk.access_token, body: { prueba_dias: 999 } });
+        const reloj = await rest('PATCH', `talleres?id=eq.${DEMO_ID}`, { clave: ANON, jwt: tk.access_token, body: { prueba_inicio_at: '2030-01-01T00:00:00Z' } });
+        const prueba = await estadoDemo();
+        ok(dias.status >= 400 && reloj.status >= 400 && prueba.prueba_dias === (antes.prueba_dias ?? null)
+            && prueba.prueba_inicio_at === (antes.prueba_inicio_at ?? null),
+            `4-bis. el usuario del taller no puede tocarse la prueba (HTTP ${dias.status} / ${reloj.status})`);
         // Control positivo del trigger: el mismo usuario SÍ puede tocar otra columna suya.
         const otra = await rest('PATCH', `talleres?id=eq.${DEMO_ID}`, { clave: ANON, jwt: tk.access_token, body: { horas_para_llamar: antes.horas_para_llamar } });
         ok(otra.status < 400, `4. control positivo: el mismo usuario sí guarda su configuración (HTTP ${otra.status})`);
     } finally {
-        await restaurar();
+        await restaurar(antes);
         const despues = await estadoDemo();
         ok(!despues.acceso_suspendido_at && !despues.acceso_suspendido_motivo, 'FINAL: el Taller Demo quedó sin suspensión, como estaba');
         await b.close();

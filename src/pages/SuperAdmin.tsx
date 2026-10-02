@@ -13,6 +13,7 @@ import { Pencil, Loader2, Save, UploadCloud, Plus, Trash2, Edit2, Check, X, Aler
 import { PedidosDelTaller } from '@/components/PedidosDelTaller';
 import { NovedadesAdmin } from '@/components/NovedadesAdmin';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { DIAS_DE_PRUEBA, diaYMes, estadoPrueba, etiquetaPrueba } from '@/lib/pruebaGratuita';
 
 const HTTPS_URL_REGEX = /^https:\/\/.+/;
 
@@ -26,6 +27,11 @@ interface Taller {
     politica_pago?: string;
     plan_actual?: string;
     created_at?: string;
+    // La prueba gratuita (2-oct-2026): ver src/lib/pruebaGratuita.ts
+    prueba_dias?: number | null;
+    prueba_inicio_at?: string | null;
+    acceso_suspendido_at?: string | null;
+    acceso_suspendido_motivo?: string | null;
 }
 
 interface ServicioCatalogo {
@@ -42,6 +48,10 @@ export default function SuperAdmin() {
     const [loading, setLoading] = useState(true);
     const [editingTaller, setEditingTaller] = useState<Taller | null>(null);
     const [saving, setSaving] = useState(false);
+    // La prueba como estaba al abrir el editor: el acceso se devuelve solo si la prueba
+    // CAMBIÓ (pasó a Paga o más días), no por guardar un logo. Y un botón explícito.
+    const [pruebaAlAbrir, setPruebaAlAbrir] = useState<number | null>(null);
+    const [devolverAcceso, setDevolverAcceso] = useState(false);
 
     // Tab and Upload States
     const [activeTab, setActiveTab] = useState('general');
@@ -138,6 +148,8 @@ export default function SuperAdmin() {
 
     const handleEditClick = (taller: Taller) => {
         setEditingTaller({ ...taller });
+        setPruebaAlAbrir(taller.prueba_dias ?? null);
+        setDevolverAcceso(false);
         setActiveTab('general');
         fetchWebhookErpUrl(taller.id);
     };
@@ -218,21 +230,48 @@ export default function SuperAdmin() {
             return;
         }
 
+        const diasPrueba = editingTaller.prueba_dias == null ? null : Number(editingTaller.prueba_dias);
+        if (diasPrueba != null && !(Number.isInteger(diasPrueba) && diasPrueba >= 1)) {
+            alert('Los días de prueba tienen que ser un número entero, de 1 para arriba.');
+            return;
+        }
+
         try {
             setSaving(true);
-            const { error } = await supabase
+            const cambios: Record<string, unknown> = {
+                logo_url: editingTaller.logo_url,
+                color_primario: editingTaller.color_primario,
+                color_secundario: editingTaller.color_secundario,
+                mensaje_informe: editingTaller.mensaje_informe,
+                politica_pago: editingTaller.politica_pago,
+                plan_actual: editingTaller.plan_actual,
+                prueba_dias: diasPrueba,
+            };
+            // El acceso se devuelve con el botón, o solo si estaba cortado por la prueba y la
+            // prueba CAMBIÓ (pasó a Paga o se le dieron más días) y ya no está vencida.
+            // Si queda en prueba y vencida, el cron lo vuelve a cortar: la fila que vuelve
+            // de la base dice lo que quedó.
+            if (editingTaller.acceso_suspendido_at) {
+                const cambioLaPrueba = diasPrueba !== pruebaAlAbrir;
+                const sigueVencida = diasPrueba != null && estadoPrueba({
+                    prueba_dias: diasPrueba, prueba_inicio_at: editingTaller.prueba_inicio_at,
+                }).tipo === 'vencida';
+                const porLaPrueba = editingTaller.acceso_suspendido_motivo === 'prueba_finalizada'
+                    && cambioLaPrueba && !sigueVencida;
+                if (devolverAcceso || porLaPrueba) {
+                    cambios.acceso_suspendido_at = null;
+                    cambios.acceso_suspendido_motivo = null;
+                }
+            }
+            const { data: guardado, error } = await supabase
                 .from('talleres')
-                .update({
-                    logo_url: editingTaller.logo_url,
-                    color_primario: editingTaller.color_primario,
-                    color_secundario: editingTaller.color_secundario,
-                    mensaje_informe: editingTaller.mensaje_informe,
-                    politica_pago: editingTaller.politica_pago,
-                    plan_actual: editingTaller.plan_actual,
-                })
-                .eq('id', editingTaller.id);
+                .update(cambios)
+                .eq('id', editingTaller.id)
+                .select('*')
+                .single();
 
             if (error) throw error;
+            const tallerGuardado: Taller = { ...editingTaller, ...(guardado ?? {}) };
 
             // Upsert de los webhooks en taller_configuraciones (schema flat: una fila por taller).
             const { error: cfgError } = await supabase
@@ -251,7 +290,7 @@ export default function SuperAdmin() {
                 alert('Error guardando los webhooks: ' + cfgError.message);
             }
 
-            setTalleres(talleres.map(t => t.id === editingTaller.id ? editingTaller : t));
+            setTalleres(talleres.map(t => t.id === editingTaller.id ? tallerGuardado : t));
             setEditingTaller(null);
             setWebhookErpUrl('');
             setWebhookErpUrlError(null);
@@ -374,6 +413,7 @@ export default function SuperAdmin() {
                                     <TableRow>
                                         <TableHead>Nombre</TableHead>
                                         <TableHead>Plan</TableHead>
+                                        <TableHead>Prueba</TableHead>
                                         <TableHead>Logo</TableHead>
                                         <TableHead>Color Primario</TableHead>
                                         <TableHead>Color Secundario</TableHead>
@@ -392,6 +432,9 @@ export default function SuperAdmin() {
                                                 }`}>
                                                     {taller.plan_actual || 'Sport'}
                                                 </span>
+                                            </TableCell>
+                                            <TableCell className="text-sm text-muted-foreground max-w-[18rem]">
+                                                {etiquetaPrueba(taller)}
                                             </TableCell>
                                             <TableCell>
                                                 {taller.logo_url ? (
@@ -422,7 +465,7 @@ export default function SuperAdmin() {
                                     ))}
                                     {talleres.length === 0 && (
                                         <TableRow>
-                                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                                            <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                                                 No hay talleres registrados.
                                             </TableCell>
                                         </TableRow>
@@ -559,6 +602,63 @@ export default function SuperAdmin() {
                                             <option value="Pro">Pro</option>
                                             <option value="Expert">Expert</option>
                                         </select>
+                                    </div>
+
+                                    {/* Prueba gratuita (2-oct-2026) */}
+                                    <div className="space-y-2">
+                                        <Label htmlFor="prueba_estado">Prueba gratuita</Label>
+                                        <p className="text-xs text-muted-foreground -mt-1">
+                                            {etiquetaPrueba(editingTaller)}
+                                        </p>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <select
+                                                id="prueba_estado"
+                                                className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                                value={editingTaller.prueba_dias ? 'prueba' : 'paga'}
+                                                onChange={(e) => setEditingTaller({
+                                                    ...editingTaller,
+                                                    prueba_dias: e.target.value === 'prueba' ? DIAS_DE_PRUEBA : null,
+                                                })}
+                                            >
+                                                <option value="prueba">En prueba</option>
+                                                <option value="paga">Paga (sin prueba)</option>
+                                            </select>
+                                            {!!editingTaller.prueba_dias && (
+                                                <label className="flex items-center gap-2 text-sm">
+                                                    <Input
+                                                        type="number"
+                                                        min={1}
+                                                        className="w-20"
+                                                        value={editingTaller.prueba_dias ?? ''}
+                                                        onChange={(e) => setEditingTaller({
+                                                            ...editingTaller,
+                                                            prueba_dias: e.target.value === '' ? DIAS_DE_PRUEBA : Number(e.target.value),
+                                                        })}
+                                                    />
+                                                    días desde la primera carga
+                                                </label>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            Al vencer, el sistema corta el acceso solo y el taller ve el aviso automático. Los datos no se tocan. Si ya cargaba datos hace más de esos días, el corte es inmediato.
+                                        </p>
+                                        {editingTaller.acceso_suspendido_at && (
+                                            <div className="flex flex-wrap items-center gap-2 rounded-md border border-input px-3 py-2">
+                                                <span className="text-sm">
+                                                    {devolverAcceso
+                                                        ? 'El acceso se devuelve al guardar.'
+                                                        : `Acceso cortado desde el ${diaYMes(editingTaller.acceso_suspendido_at)}.`}
+                                                </span>
+                                                <Button type="button" variant="outline" size="sm" className="hover:bg-slate-50 hover:text-slate-900" onClick={() => setDevolverAcceso(!devolverAcceso)}>
+                                                    {devolverAcceso ? 'Deshacer' : 'Devolver el acceso'}
+                                                </Button>
+                                                {devolverAcceso && !!editingTaller.prueba_dias && (
+                                                    <span className="w-full text-xs text-muted-foreground">
+                                                        Si sigue en prueba y vencida, el sistema lo vuelve a cortar: pasalo a Paga o dale más días.
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Webhook ERP URL */}

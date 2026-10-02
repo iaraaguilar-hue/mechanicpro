@@ -222,13 +222,16 @@ function leerProducto(nombre) {
         const det = await cbGet(tok, `/api/comprobantes/${id}`);
         const bicis = (det?.Items ?? []).filter(i => i.IdRubro === RUBRO_BIKE);
 
-        const anotar = async (resultado, detalle, cliente_id = null, bicicleta_id = null) => {
+        // `extra`: columnas sueltas (comprador, bici_modelo, bici_talle) para que la pantalla
+        // pueda precargar el formulario «Cargar al dueño» sin leer la frase (2-oct-2026).
+        const anotar = async (resultado, detalle, cliente_id = null, bicicleta_id = null, extra = {}) => {
             resumen[resultado]++;
             if (DRY) return;
             await db.from('altas_desde_erp').insert({
                 taller_id: taller.id, comprobante_id: id,
                 fecha_venta: (det?.FechaAlta || c.FechaAlta || '').slice(0, 10) || null,
                 cliente_id, bicicleta_id, resultado, detalle: (detalle ?? '').slice(0, 500),
+                ...extra,
             });
         };
 
@@ -277,7 +280,8 @@ function leerProducto(nombre) {
             const { modelo: mod, talle: tal } = leerProducto(bicis[0].Concepto);
             await anotar('a_revisar',
                 `${nombre} (CUIT ${cli?.NroDoc}) compró 1 ${mod}${tal ? ' ' + tal : ''}. `
-                + `Facturado a una empresa: preguntar de quién es la bici.`);
+                + `Facturado a una empresa: preguntar de quién es la bici.`,
+                null, null, { comprador: nombre, bici_modelo: mod, bici_talle: tal || null });
             console.log(`  ❓ ${nombre} — 1 ${mod}: facturado a empresa, hay que preguntar de quién es`);
             continue;
         }

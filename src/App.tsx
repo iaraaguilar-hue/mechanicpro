@@ -358,8 +358,12 @@ function AppContent() {
         </div>
       )}
 
-      {/* ── DESKTOP SIDEBAR (hidden on mobile) ── */}
-      <nav data-tour="nav" className="hidden md:flex w-28 border-r border-border bg-card flex-col items-center py-4 space-y-4 sticky top-0 z-10 h-screen overflow-y-auto">
+      {/* ── DESKTOP SIDEBAR (hidden on mobile) ──
+          🔴 `shrink-0` + el `min-w-0` del <main>: sin los dos, en una pantalla de 1280 px o
+          menos el navegador le sacaba el ancho al MENÚ (quedaba en 25 px, o 1 px a 1024) en
+          vez de achicar el contenido. Lo vio Leandro (Probikes) en su compu vieja, 2-oct-2026.
+          Candado: qa_barra_lateral.cjs. */}
+      <nav data-tour="nav" className="hidden md:flex w-28 shrink-0 border-r border-border bg-card flex-col items-center py-4 space-y-4 sticky top-0 z-10 h-screen overflow-y-auto">
         <div className="mb-6 text-center w-full px-2 shrink-0">
           <div className="flex flex-col items-center justify-center mb-2 mt-2 w-full">
             {taller?.logo_url ? (
@@ -423,7 +427,7 @@ function AppContent() {
       </nav>
 
       {/* Main Content */}
-      <main className="flex-1 p-4 md:p-8 max-w-7xl mx-auto w-full">
+      <main className="flex-1 min-w-0 p-4 md:p-8 max-w-7xl mx-auto w-full">
         <Routes>
           {/* Feedback 11 a Fondo (jul-2026): la página principal es el Taller Activo.
               /workshop se mantiene como alias (IntakeWizard y hábitos navegan ahí). */}

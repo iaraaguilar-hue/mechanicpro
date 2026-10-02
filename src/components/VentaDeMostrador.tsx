@@ -16,7 +16,7 @@
 // sale, aparecen en Retención para escribirle a mano.
 // ─────────────────────────────────────────────────────────────
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,11 +33,19 @@ import { Bike, Check, Loader2, UserPlus, X } from 'lucide-react';
 interface Props {
     open: boolean;
     onClose: () => void;
+    /**
+     * Una venta que ya se sabe (2-oct-2026): la que llegó del ERP facturada a una empresa
+     * ("Bicis vendidas que no entraron solas"). La bici y la fecha vienen puestas; lo único
+     * que falta es el dueño real, que es justo lo que el taller tuvo que preguntar.
+     */
+    inicial?: { marca?: string; modelo?: string; talle?: string; fechaVenta?: string; facturadaA?: string };
+    /** Se llama cuando quedó guardada, con lo que se creó. */
+    onListo?: (r: { cliente_id: string; bicicleta_id: string }) => void;
 }
 
 const primerNombre = (n?: string | null) => (n ?? '').trim().split(/\s+/)[0] || '';
 
-export function VentaDeMostrador({ open, onClose }: Props) {
+export function VentaDeMostrador({ open, onClose, inicial, onListo }: Props) {
     const taller = useAuthStore(s => s.taller);
     const taller_id = useAuthStore(s => s.taller_id);
     const clientes = useDataStore(s => s.clientes);
@@ -81,6 +89,16 @@ export function VentaDeMostrador({ open, onClose }: Props) {
         }
     };
 
+    // Al abrirse con una venta conocida, se completa lo que ya se sabe.
+    useEffect(() => {
+        if (!open || !inicial) return;
+        setMarca(inicial.marca ?? '');
+        setModelo(inicial.modelo ?? '');
+        setTalle(inicial.talle ?? '');
+        if (inicial.fechaVenta && /^\d{4}-\d{2}-\d{2}$/.test(inicial.fechaVenta)) cambiarVenta(inicial.fechaVenta);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, inicial]);
+
     const coincidencias = useMemo(() => {
         const q = busqueda.trim().toLowerCase();
         if (q.length < 2) return [];
@@ -123,6 +141,7 @@ export function VentaDeMostrador({ open, onClose }: Props) {
                 // La bici ya quedó: el error lo dice así, para que nadie la vuelva a cargar.
                 if (e) throw new Error(`La bici quedó cargada, pero no se pudieron agendar los avisos (${e.message}). Probá de nuevo desde su ficha o avisanos.`);
             }
+            onListo?.({ cliente_id: cid!, bicicleta_id: bici.id });
             setListo({
                 quien, bici: `${marca.trim()} ${modelo.trim()}`,
                 ajuste: conAjuste ? fechaAjuste : null, primer: conPrimer ? fechaPrimer : null,
@@ -142,8 +161,13 @@ export function VentaDeMostrador({ open, onClose }: Props) {
             <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Bike className="h-5 w-5 text-primary" /> Vendí una bici
+                        <Bike className="h-5 w-5 text-primary" /> {inicial ? 'Cargar al dueño de la bici' : 'Vendí una bici'}
                     </DialogTitle>
+                    {inicial?.facturadaA && !listo && (
+                        <p className="text-sm text-muted-foreground">
+                            Se facturó a {inicial.facturadaA}. Poné el nombre de quien la usa.
+                        </p>
+                    )}
                 </DialogHeader>
 
                 {listo ? (
@@ -161,7 +185,7 @@ export function VentaDeMostrador({ open, onClose }: Props) {
                             </p>
                         )}
                         <div className="flex gap-2 justify-end">
-                            <Button variant="outline" onClick={reiniciar}>Cargar otra venta</Button>
+                            {!inicial && <Button variant="outline" onClick={reiniciar}>Cargar otra venta</Button>}
                             <Button onClick={cerrar}>Listo</Button>
                         </div>
                     </div>

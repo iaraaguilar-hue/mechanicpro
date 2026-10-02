@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { AvisoDeVuelta } from '@/components/AvisoDeVuelta';
 import { useSearchParams } from "react-router-dom";
 import { useDataStore } from "@/store/dataStore";
@@ -12,8 +12,9 @@ import { dispararMensajesAutomaticos } from "@/lib/comprobanteALaNube";
 import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign, PackageSearch, Phone, Bike, Send } from "lucide-react";
+import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign, PackageSearch, Phone, Bike, Send, Loader2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { TildarAntesDeCerrar } from "@/components/TildarAntesDeCerrar";
 import { servicioRevenue } from "@/lib/servicioRevenue";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
@@ -1127,6 +1128,22 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
     const [avisosERP, setAvisosERP] = useState<AvisoOrdenERP[] | null>(null);
     const productos = useDataStore(s => s.productos);
 
+    // 🔴 UN SOLO CIERRE POR ORDEN, aunque se apriete dos veces (2-oct-2026). En una compu
+    // lenta (la de Leandro, Probikes) el botón tarda en reaccionar mientras se lee el
+    // catálogo del ERP, y el segundo clic arrancaba OTRA cadena entera: dos cierres, dos
+    // mensajes de "ya está lista" al cliente. El estado (`verificando`) apaga el botón;
+    // la ref frena el segundo clic que llega antes de que React vuelva a dibujar.
+    const [verificando, setVerificando] = useState(false);
+    const cerrandoRef = useRef(false);
+
+    // Lo que falta tildar se tilda ADENTRO de esta ventana (ver TildarAntesDeCerrar).
+    const verDerivadas = avancesActivos(taller);
+    const verLibres = tareasActivas(taller);
+    const bloqueaTareas = bloqueoFinalizacionActivo(taller);
+    const faltanTildar = service
+        ? (verDerivadas ? trabajosPendientes(service).length : 0) + (verLibres ? tareasLibresPendientes(service).length : 0)
+        : 0;
+
     // ── Con qué se calcula la sugerencia del aviso.
     //
     // Las visitas del cliente salen del store que ya está cargado: no hay una
@@ -1159,6 +1176,12 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
 
 
     const handleFinalize = async () => {
+        if (!service || cerrandoRef.current) return;
+        setVerificando(true);
+        try { await cadenaDeCierre(); } finally { setVerificando(false); }
+    };
+
+    const cadenaDeCierre = async () => {
         if (!service) return;
 
         const estadoActual = (service.estado || '').toLowerCase();
@@ -1276,7 +1299,8 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
     };
 
     const doFinalize = async () => {
-        if (!service) return;
+        if (!service || cerrandoRef.current) return;
+        cerrandoRef.current = true;
         setIsSaving(true);
         try {
             // Update service notes
@@ -1452,6 +1476,7 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
             console.error("Error finalizando:", e);
             alert(`Error: ${e.message}`);
         } finally {
+            cerrandoRef.current = false;
             setIsSaving(false);
         }
     };
@@ -1515,6 +1540,10 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                 </DialogHeader>
 
                 <div className="grid gap-6 py-4">
+                    {/* Primero lo que falta tildar: es lo único que puede frenar el cierre. */}
+                    {!isCompleted && (verDerivadas || verLibres) && (
+                        <TildarAntesDeCerrar servicio={service} verDerivadas={verDerivadas} verLibres={verLibres} bloquea={bloqueaTareas} />
+                    )}
                     <div className="grid gap-4 md:grid-cols-2">
                         <div data-tour="finalizar-resumen" className="space-y-2">
                             <Label>Detalle de Costos (Resumen)</Label>
@@ -1654,9 +1683,23 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                             </Button>
                         </>
                     ) : (
-                        <Button onClick={handleFinalize} disabled={isSaving} className="bg-green-600 hover:bg-green-700 text-white">
-                            <CheckCircle className="mr-2 h-4 w-4" /> Finalizar Service (Confirmar)
-                        </Button>
+                        <div className="flex flex-col items-end gap-1">
+                            <Button
+                                onClick={handleFinalize}
+                                disabled={isSaving || verificando || (bloqueaTareas && faltanTildar > 0)}
+                                className="bg-green-600 hover:bg-green-700 text-white"
+                            >
+                                {isSaving || verificando
+                                    ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    : <CheckCircle className="mr-2 h-4 w-4" />} Finalizar Service (Confirmar)
+                            </Button>
+                            {/* Un botón apagado dice POR QUÉ a la vista (en la compu y en el celu). */}
+                            {bloqueaTareas && faltanTildar > 0 && (
+                                <p data-motivo-apagado className="text-xs text-amber-700">
+                                    Tildá arriba {faltanTildar === 1 ? 'el trabajo que falta' : `los ${faltanTildar} que faltan`} para cerrar.
+                                </p>
+                            )}
+                        </div>
                     )}
                 </DialogFooter>
             </DialogContent>

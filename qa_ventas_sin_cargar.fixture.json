@@ -1,0 +1,20 @@
+[
+ {"id": "00000000-0000-4000-8000-000000000000", "comprobante_id": "qa0", "fecha_venta": "2026-09-30", "resultado": "a_revisar", "comprador": "EMPRESA UNO S.R.L.", "bici_modelo": "Sirrus X 3.0", "bici_talle": "M",
+  "detalle": "EMPRESA UNO S.R.L. (CUIT 30000000000) compró 1 Sirrus X 3.0 M. Facturado a una empresa: preguntar de quién es la bici."},
+ {"id": "00000000-0000-4000-8000-000000000001", "comprobante_id": "qa1", "fecha_venta": "2026-09-30", "resultado": "a_revisar", "comprador": "EMPRESA DOS S.R.L.", "bici_modelo": "Tarmac Sl8 Expert Di2 /wht", "bici_talle": "54",
+  "detalle": "EMPRESA DOS S.R.L. (CUIT 30000000000) compró 1 Tarmac Sl8 Expert Di2 /wht 54. Facturado a una empresa: preguntar de quién es la bici."},
+ {"id": "00000000-0000-4000-8000-000000000002", "comprobante_id": "qa2", "fecha_venta": "2026-09-30", "resultado": "lejos", "comprador": null, "bici_modelo": null, "bici_talle": null,
+  "detalle": "JUAN PRUEBA · Mendoza: fuera de donde atiende el taller"},
+ {"id": "00000000-0000-4000-8000-000000000003", "comprobante_id": "qa3", "fecha_venta": "2026-09-15", "resultado": "lejos", "comprador": null, "bici_modelo": null, "bici_talle": null,
+  "detalle": "COMERCIO TRES S.R.L. · Chubut: fuera de donde atiende el taller"},
+ {"id": "00000000-0000-4000-8000-000000000004", "comprobante_id": "qa4", "fecha_venta": "2026-09-08", "resultado": "lejos", "comprador": null, "bici_modelo": null, "bici_talle": null,
+  "detalle": "SOCIEDAD CUATRO · Chaco: fuera de donde atiende el taller"},
+ {"id": "00000000-0000-4000-8000-000000000005", "comprobante_id": "qa5", "fecha_venta": "2026-07-24", "resultado": "generico", "comprador": null, "bici_modelo": null, "bici_talle": null,
+  "detalle": "\"CONSUMIDOR FINAL\": es el cliente genérico de facturación"},
+ {"id": "00000000-0000-4000-8000-000000000006", "comprobante_id": "qa6", "fecha_venta": "2026-06-29", "resultado": "lejos", "comprador": null, "bici_modelo": null, "bici_talle": null,
+  "detalle": "PEDRO PRUEBA · Rio Negro: fuera de donde atiende el taller"},
+ {"id": "00000000-0000-4000-8000-000000000007", "comprobante_id": "qa7", "fecha_venta": "2026-06-24", "resultado": "lejos", "comprador": null, "bici_modelo": null, "bici_talle": null,
+  "detalle": "LUIS PRUEBA · Rio Negro: fuera de donde atiende el taller"},
+ {"id": "00000000-0000-4000-8000-000000000008", "comprobante_id": "qa8", "fecha_venta": "2026-05-23", "resultado": "generico", "comprador": null, "bici_modelo": null, "bici_talle": null,
+  "detalle": "\"CONSUMIDOR FINAL\": es el cliente genérico de facturación"}
+]

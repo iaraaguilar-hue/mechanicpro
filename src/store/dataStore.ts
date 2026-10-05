@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { huellaItemsERP, corregirOrdenEnERP } from '@/lib/ordenVentaERP';
+import { huellaItemsERP, corregirOrdenEnERP, sincronizarOrdenEnTaller, cerrarOrdenEnTaller, aceptaOrdenEnTaller, type ErpTaller } from '@/lib/ordenVentaERP';
 import { supabase } from '@/lib/supabase';
 import { claveProducto, type ProductoTaller } from '@/lib/buscadorProductos';
 
@@ -217,6 +217,8 @@ export interface SupabaseService {
     webhook_erp_ok?: boolean | null;
     webhook_erp_detalle?: string | null;
     webhook_erp_at?: string | null;
+    /** La orden EN TALLER (<N>-T) del ERP: ver lib/ordenVentaERP.ts, sección 5 (5-oct-2026). */
+    erp_taller?: ErpTaller | null;
     eliminado_en?: string | null;
     checklist_data?: Record<string, boolean>;
     etapas_data?: Record<string, boolean> | null;
@@ -336,6 +338,20 @@ async function logActividad(payload: {
     } catch (auditErr) {
         console.warn('[DataStore] ⚠️ Audit log falló (no crítico):', auditErr);
     }
+}
+
+/**
+ * Lo que dejan escrito los envíos al ERP (qué contestó la orden de venta, cómo
+ * quedó la orden en taller) llega DESPUÉS del guardado: se trae de la base para
+ * pegarlo en el store y que el cartel de la fila se vea sin recargar.
+ */
+async function traerEstadoERP(id: string): Promise<Partial<SupabaseService> | null> {
+    const { data } = await supabase
+        .from('servicios')
+        .select('webhook_erp_ok,webhook_erp_detalle,webhook_erp_at,erp_taller')
+        .eq('id', id)
+        .maybeSingle();
+    return (data as Partial<SupabaseService> | null) ?? null;
 }
 
 export const useDataStore = create<DataState>((set, get) => ({
@@ -727,6 +743,20 @@ export const useDataStore = create<DataState>((set, get) => ({
 
             // El buscador aprende de esta orden (no bloquea el alta si falla).
             await get().registrarProductosUsados(itemsToInsert);
+
+            // ── La orden EN TALLER: el stock baja con el primer repuesto (5-oct-2026) ──
+            // Si la bici entra con repuestos ya cargados (el presupuesto de la
+            // recepción), la -T nace acá y no recién al finalizar. Sin `await`: el
+            // alta no espera al ERP. Si los renglones no se guardaron, la base no
+            // tiene qué mandar.
+            if (!itemsError && aceptaOrdenEnTaller(createdService.taller_id) && huellaItemsERP(itemsToInsert) !== '') {
+                const id = createdService.id;
+                void sincronizarOrdenEnTaller(id).then(async (r) => {
+                    if (r === 'no_aplica' || r === 'nada') return;
+                    const fila = await traerEstadoERP(id);
+                    if (fila) set({ servicios: get().servicios.map(s => s.id === id ? { ...s, ...fila } : s) });
+                });
+            }
         }
 
         // Update Zustand state with items attached
@@ -819,16 +849,22 @@ export const useDataStore = create<DataState>((set, get) => ({
             // `corregirOrdenEnERP` lee la base y no hace nada si la orden nunca salió.
             // Si el guardado de los renglones falló, la base no refleja la
             // edición: corregir con eso mandaría una orden vacía o equivocada.
+            //
+            // ── Y con el service EN CURSO, la orden en taller (<N>-T, 5-oct-2026) ──
+            // Cada cambio de repuestos la crea o la pisa (o la cancela, si no queda
+            // ninguno), para que el stock baje cuando el mecánico carga el repuesto
+            // y no cuando termina. Las dos se excluyen por condición (la -T solo con
+            // la final SIN mandar; la corrección solo con la final mandada) y van en
+            // la misma fila, así que nunca se adelantan entre sí.
             if (itemsGuardados && huellaItemsERP(itemsArray) !== huellaAntes) {
-                void corregirOrdenEnERP(id).then(async (r) => {
-                    if (r === 'no_aplica') return;
-                    const { data: fila } = await supabase
-                        .from('servicios')
-                        .select('webhook_erp_ok,webhook_erp_detalle,webhook_erp_at')
-                        .eq('id', id)
-                        .maybeSingle();
+                const traer = async (r: string) => {
+                    if (r === 'no_aplica' || r === 'nada') return;
+                    const fila = await traerEstadoERP(id);
                     if (fila) set({ servicios: get().servicios.map(s => s.id === id ? { ...s, ...fila } : s) });
-                });
+                };
+                void corregirOrdenEnERP(id).then(traer);
+                const tallerDeLaOrden = get().servicios.find(s => s.id === id)?.taller_id || serviceData.taller_id;
+                if (aceptaOrdenEnTaller(tallerDeLaOrden)) void sincronizarOrdenEnTaller(id).then(traer);
             }
         }
 
@@ -848,9 +884,14 @@ export const useDataStore = create<DataState>((set, get) => ({
     deleteServicio: async (id) => {
         // Soft delete
         const eliminado_en = new Date().toISOString();
+        const tallerDeLaOrden = get().servicios.find(s => s.id === id)?.taller_id;
         const { error } = await supabase.from('servicios').update({ eliminado_en }).eq('id', id);
         if (error) throw new Error(`Error eliminando servicio: ${error.message}`);
         set({ servicios: get().servicios.filter(s => s.id !== id) });
+        // Una orden borrada no puede seguir reservando stock en el ERP (5-oct-2026):
+        // si tenía la -T abierta, se cancela. Lee la base, así que no depende de que
+        // el store esté al día.
+        if (aceptaOrdenEnTaller(tallerDeLaOrden)) void cerrarOrdenEnTaller(id);
     },
 
     dismissAlert: async (servicioId, alertId) => {

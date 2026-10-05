@@ -24,7 +24,7 @@ import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
 import { estadoDeEspera } from "@/lib/avisoDeLaOrden";
 import { resolveOrdenWebhookUrl, resolveEntregadoWebhookUrl } from "@/lib/ordenWebhook";
-import { armarPayloadOrden, cargarVinculosERP as cargarVinculosERPDelTaller, enFila, mandarOrden, registrarRespuestaERP, textoAvisoERP } from "@/lib/ordenVentaERP";
+import { armarPayloadOrden, cargarVinculosERP as cargarVinculosERPDelTaller, enFila, mandarOrden, registrarRespuestaERP, textoAvisoERP, textoAvisoEnTaller, cerrarOrdenEnTaller, aceptaOrdenEnTaller, type ErpTaller } from "@/lib/ordenVentaERP";
 import { buscarProductos } from "@/lib/buscadorProductos";
 import { instanteAR, diaCalendario, horaCorta, ZONA_AR } from "@/lib/fechaAR";
 import { ETIQUETAS_NOTAS } from "@/lib/notasServicio";
@@ -80,6 +80,8 @@ interface DashboardJob {
     /** false = el POST de la orden de venta al ERP no llegó. */
     webhook_erp_ok?: boolean | null;
     webhook_erp_detalle?: string | null;
+    /** La orden en taller (<N>-T): si su último envío falló, la fila lo dice. */
+    erp_taller?: ErpTaller | null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -216,6 +218,7 @@ export default function Workshop() {
                     bicicleta_id: s.bicicleta_id,
                     webhook_erp_ok: s.webhook_erp_ok ?? null,
                     webhook_erp_detalle: s.webhook_erp_detalle ?? null,
+                    erp_taller: s.erp_taller ?? null,
                     pieza: s.pieza ?? null,
                 };
             });
@@ -358,6 +361,9 @@ export default function Workshop() {
 
     // Deshacer un "Finalizar Service" apretado por error: vuelve a En curso.
     // El webhook ERP NO se re-dispara al re-finalizar (marca webhook_erp_disparado).
+    // Tampoco vuelve la orden en taller (<N>-T, 5-oct-2026): si la final ya salió,
+    // los cambios los corrige `corregirOrdenEnERP`; si no salió es porque no había
+    // repuestos, y la -T nace sola cuando se cargue el primero.
     const doReopen = async (job: DashboardJob) => {
         try {
             await updateServicio(job.service_id, {
@@ -701,6 +707,7 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
     const isReady = (job.status || '').toLowerCase() === 'ready';
 
     const statusBadge = <StatusBadge status={job.status} />;
+    const avisoEnTaller = textoAvisoEnTaller(job.erp_taller, job.numero_orden);
 
     const [showToast, setShowToast] = useState<{type: 'success' | 'error', message: string} | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -877,6 +884,14 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                         {job.webhook_erp_ok === false && (
                             <div className="flex items-center gap-1 text-[10px] font-bold text-red-600 uppercase" title={textoAvisoERP(job.webhook_erp_detalle).cuerpo}>
                                 <PackageSearch className="h-3 w-3" /> {textoAvisoERP(job.webhook_erp_detalle).titulo}
+                            </div>
+                        )}
+                        {/* La orden en taller (<N>-T) no se pudo crear, pisar o cancelar
+                            (5-oct-2026). Mismo formato que el de arriba: un stock que no
+                            bajó, o que quedó reservado, no puede fallar en silencio. */}
+                        {avisoEnTaller && (
+                            <div className="flex items-center gap-1 text-[10px] font-bold text-red-600 uppercase" title={avisoEnTaller.cuerpo}>
+                                <PackageSearch className="h-3 w-3" /> {avisoEnTaller.titulo}
                             </div>
                         )}
                         <ChipDeEspera serviceId={job.service_id} />
@@ -1452,8 +1467,13 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                             // mientras este envío viaja sale después, no antes. Y el
                             // registro va ADENTRO de la fila: la corrección lee de la base
                             // si la orden llegó, así que tiene que encontrarlo escrito.
+                            //
+                            // `etapa: 'finalizada'` (5-oct-2026): la automatización de Probikes
+                            // ahora también recibe la orden EN TALLER (<N>-T); esta es la <N>
+                            // de siempre, la que se factura. Sin etapa también la toma como
+                            // final: el campo es para que se lea sin adivinar.
                             void enFila(servicioId, async () => {
-                                const { ok, detalle } = await mandarOrden(ordenUrl, payload);
+                                const { ok, detalle } = await mandarOrden(ordenUrl, { ...payload, etapa: 'finalizada' });
                                 if (!ok) console.error("Webhook de orden: no llegó —", detalle);
                                 await registrarRespuestaERP(servicioId, ok, detalle);
                             });
@@ -1469,6 +1489,15 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                 } catch (err) {
                     console.error("Error preparando el Webhook:", err);
                 }
+
+                // ── La orden EN TALLER (<N>-T) se cierra al finalizar (5-oct-2026) ──
+                // Reservó el stock mientras la bici estaba en el taller; ahora la
+                // reserva pasa a la final. Va FUERA del `if` de los repuestos a
+                // propósito: si se sacaron todos antes de finalizar, o la final no
+                // sale (reabierta, taller sin webhook), una -T abierta igual se
+                // cancela. Y va DESPUÉS de la final y en su misma fila: entre las dos
+                // el stock nunca queda libre. Lee la base y no hace nada si no hay -T.
+                if (aceptaOrdenEnTaller(taller_id)) void cerrarOrdenEnTaller(job.service_id);
             }
 
             onClose();

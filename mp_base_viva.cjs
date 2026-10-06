@@ -375,8 +375,12 @@ function guardarEstado(e) {
                 notificar('🔴 Mechanic Pro — la base NO responde y no pude reiniciarla',
                     `${reporte.motivo}. Reinicio: ${reporte.reinicio}. El runbook está en ~/Library/Logs/mp-base-viva.log`);
             }
-        } else if (!previo.caida) {
+        } else if (!previo.caida && red.ok) {
             // Primera vez que se ve: se avisa ya; si en 5 min sigue, se reinicia.
+            // Si no contesta NI el endpoint sin llave, es la red de esta Mac (6-oct:
+            // al despertar del reposo, "fetch failed" en todo): eso no se avisa
+            // salvo que dure 30 min (rama de abajo). Una alarma por cada vez que
+            // se abre la tapa es la alarma que nadie lee.
             notificar('🔴 Mechanic Pro — la base NO responde',
                 `${reporte.motivo}. Si sigue así en 5 minutos, la reinicio sola.`);
         } else if (minutosDesde(estado.caidaDesde) >= 30 && !estado.avisoSigueCaida) {
@@ -387,7 +391,9 @@ function guardarEstado(e) {
             notificar('🔴 Mechanic Pro — lleva 30 min caída y no la puedo reiniciar',
                 `${reporte.motivo}. El runbook está en ~/Library/Logs/mp-base-viva.log`);
         } else {
-            log(`  ya avisado; último reinicio: ${estado.ultimoReinicio ?? 'ninguno'}`);
+            log(red.ok
+                ? `  ya avisado; último reinicio: ${estado.ultimoReinicio ?? 'ninguno'}`
+                : '  sin red en esta Mac: no se avisa ni se reinicia (si dura 30 min, se avisa)');
         }
     } else {
         log('✓ la base contesta');

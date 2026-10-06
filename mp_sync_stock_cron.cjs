@@ -98,7 +98,9 @@ function correrSync() {
     const p = spawn(process.execPath, [path.join(__dirname, 'mp_sync_stock_erp.cjs'), '--taller', TALLER, '--dias', '365'],
       { cwd: __dirname, env: process.env });
     let salida = '', cortado = false;
-    p.stdout.on('data', d => salida += d); p.stderr.on('data', d => salida += d);
+    // En vivo, no al final: si el intento se corta, el log ya dice en qué fase iba.
+    const escribir = d => { salida += d; if (NUBE) process.stdout.write(d); else fs.appendFileSync(LOG, d); };
+    p.stdout.on('data', escribir); p.stderr.on('data', escribir);
     const tope = setTimeout(() => { cortado = true; p.kill('SIGTERM'); }, TOPE_INTENTO_MIN * 60e3);
     p.on('close', code => {
       clearTimeout(tope);
@@ -135,7 +137,6 @@ function correrSync() {
   for (let i = 0; i < ESPERAS_MIN.length; i++) {
     if (ESPERAS_MIN[i]) { log(`  … espero ${ESPERAS_MIN[i]} min y reintento (${i + 1}/${ESPERAS_MIN.length})`); await sleep(ESPERAS_MIN[i] * 60e3); }
     r = await correrSync();
-    log(r.salida.trim());
     if (r.code === 0) break;
     log(r.cortado ? `✗ intento ${i + 1}: lo corté a los ${TOPE_INTENTO_MIN} min` : `✗ intento ${i + 1}: código ${r.code} a los ${r.seg} s`);
     if (/CREDENCIAL RECHAZADA/.test(r.salida)) break; // reintentar no la arregla

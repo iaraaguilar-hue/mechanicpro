@@ -32,6 +32,7 @@
 // ─────────────────────────────────────────────────────────────
 
 const fs = require('fs');
+const { crearCliente } = require('./contabilium_http.cjs');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 
@@ -88,24 +89,22 @@ function dniDe(doc) {
 /** ¿El documento es de una empresa? Se usa para saltear la venta entera. */
 const esEmpresa = (doc) => /^(30|33|34)/.test(soloNum(doc)) && soloNum(doc).length === 11;
 
-/** Token OAuth de Contabilium. */
+/** Token OAuth de Contabilium, por el cliente compartido (ritmo + Retry-After: contabilium_http.cjs). */
+let cb = null;
 async function tokenCB() {
-    const r = await fetch(`${CB}/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            grant_type: 'client_credentials',
-            client_id: process.env.CB_EMAIL, client_secret: process.env.CB_KEY,
-        }),
-    });
-    const d = await r.json().catch(() => ({}));
-    if (!d.access_token) die('no pude autenticar contra Contabilium: ' + JSON.stringify(d).slice(0, 180));
-    return d.access_token;
+    cb = crearCliente({ email: process.env.CB_EMAIL, key: process.env.CB_KEY });
+    try { return await cb.token(); } catch (e) { die('no pude autenticar contra Contabilium: ' + e.message); }
 }
 
-const cbGet = async (tok, p) => {
-    const r = await fetch(CB + p, { headers: { Authorization: `Bearer ${tok}` } });
-    return r.ok ? r.json() : null;
+// 🔴 6-oct-2026: antes devolvía null ante CUALQUIER error, un 429 incluido (Contabilium tiene límite
+// de pedidos desde el 3-oct). El comprobante quedaba anotado como «sin ítems del rubro Bike» y la
+// bici vendida no entraba NUNCA. Ahora un pedido que no vuelve aborta la corrida sin anotar nada:
+// lo que quedó sin anotar se reintenta mañana (la ventana es de 7 días).
+const cbGet = async (_tok, p) => {
+    const r = await cb.get(p);
+    if (r.status === 200) return r.data;
+    if (r.status === 404) return null;
+    throw new Error(`Contabilium no devolvió ${p} (status ${r.status}). Abortado para no anotar como procesado algo que no se leyó.`);
 };
 
 /**

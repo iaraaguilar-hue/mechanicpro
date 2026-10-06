@@ -220,7 +220,7 @@ export interface SupabaseService {
     webhook_erp_ok?: boolean | null;
     webhook_erp_detalle?: string | null;
     webhook_erp_at?: string | null;
-    /** La orden EN TALLER (<N>-T) del ERP: ver lib/ordenVentaERP.ts, sección 5 (5-oct-2026). */
+    /** La orden de venta PENDIENTE en el ERP: ver lib/ordenVentaERP.ts, sección 5 (5 y 6-oct-2026). */
     erp_taller?: ErpTaller | null;
     eliminado_en?: string | null;
     checklist_data?: Record<string, boolean>;
@@ -749,7 +749,7 @@ export const useDataStore = create<DataState>((set, get) => ({
         if (aceptaOrdenEnTaller(tallerDeLaBici)) {
             const { pudoLeer, sinCerrar } = await cerrarOrdenesEnTallerDeLaBici(id);
             if (!pudoLeer) throw new Error('No se pudo revisar si esta bici tiene una orden en taller abierta en el ERP. La bici no se borró: probá de nuevo en un rato.');
-            if (sinCerrar.length) throw new Error(`No se pudo cancelar en el ERP la orden en taller ${sinCerrar.join(', ')}. La bici no se borró, para no dejar stock reservado sin dueño: probá de nuevo, o anulá esa orden a mano en Contabilium antes de borrarla.`);
+            if (sinCerrar.length) throw new Error(`No se pudo cancelar en el ERP la orden de venta ${sinCerrar.join(', ')}. La bici no se borró, para no dejar stock reservado sin dueño: probá de nuevo, o anulá esa orden a mano en Contabilium antes de borrarla.`);
         }
         const { error } = await supabase.from('bicicletas').delete().eq('id', id);
         if (error) throw new Error(`Error eliminando bicicleta: ${error.message}`);

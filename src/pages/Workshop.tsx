@@ -80,7 +80,7 @@ interface DashboardJob {
     /** false = el POST de la orden de venta al ERP no llegó. */
     webhook_erp_ok?: boolean | null;
     webhook_erp_detalle?: string | null;
-    /** La orden en taller (<N>-T): si falló o quedó abierta de más, la fila lo dice. */
+    /** La orden de venta pendiente: si falló o quedó abierta de más, la fila lo dice. */
     erp_taller?: ErpTaller | null;
     webhook_erp_disparado?: boolean | null;
     fecha_finalizacion?: string | null;
@@ -366,9 +366,9 @@ export default function Workshop() {
 
     // Deshacer un "Finalizar Service" apretado por error: vuelve a En curso.
     // El webhook ERP NO se re-dispara al re-finalizar (marca webhook_erp_disparado).
-    // Tampoco vuelve la orden en taller (<N>-T, 5-oct-2026): si la final ya salió,
-    // los cambios los corrige `corregirOrdenEnERP`; si no salió es porque no había
-    // repuestos, y la -T nace sola cuando se cargue el primero.
+    // Tampoco se vuelve a mandar la orden pendiente (5 y 6-oct-2026): si la final ya
+    // salió, los cambios los corrige `corregirOrdenEnERP`; si no salió es porque no
+    // había repuestos, y la pendiente nace sola cuando se cargue el primero.
     const doReopen = async (job: DashboardJob) => {
         try {
             await updateServicio(job.service_id, {
@@ -1518,10 +1518,10 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                             // registro va ADENTRO de la fila: la corrección lee de la base
                             // si la orden llegó, así que tiene que encontrarlo escrito.
                             //
-                            // `etapa: 'finalizada'` (5-oct-2026): la automatización de Probikes
-                            // ahora también recibe la orden EN TALLER (<N>-T); esta es la <N>
-                            // de siempre, la que se factura. Sin etapa también la toma como
-                            // final: el campo es para que se lea sin adivinar.
+                            // `etapa: 'finalizada'` (5 y 6-oct-2026): con UNA sola orden, pasa
+                            // la misma <N> que estaba Pendiente a Aceptado: la que se factura.
+                            // Sin etapa también la toma como final: el campo es para que se
+                            // lea sin adivinar.
                             mandarFinal = async () => {
                                 const { ok, detalle } = await mandarOrden(ordenUrl, { ...payload, etapa: 'finalizada' });
                                 if (!ok) console.error("Webhook de orden: no llegó —", detalle);
@@ -1540,16 +1540,15 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                     console.error("Error preparando el Webhook:", err);
                 }
 
-                // ── La final y el cierre de la orden EN TALLER (<N>-T), 5-oct-2026 ──
-                // La -T reservó el stock mientras la bici estaba en el taller; ahora
-                // la reserva pasa a la final. El cierre va FUERA del `if` de los
-                // repuestos a propósito: si se sacaron todos antes de finalizar, o la
-                // final no sale (reabierta, taller sin webhook), una -T abierta igual
-                // se cancela. Y sale DESPUÉS de la final, en su misma fila: entre las
-                // dos el stock nunca queda libre. Si la pestaña se cierra antes, la
-                // -T queda abierta y la cancela el reconciliador en la próxima carga.
-                // Al terminar se trae lo que quedó escrito: si el cierre falló, la
-                // fila lo muestra sin recargar.
+                // ── La final y DESPUÉS el cierre de la orden pendiente (5 y 6-oct) ──
+                // Con una sola orden, la final pasa la misma <N> a Aceptado; el cierre
+                // de después manda `cancelar_taller`, que solo toca las "<N>-T" del
+                // esquema anterior (si no hay, contesta 0 y el registro se cierra). Va
+                // FUERA del `if` de los repuestos a propósito: si se sacaron todos antes
+                // de finalizar, la <N> pendiente se cancela (`cancelada`). Y sale
+                // DESPUÉS de la final, en su misma fila. Si la pestaña se cierra antes,
+                // lo termina el reconciliador en la próxima carga. Al terminar se trae
+                // lo que quedó escrito: si el cierre falló, la fila lo muestra.
                 const { final, cierre } = mandarFinalYCerrarEnTaller(job.service_id, mandarFinal, aceptaOrdenEnTaller(taller_id));
                 const refrescar = () => { void refrescarERP(job.service_id); };
                 (cierre ?? final)?.then(refrescar, refrescar);

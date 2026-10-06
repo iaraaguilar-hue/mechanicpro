@@ -10,6 +10,7 @@ import {
     leerRespuestaERP, mandarOrden, RECHAZADA_ERP, CODIGO_NO_EXISTE,
     accionOrdenEnTaller, armarPayloadCancelacion, erpTallerAntesDeMandar, erpTallerTrasEnvio, avisoEnTaller, aceptaOrdenEnTaller,
     ordenesParaReconciliar, mandarFinalYCerrarEnTaller, cerrarOrdenEnTaller, sincronizarOrdenEnTaller,
+    erpTallerSinErrorViejo, cerrarOrdenesEnTallerDeLaBici,
     type ErpTaller, type ProductoOrdenERP, type ServicioParaEnTaller,
 } from './ordenVentaERP';
 import type { VinculoProducto } from './chequeoOrdenERP';
@@ -222,6 +223,10 @@ const enCurso: ServicioParaEnTaller = { estado: 'in_progress', webhook_erp_dispa
     eq('… y si la pestaña muere ahí, al finalizar el cierre la cancela', accionOrdenEnTaller({ estado: 'ready', erp_taller: anotada }, []), 'cancelar_taller');
     eq('… y el reconciliador la encuentra', ordenesParaReconciliar([{ id: 'a', estado: 'ready', erp_taller: anotada }]), ['a']);
     eq('pisar una CONFIRMADA: la anotación sigue confirmada (la -T existe seguro)', erpTallerAntesDeMandar(abiertaCon([CAMARA]), [CADENA], 't').confirmada, true);
+    // 2ª vuelta (6-oct): la anotación de un en_taller que nunca contestó NO es "ya sincronizada".
+    eq('anotada sin confirmar y con los MISMOS repuestos (pestaña cerrada a mitad) → se vuelve a mandar, no "nada"',
+        accionOrdenEnTaller({ ...enCurso, erp_taller: anotada }, [CAMARA]), 'en_taller');
+    eq('control: confirmada con los mismos repuestos → nada', accionOrdenEnTaller({ ...enCurso, erp_taller: abiertaCon([CAMARA]) }, [CAMARA]), 'nada');
 
     eq('en_taller OK → abierta y confirmada, con lo mandado', erpTallerTrasEnvio(null, 'en_taller', [CAMARA], OK, 't'),
         { abierta: true, confirmada: true, productos: [CAMARA], at: 't', etapa: 'en_taller', ...SIN_ERR });
@@ -242,8 +247,13 @@ const enCurso: ServicioParaEnTaller = { estado: 'in_progress', webhook_erp_dispa
         { abierta: false, confirmada: false, productos: [CAMARA], at: 't', etapa: 'cancelar_taller', ...SIN_ERR });
     eq('cancelar rechazado con -1 (u otro código) sobre una sin confirmar → sigue abierta: -1 no dice que no exista',
         erpTallerTrasEnvio(incierta, 'cancelar_taller', [CAMARA], RECHAZO, 't').abierta, true);
-    eq('cancelar rechazado con 0 sobre una -T CONFIRMADA → sigue abierta (esa sí reserva)',
-        erpTallerTrasEnvio(abiertaCon([CAMARA]), 'cancelar_taller', [CAMARA], CODIGO_0, 't').abierta, true);
+    // 2ª vuelta (6-oct): una CONFIRMADA que al cancelar da 0 es una que alguien anuló a mano.
+    const anuladaAMano = erpTallerTrasEnvio(abiertaCon([CAMARA]), 'cancelar_taller', [CAMARA], CODIGO_0, 't');
+    eq('cancelar rechazado con 0 sobre una -T CONFIRMADA (anulada a mano) → cerrada y sin error',
+        anuladaAMano, { abierta: false, confirmada: false, productos: [CAMARA], at: 't', etapa: 'cancelar_taller', ...SIN_ERR });
+    eq('… sin cartel', avisoEnTaller({ numero_orden: 412, estado: 'delivered', fecha_finalizacion: '2026-10-01T00:00:00Z', erp_taller: anuladaAMano }), null);
+    eq('… y el reconciliador ya no la vuelve a cancelar en cada carga',
+        ordenesParaReconciliar([{ id: 'x', estado: 'delivered', erp_taller: anuladaAMano }]), []);
     eq('confirmada y después un en_taller incierto → sigue confirmada (la -T existe seguro)',
         erpTallerTrasEnvio(abiertaCon([CAMARA]), 'en_taller', [CADENA], INCIERTO, 't').confirmada, true);
     const cierreFallido = erpTallerTrasEnvio(abiertaCon([CAMARA]), 'cancelar_taller', [CAMARA], INCIERTO, 't');
@@ -251,6 +261,17 @@ const enCurso: ServicioParaEnTaller = { estado: 'in_progress', webhook_erp_dispa
         { abierta: true, confirmada: true, productos: [CAMARA], at: 't', etapa: 'cancelar_taller', error: 'HTTP 500', rechazada: false, codigo: null });
     eq('… y la próxima vuelta (ya finalizada) la vuelve a cancelar', accionOrdenEnTaller({ estado: 'ready', erp_taller: cierreFallido }, []), 'cancelar_taller');
     eq('… con esos mismos renglones', armarPayloadCancelacion({ numeroOrden: 1, servicioId: 'x', dni: null, nombre: null, fechaFinalizacion: 'f' }, cierreFallido).productos, [CAMARA]);
+}
+
+// ── 9-bis. El error viejo se limpia cuando ya no dice nada cierto (2ª vuelta) ─
+{
+    const rechazadaAntes: ErpTaller = { abierta: false, productos: [], at: 't', etapa: 'en_taller', error: 'el ERP la rechazó (código -1)', rechazada: true, codigo: -1 };
+    eq('en_taller rechazado y después se sacan TODOS los repuestos → la decisión es nada…',
+        accionOrdenEnTaller({ ...enCurso, erp_taller: rechazadaAntes }, []), 'nada');
+    eq('… y el error viejo se limpia', erpTallerSinErrorViejo(rechazadaAntes), { ...rechazadaAntes, ...SIN_ERR });
+    eq('una -T abierta con error NO se limpia (sigue reservando)', erpTallerSinErrorViejo(abiertaCon([CAMARA], 'HTTP 500')), null);
+    eq('sin error no hay nada que limpiar', erpTallerSinErrorViejo({ ...rechazadaAntes, ...SIN_ERR }), null);
+    eq('sin -T no hay nada que limpiar', erpTallerSinErrorViejo(null), null);
 }
 
 // ── 10. El reconciliador: qué órdenes barre al cargar el taller ──────────────
@@ -340,7 +361,7 @@ async function finalYCierre() {
 // escrituras contra los envíos. La base y el n8n son un `fetch` falso que anota
 // todo en un registro.
 const PROBIKES = 'f3844f35-cb20-420d-93e7-a940a50a68a1';
-function mundoFalso(fila: any, alLlegarAlN8n?: (body: any, fila: any) => void) {
+function mundoFalso(fila: any, alLlegarAlN8n?: (body: any, fila: any) => void, contestar?: (body: any) => { ok: boolean; id_orden: number }) {
     const registro: string[] = [];
     const json = (x: unknown) => new Response(JSON.stringify(x), { status: 200, headers: { 'Content-Type': 'application/json' } });
     const fetchFalso = (async (input: any, init?: any) => {
@@ -350,7 +371,7 @@ function mundoFalso(fila: any, alLlegarAlN8n?: (body: any, fila: any) => void) {
             const body = JSON.parse(init.body);
             registro.push(`n8n ${body.etapa}`);
             alLlegarAlN8n?.(body, fila);
-            return json({ ok: true, id_orden: 99, etapa: body.etapa });
+            return json({ ...(contestar ? contestar(body) : { ok: true, id_orden: 99 }), etapa: body.etapa });
         }
         if (url.includes('/rest/v1/servicios')) {
             if (metodo === 'PATCH') {
@@ -383,13 +404,31 @@ async function dePuntaAPunta() {
         eq('primer repuesto: la -T se anota ANTES de salir al n8n, y se confirma al volver', [ra, A.registro],
             ['abierta', ['anota abierta=true confirmada=false error=null', 'n8n en_taller', 'anota abierta=true confirmada=true error=null']]);
 
-        // B. Otra compu finalizó mientras el en_taller viajaba: se relee y se cancela en la misma tarea.
+        // B. Se BORRÓ (otra compu) mientras el en_taller viajaba: se relee y se cancela en la misma tarea.
         const b = filaBase();
-        const B = mundoFalso(b, (body, f) => { if (body.etapa === 'en_taller') { f.estado = 'ready'; f.webhook_erp_disparado = true; } });
+        const B = mundoFalso(b, (body, f) => { if (body.etapa === 'en_taller') f.eliminado_en = '2026-10-06T10:00:00Z'; });
         globalThis.fetch = B.fetchFalso;
         const rb = await sincronizarOrdenEnTaller('e2e');
-        eq('si la orden se finalizó mientras viajaba el en_taller, se cancela enseguida',
+        eq('si la orden se BORRÓ mientras viajaba el en_taller, se cancela enseguida',
             [rb, B.registro.filter(x => x.startsWith('n8n')), b.erp_taller?.abierta], ['cancelada', ['n8n en_taller', 'n8n cancelar_taller'], false]);
+
+        // B2 (2ª vuelta). Se FINALIZÓ mientras viajaba: NO se cancela ahí (la final todavía no salió).
+        const b2 = filaBase();
+        const B2 = mundoFalso(b2, (body, f) => { if (body.etapa === 'en_taller') { f.estado = 'ready'; f.webhook_erp_disparado = true; } });
+        globalThis.fetch = B2.fetchFalso;
+        const rb2 = await sincronizarOrdenEnTaller('e2e');
+        eq('si se FINALIZÓ mientras viajaba el en_taller, la -T queda abierta (la cancela el cierre de después de la final)',
+            [rb2, B2.registro.filter(x => x.startsWith('n8n')), b2.erp_taller?.abierta], ['abierta', ['n8n en_taller'], true]);
+
+        // B3 (2ª vuelta). La misma pestaña: guarda un repuesto y finaliza en los 2-4 s siguientes.
+        const b3 = filaBase();
+        const B3 = mundoFalso(b3, (body, f) => { if (body.etapa === 'en_taller') { f.estado = 'ready'; f.webhook_erp_disparado = true; } });
+        globalThis.fetch = B3.fetchFalso;
+        const sync = sincronizarOrdenEnTaller('e2e');
+        const { final, cierre } = mandarFinalYCerrarEnTaller('e2e', async () => { B3.registro.push('n8n finalizada'); }, true);
+        await Promise.all([sync, final, cierre]);
+        eq('repuesto + finalizar enseguida: en_taller, DESPUÉS la final, DESPUÉS la cancelación (el stock nunca queda libre)',
+            [B3.registro.filter(x => x.startsWith('n8n')), b3.erp_taller?.abierta], [['n8n en_taller', 'n8n finalizada', 'n8n cancelar_taller'], false]);
 
         // C. Al finalizar sin -T abierta pero con un error viejo: no se manda nada y el error se limpia.
         const c = { ...filaBase(), estado: 'ready', erp_taller: { abierta: false, productos: [], at: 't', etapa: 'en_taller', error: 'el ERP la rechazó (código -1)', rechazada: true, codigo: -1 } };
@@ -405,6 +444,25 @@ async function dePuntaAPunta() {
         globalThis.fetch = D.fetchFalso;
         const rd = await cerrarOrdenEnTaller('e2e');
         eq('cierre con la -T abierta y sin repuestos: cancela con los guardados', [rd, mandados, d.erp_taller.abierta], ['cancelada', [CAMARA], false]);
+
+        // C2 (2ª vuelta). En curso, en_taller rechazado y después se sacaron todos los repuestos.
+        const c2 = { ...filaBase(), servicio_items: [], erp_taller: { abierta: false, productos: [], at: 't', etapa: 'en_taller', error: 'el ERP la rechazó (código -1)', rechazada: true, codigo: -1 } };
+        const C2 = mundoFalso(c2);
+        globalThis.fetch = C2.fetchFalso;
+        const rc2 = await sincronizarOrdenEnTaller('e2e');
+        eq('sin repuestos tras un rechazo: no sale nada y el cartel "sin reservar" desaparece',
+            [rc2, C2.registro.filter(x => x.startsWith('n8n')), c2.erp_taller.error, avisoEnTaller(c2 as any)], ['nada', [], null, null]);
+
+        // F (2ª vuelta). Borrar una BICI: sus órdenes se borran en cascada, así que su -T se cancela ANTES.
+        const f = { ...filaBase(), erp_taller: abiertaCon([CAMARA]) };
+        const F = mundoFalso(f);
+        globalThis.fetch = F.fetchFalso;
+        eq('antes de borrar la bici se cancela la -T abierta de su orden', [await cerrarOrdenesEnTallerDeLaBici('b1'), F.registro.filter(x => x.startsWith('n8n'))],
+            [{ pudoLeer: true, sinCerrar: [] }, ['n8n cancelar_taller']]);
+        const g = { ...filaBase(), erp_taller: abiertaCon([CAMARA]) };
+        const G = mundoFalso(g, undefined, () => ({ ok: false, id_orden: -99 }));
+        globalThis.fetch = G.fetchFalso;
+        eq('si la cancelación no sale, dice cuál quedó (y la bici no se borra)', await cerrarOrdenesEnTallerDeLaBici('b1'), { pudoLeer: true, sinCerrar: ['412-T'] });
 
         // E. Control negativo: otro taller no manda nada.
         const e = { ...filaBase(), taller_id: '33209a9b-1751-4cbf-bc90-8603b6ad2752' };

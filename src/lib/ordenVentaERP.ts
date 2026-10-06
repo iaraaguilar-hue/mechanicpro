@@ -407,13 +407,30 @@ function huellaProductos(productos: ProductoOrdenERP[] | null | undefined): stri
  *  · Fuera de eso, una -T que quedó abierta se CANCELA: nunca puede convivir con
  *    la final (reservaría dos veces), y es el reintento de un cierre que falló.
  *  · Sin repuestos que viajen (se sacaron todos, o pasaron a "(ML)"): se cancela.
- *  · Los mismos renglones que ya tiene y sin error pendiente: nada.
+ *  · Los mismos renglones que ya tiene, CONFIRMADA y sin error pendiente: nada.
+ *    Sin confirmar no alcanza (auditor, 6-oct-2026): "abierta, sin confirmar, sin
+ *    error" es la anotación previa de un en_taller que nunca contestó (pestaña
+ *    cerrada en el medio). Tomarla por sincronizada dejaba el stock sin reservar y
+ *    sin cartel; se vuelve a mandar (pisar con lo mismo no duplica nada).
  */
 export function accionOrdenEnTaller(s: ServicioParaEnTaller, productos: ProductoOrdenERP[]): AccionEnTaller {
-    const abierta = !!s.erp_taller?.abierta;
+    const erp = s.erp_taller;
+    const abierta = !!erp?.abierta;
     if (!laOrdenPuedeTenerT(s) || productos.length === 0) return abierta ? 'cancelar_taller' : 'nada';
-    if (abierta && !s.erp_taller?.error && huellaProductos(s.erp_taller?.productos) === huellaProductos(productos)) return 'nada';
+    if (abierta && erp?.confirmada && !erp.error && huellaProductos(erp.productos) === huellaProductos(productos)) return 'nada';
     return 'en_taller';
+}
+
+/**
+ * Un error que ya no dice nada cierto (auditor, 6-oct-2026). Con la -T cerrada y
+ * nada que mandar, un error viejo de un en_taller (rechazado antes de que se
+ * sacaran todos los repuestos, o antes de finalizar) dejaba el cartel "Repuestos
+ * sin reservar" en una orden sin repuestos. Devuelve lo que hay que escribir para
+ * limpiarlo, o null si no hay nada que limpiar.
+ */
+export function erpTallerSinErrorViejo(guardado: ErpTaller | null | undefined): ErpTaller | null {
+    if (!guardado || guardado.abierta || !guardado.error) return null;
+    return { ...guardado, ...SIN_ERROR };
 }
 
 type DatosEtapa = Omit<DatosOrdenERP, 'items' | 'vinculos'>;
@@ -469,8 +486,11 @@ export const CODIGO_NO_EXISTE = 0;
  *  · un en_taller que falló sin saber cómo (HTTP 500, red) pudo haber creado la
  *    -T: queda abierta (sin confirmar), para que el cierre la cancele igual;
  *  · una cancelación que falló sigue abierta, con sus renglones, para reintentar.
- *    SALVO el rechazo con CODIGO_NO_EXISTE sobre una -T nunca confirmada: ahí no
- *    había nada reservado, y gritar "anulala a mano" sería una falsa alarma.
+ *    SALVO el rechazo con CODIGO_NO_EXISTE: la -T no existe, así que no hay nada
+ *    reservado. Vale aunque haya estado CONFIRMADA (auditor, 6-oct-2026): una
+ *    confirmada que después da 0 es una que alguien anuló a mano en Contabilium, y
+ *    dejarla abierta era un cartel rojo fijo y una cancelación por cada carga de
+ *    cada equipo, para siempre.
  */
 export function erpTallerTrasEnvio(
     previo: ErpTaller | null | undefined,
@@ -491,7 +511,7 @@ export function erpTallerTrasEnvio(
             : { abierta: true, confirmada: abiertaSegura, productos, at, etapa: accion, ...fallo };
     }
     const guardados = previo?.productos?.length ? previo.productos : productos;
-    if (r.rechazada && r.codigo === CODIGO_NO_EXISTE && !abiertaSegura) {
+    if (r.rechazada && r.codigo === CODIGO_NO_EXISTE) {
         return { abierta: false, confirmada: false, productos: guardados, at, etapa: accion, ...SIN_ERROR };
     }
     return { abierta: true, confirmada: abiertaSegura, productos: guardados, at, etapa: accion, ...fallo };
@@ -634,6 +654,35 @@ export async function reconciliarOrdenesEnTaller(tallerId: string | null | undef
     }
 }
 
+/**
+ * Antes de borrar una BICI (auditor, 6-oct-2026). Borrarla borra EN CASCADA sus
+ * órdenes: medido en la base ese día con una bici y una orden de usar y tirar en
+ * el Demo, la orden desapareció. Con la orden se va el registro de su -T, y una
+ * -T abierta quedaría reservando stock donde ni el reconciliador la encuentra.
+ * Se cancelan ANTES de borrar. Devuelve las que no se pudieron cerrar.
+ */
+export async function cerrarOrdenesEnTallerDeLaBici(bicicletaId: string): Promise<{ pudoLeer: boolean; sinCerrar: string[] }> {
+    try {
+        const { data, error } = await supabase
+            .from('servicios')
+            .select('id')
+            .eq('bicicleta_id', bicicletaId)
+            .eq('erp_taller->>abierta', 'true');
+        if (error) return { pudoLeer: false, sinCerrar: [] };
+        const ids = (data || []).map((f: { id: string }) => f.id);
+        if (!ids.length) return { pudoLeer: true, sinCerrar: [] };
+        await Promise.all(ids.map(id => cerrarOrdenEnTaller(id)));
+        const { data: despues, error: e2 } = await supabase.from('servicios').select(COLUMNAS_EN_TALLER).in('id', ids);
+        if (e2) return { pudoLeer: false, sinCerrar: [] };
+        const sinCerrar = ((despues || []) as FilaEnTaller[])
+            .filter(f => f.erp_taller?.abierta)
+            .map(f => `${ordenNumberForWebhook(f.numero_orden ?? undefined, f.id)}-T`);
+        return { pudoLeer: true, sinCerrar };
+    } catch {
+        return { pudoLeer: false, sinCerrar: [] };
+    }
+}
+
 /** Una orden con su -T, leída de la base (para la que se acaba de borrar). */
 export async function leerOrdenEnTaller(servicioId: string): Promise<FilaEnTaller | null> {
     const { data } = await supabase.from('servicios').select(COLUMNAS_EN_TALLER).eq('id', servicioId).maybeSingle();
@@ -649,26 +698,24 @@ async function enTallerAhora(servicioId: string, soloCerrar: boolean): Promise<R
             .maybeSingle();
         if (error || !s || !aceptaOrdenEnTaller(s.taller_id)) return 'no_aplica';
         const guardado = (s.erp_taller ?? null) as ErpTaller | null;
-        if (soloCerrar && !guardado?.abierta) {
-            // No hay -T que cancelar. Si quedó un error viejo (un en_taller que
-            // falló antes de finalizar), ya no dice nada cierto: se limpia, para que
-            // no quede un cartel contradiciendo a una orden cerrada sin problemas.
-            if (guardado?.error) {
-                await supabase.from('servicios').update({ erp_taller: { ...guardado, ...SIN_ERROR } }).eq('id', servicioId);
-            }
-            return 'nada';
-        }
 
         // Primero la decisión (lo más común es "nada"), después lo que cuesta ir a buscar.
         const items = (s.servicio_items || []) as ItemOrden[];
         let vinculos = new Map<string, VinculoProducto>();
-        let accion: AccionEnTaller = 'cancelar_taller';
+        let accion: AccionEnTaller = guardado?.abierta ? 'cancelar_taller' : 'nada';
         if (!soloCerrar) {
             vinculos = (await cargarVinculosERP(s.taller_id, items)).vinculos;
             const productos = armarPayloadOrden({ numeroOrden: s.numero_orden, servicioId, dni: null, nombre: null, fechaFinalizacion: '', items, vinculos }).productos;
             accion = accionOrdenEnTaller(s, productos);
         }
-        if (accion === 'nada') return 'nada';
+        if (accion === 'nada') {
+            // Nada que mandar. Si quedó un error viejo con la -T cerrada (un
+            // en_taller rechazado antes de finalizar o de sacar todos los
+            // repuestos), ya no dice nada cierto: se limpia.
+            const limpio = erpTallerSinErrorViejo(guardado);
+            if (limpio) await supabase.from('servicios').update({ erp_taller: limpio }).eq('id', servicioId);
+            return 'nada';
+        }
 
         const { data: conf } = await supabase
             .from('taller_configuraciones')
@@ -715,15 +762,21 @@ async function enTallerAhora(servicioId: string, soloCerrar: boolean): Promise<R
         if (accion === 'cancelar_taller') return 'cancelada';
 
         // Dos equipos (auditor, 5-oct-2026): mientras este en_taller viajaba, otra
-        // compu pudo finalizar o borrar la orden, y su cierre leyó la -T todavía
-        // sin crear. Se relee y, si ya no está en curso, se cancela en esta misma
-        // tarea (sin pasar por la fila: esperaría a esta misma tarea).
+        // compu pudo BORRAR la orden, y su cierre leyó la -T todavía sin crear. Se
+        // relee y, si está borrada, se cancela en esta misma tarea (sin pasar por
+        // la fila: esperaría a esta misma tarea).
+        // 🔴 Si está FINALIZADA (o con la final por salir) NO se cancela acá
+        // (auditor, 6-oct-2026): guardar un repuesto y finalizar en los 2 a 4 s
+        // siguientes encolaba la final DETRÁS de este envío, y cancelar ahora
+        // dejaba el stock libre hasta que llegaba la final. Esa -T la cancela el
+        // cierre que va después de la final en la misma fila; si la finalizó otra
+        // compu, o se cerró la pestaña, el reconciliador en la próxima carga.
         const { data: ahora } = await supabase
             .from('servicios')
-            .select('estado,eliminado_en,webhook_erp_disparado')
+            .select('eliminado_en')
             .eq('id', servicioId)
             .maybeSingle();
-        if (ahora && !laOrdenPuedeTenerT(ahora)) return enTallerAhora(servicioId, true);
+        if (ahora?.eliminado_en) return enTallerAhora(servicioId, true);
         return 'abierta';
     } catch (e: any) {
         console.error('[ERP] Orden en taller:', e?.message);

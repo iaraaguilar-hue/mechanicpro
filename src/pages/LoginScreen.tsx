@@ -37,10 +37,15 @@ export default function LoginScreen() {
         setLoading(true);
         setError("");
 
+        // El autocompletado del celular deja un espacio al final del mail y Supabase
+        // lo rechaza como "Invalid login credentials" con la clave correcta (Alex,
+        // 11 a fondo, 6-oct-2026). La clave NO se recorta: un espacio puede ser parte de ella.
+        const emailLimpio = email.trim().toLowerCase();
+
         try {
             // FORGOT PASSWORD FLOW
             if (isResetting) {
-                const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+                const { error: resetError } = await supabase.auth.resetPasswordForEmail(emailLimpio, {
                     redirectTo: `${window.location.origin}/update-password`
                 });
                 if (resetError) {
@@ -51,7 +56,7 @@ export default function LoginScreen() {
             }
 
             console.log("PASO 1: Iniciando Auth en Supabase...");
-            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
+            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email: emailLimpio, password });
             if (authError) throw authError;
             if (!authData.user) throw new Error("No se pudo obtener el usuario.");
 
@@ -165,6 +170,10 @@ export default function LoginScreen() {
                             <input
                                 type="email"
                                 placeholder="Email"
+                                autoComplete="email"
+                                autoCapitalize="none"
+                                autoCorrect="off"
+                                spellCheck={false}
                                 className={`w-full bg-transparent border-0 border-b-2 ${error ? 'border-red-500' : 'border-gray-200'} focus:ring-0 focus:border-primary px-1 py-2 text-gray-900 placeholder-gray-400 focus:outline-none transition-colors`}
                                 value={email}
                                 onChange={(e) => {

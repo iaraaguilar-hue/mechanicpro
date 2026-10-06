@@ -58,6 +58,32 @@ export function huellaItemsERP(items: ItemOrden[] | null | undefined): string {
         .join('\n');
 }
 
+/**
+ * Los renglones que viajan en la orden EN TALLER (<N>-T): los de la final MENOS
+ * los que todavía no tienen nombre (vacío o solo espacios).
+ *
+ * POR QUÉ (orden 405 de Probikes, 6-oct-2026, 15:42): el mecánico agregó dos
+ * renglones de repuesto y los iba a escribir después; mientras tanto se
+ * guardaron vacíos, el en_taller salió con dos productos sin descripción y
+ * Contabilium lo rechazó entero (-1). Un renglón sin nombre no reserva nada:
+ * no viaja, y si solo quedan renglones vacíos es lo mismo que "sin repuestos".
+ * 🚩 A la FINAL no se le saca nada: ahí el candado pre-finalización de "renglón
+ * sin nombre" (`chequeoOrdenERP.ts`) frena y avisa antes de mandar.
+ */
+export function itemsQueVanALaT<T extends ItemOrden>(items: T[] | null | undefined): T[] {
+    return itemsQueVanAlERP(items).filter(p => (p.descripcion || '').trim() !== '');
+}
+
+/**
+ * La huella que dispara la -T: la de `huellaItemsERP` sin los renglones vacíos.
+ * Agregar un renglón vacío no manda nada; escribirle el nombre, sí. (La de la
+ * final, `huellaItemsERP`, no cambia: la corrección de una orden ya mandada
+ * sigue viendo todo.)
+ */
+export function huellaItemsEnTaller(items: ItemOrden[] | null | undefined): string {
+    return huellaItemsERP(itemsQueVanALaT(items));
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 2. El payload (el MISMO para finalizar y para corregir)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -705,7 +731,7 @@ async function enTallerAhora(servicioId: string, soloCerrar: boolean): Promise<R
         let accion: AccionEnTaller = guardado?.abierta ? 'cancelar_taller' : 'nada';
         if (!soloCerrar) {
             vinculos = (await cargarVinculosERP(s.taller_id, items)).vinculos;
-            const productos = armarPayloadOrden({ numeroOrden: s.numero_orden, servicioId, dni: null, nombre: null, fechaFinalizacion: '', items, vinculos }).productos;
+            const productos = armarPayloadOrden({ numeroOrden: s.numero_orden, servicioId, dni: null, nombre: null, fechaFinalizacion: '', items: itemsQueVanALaT(items), vinculos }).productos;
             accion = accionOrdenEnTaller(s, productos);
         }
         if (accion === 'nada') {
@@ -735,7 +761,7 @@ async function enTallerAhora(servicioId: string, soloCerrar: boolean): Promise<R
             fechaFinalizacion: new Date().toISOString(),
         };
         const payload = accion === 'en_taller'
-            ? { ...armarPayloadOrden({ ...datos, items, vinculos }), etapa: 'en_taller' satisfies EtapaOrden }
+            ? { ...armarPayloadOrden({ ...datos, items: itemsQueVanALaT(items), vinculos }), etapa: 'en_taller' satisfies EtapaOrden }
             : armarPayloadCancelacion(datos, guardado ?? { productos: [] });
 
         // Se anota ANTES de mandar (ver erpTallerAntesDeMandar). Si no se puede

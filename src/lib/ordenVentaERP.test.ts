@@ -10,7 +10,7 @@ import {
     leerRespuestaERP, mandarOrden, RECHAZADA_ERP, CODIGO_NO_EXISTE,
     accionOrdenEnTaller, armarPayloadCancelacion, erpTallerAntesDeMandar, erpTallerTrasEnvio, avisoEnTaller, aceptaOrdenEnTaller,
     ordenesParaReconciliar, mandarFinalYCerrarEnTaller, cerrarOrdenEnTaller, sincronizarOrdenEnTaller,
-    erpTallerSinErrorViejo, cerrarOrdenesEnTallerDeLaBici,
+    erpTallerSinErrorViejo, cerrarOrdenesEnTallerDeLaBici, itemsQueVanALaT, huellaItemsEnTaller,
     type ErpTaller, type ProductoOrdenERP, type ServicioParaEnTaller,
 } from './ordenVentaERP';
 import type { VinculoProducto } from './chequeoOrdenERP';
@@ -274,6 +274,29 @@ const enCurso: ServicioParaEnTaller = { estado: 'in_progress', webhook_erp_dispa
     eq('sin -T no hay nada que limpiar', erpTallerSinErrorViejo(null), null);
 }
 
+// ── 9-ter. Renglones todavía sin nombre (orden 405 de Probikes, 6-oct-2026) ──
+{
+    const conVacios = [
+        { descripcion: 'Service horquilla 50h Rockshox', precio: 60000, categoria: 'labor' },
+        { descripcion: '', precio: 0, categoria: 'part' },
+        { descripcion: '   ', precio: 0, categoria: 'part' },
+        { descripcion: null, precio: 0, categoria: 'part' },
+    ];
+    eq('405: los renglones vacíos (o solo espacios) no viajan en la -T', itemsQueVanALaT(conVacios), []);
+    eq('… y solo con vacíos la decisión es la de "sin repuestos": nada…',
+        accionOrdenEnTaller(enCurso, armarPayloadOrden({ numeroOrden: 405, servicioId: 'x', dni: null, nombre: null, fechaFinalizacion: 'f', items: itemsQueVanALaT(conVacios), vinculos: new Map() }).productos), 'nada');
+    eq('… o cancelar la -T que hubiera', accionOrdenEnTaller({ ...enCurso, erp_taller: abiertaCon([CAMARA]) }, []), 'cancelar_taller');
+    const conCamara = [...conVacios, { descripcion: 'PV TUBE 700X20-28 48MM', precio: 9500, categoria: 'part' }, { descripcion: 'Plato (ML)', precio: 5, categoria: 'part' }];
+    eq('con un repuesto con nombre viaja SOLO ese (sin vacíos, sin ML, sin mano de obra)', itemsQueVanALaT(conCamara).map(i => i.descripcion), ['PV TUBE 700X20-28 48MM']);
+    const base = [{ descripcion: 'PV TUBE 700X20-28 48MM', precio: 9500, categoria: 'part' }];
+    eq('agregar un renglón vacío NO dispara la -T', huellaItemsEnTaller([...base, { descripcion: '', precio: 0, categoria: 'part' }]), huellaItemsEnTaller(base));
+    eq('escribirle el nombre SÍ la dispara', huellaItemsEnTaller([...base, { descripcion: 'Cubierta', precio: 0, categoria: 'part' }]) !== huellaItemsEnTaller(base), true);
+    // Controles: la FINAL no se tocó (ahí manda el candado pre-finalización de "renglón sin nombre").
+    eq('control: la huella de la final SÍ ve el renglón vacío (la corrección no cambió)', huellaItemsERP([...base, { descripcion: '', precio: 0, categoria: 'part' }]) !== huellaItemsERP(base), true);
+    eq('control: el payload de la final sigue llevando el renglón vacío (lo frena el candado, no este filtro)',
+        armarPayloadOrden({ numeroOrden: 405, servicioId: 'x', dni: null, nombre: null, fechaFinalizacion: 'f', items: [...base, { descripcion: '', precio: 0, categoria: 'part' }], vinculos: new Map() }).productos.length, 2);
+}
+
 // ── 10. El reconciliador: qué órdenes barre al cargar el taller ──────────────
 {
     const filas = [
@@ -463,6 +486,18 @@ async function dePuntaAPunta() {
         const G = mundoFalso(g, undefined, () => ({ ok: false, id_orden: -99 }));
         globalThis.fetch = G.fetchFalso;
         eq('si la cancelación no sale, dice cuál quedó (y la bici no se borra)', await cerrarOrdenesEnTallerDeLaBici('b1'), { pudoLeer: true, sinCerrar: ['412-T'] });
+
+        // H (3ª vuelta). La 405: renglones vacíos → no sale nada al n8n.
+        const h = { ...filaBase(), servicio_items: [{ descripcion: 'Service horquilla 50h Rockshox', precio: 60000, categoria: 'labor' }, { descripcion: '', precio: 0, categoria: 'part' }, { descripcion: '  ', precio: 0, categoria: 'part' }] };
+        const H = mundoFalso(h);
+        globalThis.fetch = H.fetchFalso;
+        eq('405: solo renglones vacíos → no sale ningún en_taller', [await sincronizarOrdenEnTaller('e2e'), H.registro], ['nada', []]);
+        // … y con un repuesto con nombre al lado, viaja solo ese.
+        let viajaron: any = null;
+        const i2 = { ...filaBase(), servicio_items: [...h.servicio_items, { descripcion: 'PV TUBE 700X20-28 48MM', precio: 12500, categoria: 'part' }] };
+        const I2 = mundoFalso(i2, (body) => { viajaron = body.productos.map((p: any) => p.descripcion); });
+        globalThis.fetch = I2.fetchFalso;
+        eq('con un repuesto con nombre, el en_taller lleva solo ese', [await sincronizarOrdenEnTaller('e2e'), viajaron], ['abierta', ['PV TUBE 700X20-28 48MM']]);
 
         // E. Control negativo: otro taller no manda nada.
         const e = { ...filaBase(), taller_id: '33209a9b-1751-4cbf-bc90-8603b6ad2752' };

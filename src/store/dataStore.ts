@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import {
-    huellaItemsERP, corregirOrdenEnERP, sincronizarOrdenEnTaller, cerrarOrdenEnTaller, aceptaOrdenEnTaller,
+    huellaItemsERP, huellaItemsEnTaller, corregirOrdenEnERP, sincronizarOrdenEnTaller, cerrarOrdenEnTaller, aceptaOrdenEnTaller,
     reconciliarOrdenesEnTaller, leerOrdenEnTaller, avisoEnTaller, cerrarOrdenesEnTallerDeLaBici, type ErpTaller, type FilaEnTaller,
 } from '@/lib/ordenVentaERP';
 import { supabase } from '@/lib/supabase';
@@ -801,7 +801,8 @@ export const useDataStore = create<DataState>((set, get) => ({
             // recepción), la -T nace acá y no recién al finalizar. Sin `await`: el
             // alta no espera al ERP. Si los renglones no se guardaron, la base no
             // tiene qué mandar.
-            if (!itemsError && aceptaOrdenEnTaller(createdService.taller_id) && huellaItemsERP(itemsToInsert) !== '') {
+            // Un renglón todavía sin nombre no cuenta (orden 405, 6-oct-2026): ver itemsQueVanALaT.
+            if (!itemsError && aceptaOrdenEnTaller(createdService.taller_id) && huellaItemsEnTaller(itemsToInsert) !== '') {
                 const id = createdService.id;
                 void sincronizarOrdenEnTaller(id).then((r) => { if (r !== 'no_aplica') void get().refrescarERP(id); });
             }
@@ -862,6 +863,8 @@ export const useDataStore = create<DataState>((set, get) => ({
                 .select('descripcion,precio,categoria')
                 .eq('servicio_id', id);
             const huellaAntes = huellaItemsERP(itemsAntes);
+            // La de la -T no cuenta los renglones todavía sin nombre (orden 405, 6-oct-2026).
+            const huellaTAntes = huellaItemsEnTaller(itemsAntes);
             let itemsGuardados = true;
 
             // Delete existing items for this service
@@ -904,11 +907,17 @@ export const useDataStore = create<DataState>((set, get) => ({
             // y no cuando termina. Las dos se excluyen por condición (la -T solo con
             // la final SIN mandar; la corrección solo con la final mandada) y van en
             // la misma fila, así que nunca se adelantan entre sí.
-            if (itemsGuardados && huellaItemsERP(itemsArray) !== huellaAntes) {
+            //
+            // Cada una con SU huella: la corrección de la final ve todos los renglones
+            // (como siempre); la -T no ve los que todavía no tienen nombre, así que
+            // agregar un renglón vacío no manda un en_taller que Contabilium rechaza.
+            if (itemsGuardados) {
                 const traer = (r: string) => { if (r !== 'no_aplica') void get().refrescarERP(id); };
-                void corregirOrdenEnERP(id).then(traer);
+                if (huellaItemsERP(itemsArray) !== huellaAntes) void corregirOrdenEnERP(id).then(traer);
                 const tallerDeLaOrden = get().servicios.find(s => s.id === id)?.taller_id || serviceData.taller_id;
-                if (aceptaOrdenEnTaller(tallerDeLaOrden)) void sincronizarOrdenEnTaller(id).then(traer);
+                if (aceptaOrdenEnTaller(tallerDeLaOrden) && huellaItemsEnTaller(itemsArray) !== huellaTAntes) {
+                    void sincronizarOrdenEnTaller(id).then(traer);
+                }
             }
         }
 

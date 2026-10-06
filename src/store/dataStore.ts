@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import {
     huellaItemsERP, corregirOrdenEnERP, sincronizarOrdenEnTaller, cerrarOrdenEnTaller, aceptaOrdenEnTaller,
-    reconciliarOrdenesEnTaller, leerOrdenEnTaller, avisoEnTaller, type ErpTaller, type FilaEnTaller,
+    reconciliarOrdenesEnTaller, leerOrdenEnTaller, avisoEnTaller, cerrarOrdenesEnTallerDeLaBici, type ErpTaller, type FilaEnTaller,
 } from '@/lib/ordenVentaERP';
 import { supabase } from '@/lib/supabase';
 import { claveProducto, type ProductoTaller } from '@/lib/buscadorProductos';
@@ -740,9 +740,24 @@ export const useDataStore = create<DataState>((set, get) => ({
     },
 
     deleteBicicleta: async (id) => {
+        // 🔴 Borrar una bici borra EN CASCADA sus órdenes (medido en la base el
+        // 6-oct-2026). Si alguna tenía la orden en taller (<N>-T) abierta en el ERP,
+        // se cancela ANTES: después ya no queda la fila donde estaba anotada, y ni
+        // el reconciliador la encontraría. Si no se puede cancelar, la bici no se
+        // borra y se dice por qué (el mensaje lo muestra la ficha).
+        const tallerDeLaBici = get().bicicletas.find(b => b.id === id)?.taller_id;
+        if (aceptaOrdenEnTaller(tallerDeLaBici)) {
+            const { pudoLeer, sinCerrar } = await cerrarOrdenesEnTallerDeLaBici(id);
+            if (!pudoLeer) throw new Error('No se pudo revisar si esta bici tiene una orden en taller abierta en el ERP. La bici no se borró: probá de nuevo en un rato.');
+            if (sinCerrar.length) throw new Error(`No se pudo cancelar en el ERP la orden en taller ${sinCerrar.join(', ')}. La bici no se borró, para no dejar stock reservado sin dueño: probá de nuevo, o anulá esa orden a mano en Contabilium antes de borrarla.`);
+        }
         const { error } = await supabase.from('bicicletas').delete().eq('id', id);
         if (error) throw new Error(`Error eliminando bicicleta: ${error.message}`);
-        set({ bicicletas: get().bicicletas.filter(b => b.id !== id) });
+        // Sus órdenes se fueron con ella (cascada): que tampoco queden en pantalla.
+        set({
+            bicicletas: get().bicicletas.filter(b => b.id !== id),
+            servicios: get().servicios.filter(s => s.bicicleta_id !== id),
+        });
     },
 
     // ═════════════════════════════════════════════════════════

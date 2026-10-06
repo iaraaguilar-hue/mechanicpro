@@ -16,10 +16,11 @@
 //   3. Si se agota (solo en la Mac): despierta al vigía (agents/rutinas/vigia_sync_mp.md), que
 //      diagnostica y arregla, y deja la tarea en el tablero aunque Claude no ande.
 //
-// USO   node mp_sync_stock_cron.cjs [--forzar] [--sin-vigia] [--estado]
+// USO   node mp_sync_stock_cron.cjs [--forzar] [--sin-vigia] [--estado] [--probar-erp]
 //   --forzar     corre aunque ya esté al día
 //   --sin-vigia  si falla no despierta al vigía (lo usa el propio vigía, para no llamarse a sí mismo)
 //   --estado     solo dice si el stock de hoy está cargado (sale 0 si sí, 1 si no)
+//   --probar-erp un token y una página contra Contabilium, con el status (el vigía no toca .secrets)
 const fs = require('fs');
 const path = require('path');
 const { spawn, execFileSync } = require('child_process');
@@ -29,7 +30,7 @@ const NUBE = process.env.GITHUB_ACTIONS === 'true';
 const argv = process.argv.slice(2);
 const FORZAR = argv.includes('--forzar');
 const SIN_VIGIA = argv.includes('--sin-vigia') || NUBE;
-const SOLO_ESTADO = argv.includes('--estado');
+const SOLO_ESTADO = argv.includes('--estado') || argv.includes('--probar-erp');
 const TALLER = 'Probikes';
 const ESPERAS_MIN = [0, 10, 30];
 const TOPE_INTENTO_MIN = 50; // la primera corrida sin caché baja ~880 detalles a ~27 por minuto
@@ -107,6 +108,14 @@ function correrSync() {
 }
 
 (async () => {
+  if (argv.includes('--probar-erp')) {
+    const cb = require('./contabilium_http.cjs').crearCliente({ email: process.env.CB_EMAIL, key: process.env.CB_KEY, log: console.log });
+    const t0 = Date.now();
+    try { await cb.token(); } catch (e) { console.log(`✗ token: ${e.message}`); process.exit(1); }
+    const r = await cb.get('/api/inventarios/getStockByDeposito?id=56990&page=1');
+    console.log(`token ok · página 1: status ${r.status} · ${r.data?.Items?.length ?? 0} ítems de ${r.data?.TotalItems ?? '?'} · ${Date.now() - t0} ms · esperas por límite: ${cb.stats.r429}`);
+    process.exit(r.data?.Items?.length ? 0 : 1);
+  }
   if (SOLO_ESTADO) {
     const a = await alDia().catch(e => ({ medido: false, motivo: e.message }));
     console.log(a.medido

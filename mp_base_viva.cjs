@@ -22,11 +22,19 @@
  *      launchd puede no estar accesible. Si no se puede leer, se dice y se
  *      decide igual con (1) y (2), que no necesitan token.
  *
- * QUÉ **NO** HACE: reiniciar el proyecto solo. El restart se probó y recupera
- * en ~40 segundos, pero es una decisión de Iara, no del cron. Este script avisa
- * y deja el runbook a mano.
+ * 🔴 REINICIA SOLO (desde el 6-oct-2026). Hasta ese día solo avisaba y el
+ * restart "lo decidía Iara". El 6-oct la base se colgó a las 19:00, el vigía
+ * (cada 6 horas) la vio recién a las 19:30, y quien avisó fue Luis: "no puedo
+ * entrar con mi mail y mi contraseña". Iara: "no podemos tener estos errores,
+ * son errores gravísimos". Un restart de una base que ya está muerta no puede
+ * empeorar nada y no pierde datos, así que esperar a una persona solo alarga
+ * la caída. Reinicia cuando se cumplen las cuatro cosas (ver `debeReiniciar`):
+ * la consulta real cuelga, Supabase confirma la base enferma, ya venía caída
+ * en la corrida anterior (5 min) y no hubo otro reinicio en los últimos 30 min.
+ * Siempre avisa: al reiniciar, al volver (con cuánto estuvo caída) y si sigue
+ * caída después del reinicio (eso ya es un ticket a Supabase).
  *
- * Se dispara con el LaunchAgent `com.mechanicpro.base-viva` (cada 6 horas).
+ * Se dispara con el LaunchAgent `com.mechanicpro.base-viva` (cada 5 minutos).
  * ⚠️ Es node y no .sh a propósito: TCC le bloquea `~/Documents` a /bin/bash bajo
  * launchd (así murió el backup 17 días). Mismo patrón que mp_sync_stock_cron.
  *
@@ -88,8 +96,15 @@ const RUNBOOK = [
     '  3. Remedio (recuperó en ~40 s, no pierde datos):',
     '       POST https://api.supabase.com/v1/projects/' + PROYECTO + '/restart',
     '  4. Esperar a que db+auth+rest den healthy y probar el login real del Demo.',
-    '  ⚠️ El restart NO lo hace este script: lo decide Iara.',
+    '  Este script lo hace solo si la caída se confirma en dos corridas seguidas (ver debeReiniciar).',
+    '  Si sigue caída 30 min después del reinicio: ticket a Supabase (plan free, sin soporte prioritario).',
 ];
+
+const ENTRE_REINICIOS_MS = 30 * 60_000;
+// Corre cada 5 minutos: el log se rota a los 2 MB (≈ dos semanas) para no
+// crecer sin techo.
+const LOG_MAX = 2 * 1024 * 1024;
+try { if (fs.statSync(LOG).size > LOG_MAX) fs.renameSync(LOG, LOG + '.1'); } catch (_) {}
 
 // ── Credenciales del .env.local del frontend ────────────────────────────────
 function leerEnv() {
@@ -144,6 +159,23 @@ function notificar(titulo, mensaje) {
 
 function estadoPrevio() {
     try { return JSON.parse(fs.readFileSync(ESTADO, 'utf8')); } catch (_) { return { caida: false }; }
+}
+
+const minutosDesde = (iso) => iso ? Math.round((Date.now() - Date.parse(iso)) / 60_000) : null;
+
+/**
+ * Las cuatro condiciones del reinicio solo. Cada una cubre un falso positivo:
+ *  - la consulta REAL cuelga (no alcanza con que la Management API diga algo);
+ *  - Supabase confirma `db` enferma (si solo falla esta Mac, Supabase dice healthy);
+ *  - ya venía caída en la corrida anterior (un amague de segundos no reinicia);
+ *  - no hubo otro reinicio en 30 min (si el reinicio no la levanta, otro no ayuda).
+ */
+function debeReiniciar({ base, red, servicios, token, previo }) {
+    if (base.ok || !red.ok || !token) return false;
+    if (!Array.isArray(servicios) || !servicios.some(s => s.name === 'db' && !s.healthy)) return false;
+    if (!previo.caida) return false;
+    const ultimo = minutosDesde(previo.ultimoReinicio);
+    return ultimo === null || ultimo * 60_000 >= ENTRE_REINICIOS_MS;
 }
 function guardarEstado(e) {
     try { fs.writeFileSync(ESTADO, JSON.stringify(e, null, 1)); } catch (_) {}
@@ -283,15 +315,24 @@ function guardarEstado(e) {
     }
 
     const previo = estadoPrevio();
-    guardarEstado({
+    const estado = {
         caida: reporte.caida, ts: reporte.ts, motivo: reporte.motivo,
+        caidaDesde: reporte.caida ? (previo.caida && previo.caidaDesde) || reporte.ts : null,
+        ultimoReinicio: previo.ultimoReinicio ?? null,
+        avisoSigueCaida: reporte.caida ? previo.avisoSigueCaida ?? null : null,
         puenteCaido: !!reporte.puenteCaido, motivoPuente: reporte.motivoPuente ?? null,
-    });
+        avisoPuente: reporte.puenteCaido ? previo.avisoPuente ?? null : null,
+    };
 
     // El puente caído se avisa APARTE de la base: son dos problemas distintos y
-    // el remedio lo tiene otra persona (la base la reinicia Iara, el túnel lo
-    // levanta Mica).
-    if (reporte.puenteCaido) {
+    // el remedio lo tiene otra persona (la base se reinicia sola, el túnel lo
+    // levanta Mica). Cada 5 minutos no: al caerse y después cada 2 horas.
+    const avisarPuente = reporte.puenteCaido &&
+        (!estado.avisoPuente || minutosDesde(estado.avisoPuente) >= 120);
+    if (avisarPuente) estado.avisoPuente = reporte.ts;
+    if (reporte.puenteCaido && !avisarPuente) {
+        log(`  🔴 puente al ERP sigue caído (${reporte.motivoPuente}); ya avisado a las ${estado.avisoPuente}`);
+    } else if (reporte.puenteCaido) {
         log(`\n🔴 PUENTE AL ERP CAÍDO — ${reporte.motivoPuente}`);
         log('  Efecto: cada service que se finalice con repuestos NO va a generar su orden');
         log('  de venta, y hasta el 20-ago-2026 eso no dejaba ningún rastro.');
@@ -300,26 +341,66 @@ function guardarEstado(e) {
         log('  (en la app, las que digan "LA ORDEN DE VENTA NO SALIÓ").');
         notificar('🔴 Mechanic Pro — el puente al ERP está caído',
             `${reporte.motivoPuente}. Las órdenes que se finalicen NO van a generar su orden de venta. Avisale a Mica.`);
-    } else if (previo.puenteCaido && reporte.checks.puenteERP?.ok) {
+    } else if (previo.puenteCaido && reporte.checks.puentes.length) {
         log('  (el puente venía caído: volvió)');
         notificar('✅ Mechanic Pro — el puente al ERP volvió',
             'La automatización contesta otra vez. Revisá las órdenes que quedaron sin generar mientras estuvo caído.');
     }
 
     if (reporte.caida) {
-        log(`\n🔴 BASE CAÍDA — ${reporte.motivo}`);
-        RUNBOOK.forEach(l => log(l));
-        notificar('🔴 Mechanic Pro — la base NO responde',
-            `${reporte.motivo}. Los talleres no pueden usar la app. El runbook está en ~/Library/Logs/mp-base-viva.log`);
+        log(`\n🔴 BASE CAÍDA — ${reporte.motivo} (desde ${estado.caidaDesde})`);
+        const servicios = reporte.checks.management?.servicios;
+        if (debeReiniciar({ base, red, servicios, token, previo })) {
+            let r = null;
+            try {
+                r = await fetch(`https://api.supabase.com/v1/projects/${PROYECTO}/restart`,
+                    { method: 'POST', headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+            } catch (e) { log(`  ✗ el reinicio no salió: ${e.message}`); }
+            reporte.reinicio = r ? r.status : 'error';
+            // ¿Ya se la había reiniciado en ESTA misma caída? Entonces el primer
+            // reinicio no alcanzó y eso es un ticket a Supabase, no otro intento mudo.
+            const reintento = previo.ultimoReinicio &&
+                Date.parse(previo.ultimoReinicio) >= Date.parse(estado.caidaDesde);
+            if (r && r.ok) {
+                estado.ultimoReinicio = reporte.ts;
+                log('  🔄 REINICIADA SOLA (POST /restart → ' + r.status + '). Vuelve en ~5 min.');
+                if (reintento) RUNBOOK.forEach(l => log(l));
+                notificar(reintento ? '🔴 Mechanic Pro — sigue caída: la reinicié OTRA vez'
+                                    : '🔄 Mechanic Pro — la base se colgó y la reinicié',
+                    reintento
+                        ? `Lleva ${minutosDesde(estado.caidaDesde)} min caída y el primer reinicio no alcanzó. Hay que abrir un ticket a Supabase.`
+                        : `Estaba caída desde hace ${minutosDesde(estado.caidaDesde)} min. Vuelve en ~5 min; te aviso cuando conteste.`);
+            } else {
+                RUNBOOK.forEach(l => log(l));
+                notificar('🔴 Mechanic Pro — la base NO responde y no pude reiniciarla',
+                    `${reporte.motivo}. Reinicio: ${reporte.reinicio}. El runbook está en ~/Library/Logs/mp-base-viva.log`);
+            }
+        } else if (!previo.caida) {
+            // Primera vez que se ve: se avisa ya; si en 5 min sigue, se reinicia.
+            notificar('🔴 Mechanic Pro — la base NO responde',
+                `${reporte.motivo}. Si sigue así en 5 minutos, la reinicio sola.`);
+        } else if (minutosDesde(estado.caidaDesde) >= 30 && !estado.avisoSigueCaida) {
+            // Caída larga que este script no puede reiniciar (sin token, o
+            // Supabase dice que la base está sana y lo que falla es otra cosa).
+            estado.avisoSigueCaida = reporte.ts;
+            RUNBOOK.forEach(l => log(l));
+            notificar('🔴 Mechanic Pro — lleva 30 min caída y no la puedo reiniciar',
+                `${reporte.motivo}. El runbook está en ~/Library/Logs/mp-base-viva.log`);
+        } else {
+            log(`  ya avisado; último reinicio: ${estado.ultimoReinicio ?? 'ninguno'}`);
+        }
     } else {
         log('✓ la base contesta');
         // Si venía caída y volvió, se avisa igual: saber que se recuperó vale
         // tanto como saber que se cayó.
         if (previo.caida) {
-            log('  (venía caída en la corrida anterior: se recuperó)');
-            notificar('✅ Mechanic Pro — la base volvió', 'Contesta normal otra vez. Estaba caída en el chequeo anterior.');
+            const min = minutosDesde(previo.caidaDesde);
+            log(`  (venía caída${min !== null ? ` desde hace ${min} min` : ''}: se recuperó)`);
+            notificar('✅ Mechanic Pro — la base volvió',
+                `Contesta normal otra vez${min !== null ? ` (estuvo caída ~${min} min)` : ''}.`);
         }
     }
+    guardarEstado(estado);
 
     if (JSON_OUT) console.log(JSON.stringify(reporte, null, 2));
     process.exit(reporte.caida || reporte.puenteCaido ? 1 : 0);

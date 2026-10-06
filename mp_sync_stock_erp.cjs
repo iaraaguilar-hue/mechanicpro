@@ -24,12 +24,11 @@
  * talle a un cliente. Por eso se guarda `stock_actualizado_en`: la pantalla
  * tiene que poder decir de cuándo es el dato.
  */
-const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
+const { crearCliente } = require('./contabilium_http.cjs');
 
-const HOST = 'rest.contabilium.com';
 const DEPOSITO = 56990; // Probikes: depósito único PRINCIPAL
 const argv = process.argv.slice(2);
 const arg = (n, d) => { const i = argv.indexOf(`--${n}`); return i >= 0 && argv[i+1] && !argv[i+1].startsWith('--') ? argv[i+1] : d; };
@@ -42,40 +41,15 @@ if (!TALLER) { console.error('Falta --taller'); process.exit(1); }
 if (!EMAIL || !KEY) { console.error('Faltan CB_EMAIL / CB_KEY (set -a && . .secrets/contabilium.env && set +a)'); process.exit(1); }
 
 // ── Supabase (service_role: escribe en el taller que corresponda) ────────────
-const envLocal = fs.readFileSync(path.join(__dirname, '.env.local'), 'utf8');
-const gv = k => (envLocal.match(new RegExp('^' + k + '=(.*)$', 'm')) || [])[1]?.trim().replace(/^["']|["']$/g, '');
+// En la Mac sale de .env.local; en la nube (GitHub Actions) viene por variable de entorno.
+let envLocal = '';
+try { envLocal = fs.readFileSync(path.join(__dirname, '.env.local'), 'utf8'); } catch (_) {}
+const gv = k => process.env[k] || (envLocal.match(new RegExp('^' + k + '=(.*)$', 'm')) || [])[1]?.trim().replace(/^["']|["']$/g, '');
 const db = createClient(gv('VITE_SUPABASE_URL'), gv('SUPABASE_SERVICE_ROLE') || gv('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false } });
 
-// ── HTTP a Contabilium ──────────────────────────────────────────────────────
+// ── HTTP a Contabilium: ritmo, 429 con Retry-After y token, en contabilium_http.cjs ──
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-function http(method, p, auth, body) {
-  return new Promise(res => {
-    const headers = { 'User-Agent': 'Mozilla/5.0' };
-    if (auth) headers.Authorization = 'Bearer ' + auth;
-    if (body) { headers['Content-Type'] = 'application/x-www-form-urlencoded'; headers['Content-Length'] = Buffer.byteLength(body); }
-    const r = https.request({ host: HOST, path: p, method, headers }, resp => {
-      let b = ''; resp.on('data', c => b += c); resp.on('end', () => res({ status: resp.statusCode, body: b }));
-    });
-    r.on('error', e => res({ status: 0, err: String(e) }));
-    r.setTimeout(25000, () => r.destroy());
-    if (body) r.write(body);
-    r.end();
-  });
-}
-async function GET(p, auth, reintentos = 3) {
-  for (let i = 0; i < reintentos; i++) {
-    const r = await http('GET', p, auth);
-    if (r.status === 200) { try { return { data: JSON.parse(r.body) }; } catch { return { data: null }; } }
-    if (r.status === 429 || r.status === 0 || r.status >= 500) { await sleep(900 * (i + 1)); continue; }
-    return { data: null, status: r.status };
-  }
-  return { data: null };
-}
-async function token() {
-  const data = new URLSearchParams({ grant_type: 'client_credentials', client_id: EMAIL, client_secret: KEY }).toString();
-  const r = await http('POST', '/token', null, data);
-  try { return JSON.parse(r.body).access_token; } catch { return null; }
-}
+const cb = crearCliente({ email: EMAIL, key: KEY, log: s => console.log(s) });
 /**
  * 🚩 Por qué esto no es un for simple. La primera version cortaba con
  * `if (!its.length) break;`: una sola pagina que volviera vacia por un 429
@@ -85,31 +59,34 @@ async function token() {
  * que es exactamente la mentira que esta feature no puede decir.
  * Ahora cada pagina se reintenta, y al final se COMPARA contra TotalItems: si
  * falta algo, aborta en vez de devolver una foto incompleta.
+ * (6-oct: el 429 lo absorbe cb.get esperando el Retry-After; acá solo queda la
+ * página que vuelve 200 pero vacía, que se reintenta 4 veces.)
  */
-async function paginado(base, auth, cap = 400) {
-  const sep = base.includes('?') ? '&' : '?';
-  let first = null;
-  for (let intento = 0; intento < 6 && !first?.data?.Items?.length; intento++) {
-    if (intento) await sleep(2000 * intento);
-    first = await GET(`${base}${sep}page=1`, auth);
+async function pagina(url) {
+  let r = null;
+  for (let intento = 0; intento < 4; intento++) {
+    if (intento) await sleep(5000 * intento);
+    r = await cb.get(url);
+    if (r.data?.Items?.length) return r;
+    if (r.status !== 200) break; // cb.get ya agotó sus esperas: no tiene sentido insistir acá
   }
+  return r;
+}
+async function paginado(base, cap = 400) {
+  const sep = base.includes('?') ? '&' : '?';
+  const first = await pagina(`${base}${sep}page=1`);
   if (!first?.data?.Items?.length) {
-    throw new Error(`la pagina 1 de ${base} volvio vacia tras 6 intentos: el ERP no esta respondiendo. Abortado: 0 filas se leen como "no hay stock".`);
+    throw new Error(`la pagina 1 de ${base} volvio vacia (ultimo status ${first?.status}): el ERP no esta respondiendo. Abortado: 0 filas se leen como "no hay stock".`);
   }
   const total = first.data?.TotalItems || 0;
   let items = first.data?.Items || [];
   const porPagina = items.length || 50;
   const paginas = Math.min(cap, Math.max(1, Math.ceil(total / porPagina)));
   for (let p = 2; p <= paginas; p++) {
-    let its = null;
-    for (let intento = 0; intento < 6 && !its?.length; intento++) {
-      if (intento) await sleep(2000 * intento);
-      const r = await GET(`${base}${sep}page=${p}`, auth);
-      its = r.data?.Items || [];
-    }
-    if (!its.length) throw new Error(`la pagina ${p} de ${base} volvio vacia despues de 6 intentos (esperaba ~${porPagina} items de ${total})`);
+    const r = await pagina(`${base}${sep}page=${p}`);
+    const its = r?.data?.Items || [];
+    if (!its.length) throw new Error(`la pagina ${p} de ${base} volvio vacia (ultimo status ${r?.status}; 429 recibidos en la corrida: ${cb.stats.r429}) (esperaba ~${porPagina} items de ${total})`);
     items = items.concat(its);
-    await sleep(120); // el ERP tira 429 si se lo castiga
   }
   if (!items.length || (total && items.length < total)) {
     throw new Error(`barrido incompleto de ${base}: traje ${items.length} de ${total}. Abortado a proposito: una foto de stock incompleta se lee como "no hay".`);
@@ -135,12 +112,12 @@ const fmt = d => d.toISOString().slice(0, 10);
   const taller = talleres[0];
   console.log(`Taller: ${taller.nombre} (${taller.id})${DRY ? '  [DRY-RUN]' : ''}`);
 
-  const auth = await token();
-  if (!auth) { console.error('No pude autenticar contra Contabilium'); process.exit(1); }
+  const t0 = Date.now();
+  await cb.token(); // si la credencial está rechazada, tira un error que lo dice con esas palabras
 
   // 1) STOCK del depósito
   console.log('· stock del depósito…');
-  const filas = await paginado(`/api/inventarios/getStockByDeposito?id=${DEPOSITO}`, auth);
+  const filas = await paginado(`/api/inventarios/getStockByDeposito?id=${DEPOSITO}`);
   const stock = new Map();
   /* 🔴 STOCK DISPONIBLE, NO BRUTO — la misma cuña del 26-ago-2026 de los 4 exportadores de
      Probikes, que este sync tenía pendiente (28-ago). `StockActual` incluye lo ya reservado
@@ -161,32 +138,61 @@ const fmt = d => d.toISOString().slice(0, 10);
   const hoy = new Date();
   const desde = new Date(hoy.getTime() - DIAS * 864e5);
   console.log(`· comprobantes ${fmt(desde)} → ${fmt(hoy)}…`);
-  const comps = await paginado(`/api/comprobantes/search?fechaDesde=${fmt(desde)}&fechaHasta=${fmt(hoy)}`, auth);
-  console.log(`  ${comps.length} comprobantes · bajando detalle…`);
+  const comps = await paginado(`/api/comprobantes/search?fechaDesde=${fmt(desde)}&fechaHasta=${fmt(hoy)}`);
+  /* CACHÉ DEL DETALLE (6-oct-2026). Con el límite de Contabilium (~27 pedidos por minuto), bajar
+     el detalle de ~880 comprobantes todos los días son 35 minutos. Una factura emitida no cambia:
+     el detalle de lo que tiene más de 7 días se guarda y se reusa; lo reciente se vuelve a bajar
+     siempre, por si se corrigió. Vive fuera del repo (en la nube, MP_CACHE_DIR + actions/cache). */
+  const CACHE_DIR = process.env.MP_CACHE_DIR || path.join(process.env.HOME, 'Library', 'Application Support', 'mechanic_pro');
+  const CACHE = path.join(CACHE_DIR, `comprobantes_${taller.id}.json`);
+  let cache = {};
+  try { cache = JSON.parse(fs.readFileSync(CACHE, 'utf8')); } catch (_) {}
+  const reciente = fmt(new Date(hoy.getTime() - 7 * 864e5));
+  const fechaDe = c => (c.Fecha || c.FechaEmision || '').slice(0, 10);
+  const aBajar = comps.filter(c => !(cache[c.Id] && fechaDe(c) && fechaDe(c) < reciente));
+  console.log(`  ${comps.length} comprobantes · bajando detalle de ${aBajar.length} (el resto, del caché)…`);
+
+  async function bajar(c) {
+    const det = await cb.get(`/api/comprobantes/?id=${c.Id}`);
+    if (!det.data) return false;
+    const items = det.data.Items || det.data.Conceptos || det.data.Detalles || [];
+    cache[c.Id] = items.map(it => [String(it.Codigo || it.CodigoConcepto || '').trim(), Number(it.Cantidad || 0)]);
+    return true;
+  }
+  const fallidos = [];
+  await pool(aBajar, 4, async c => { if (!(await bajar(c))) fallidos.push(c); });
+  // Un detalle que no llegó NO se saltea: esa venta desaparecería del cálculo de "parado" sin que
+  // nadie se entere. Segunda pasada de a uno; si sigue faltando, se aborta.
+  const siguen = [];
+  for (const c of fallidos) if (!(await bajar(c))) siguen.push(c.Id);
+  if (siguen.length) throw new Error(`no pude bajar el detalle de ${siguen.length} comprobante(s) (ids ${siguen.slice(0, 5).join(', ')}…). Abortado: sin ese detalle, esas ventas no cuentan.`);
+
+  const vigentes = {};
+  for (const c of comps) if (cache[c.Id]) vigentes[c.Id] = cache[c.Id];
+  try { fs.mkdirSync(CACHE_DIR, { recursive: true }); fs.writeFileSync(CACHE, JSON.stringify(vigentes)); }
+  catch (e) { console.log(`  (no pude guardar el caché: ${e.message})`); }
 
   const ventas = new Map(); // sku -> { unidades, ultima }
-  await pool(comps, 4, async (c) => {
-    const det = await GET(`/api/comprobantes/?id=${c.Id}`, auth);
-    const items = det.data?.Items || det.data?.Conceptos || det.data?.Detalles || [];
+  for (const c of comps) {
     // Una nota de crédito devuelve mercadería: resta unidades y NO cuenta como venta.
     const esNC = /nota de cr|^NC/i.test(c.Tipo || c.TipoComprobante || '');
-    const fecha = (c.Fecha || c.FechaEmision || '').slice(0, 10);
-    for (const it of items) {
-      const sku = String(it.Codigo || it.CodigoConcepto || '').trim();
+    const fecha = fechaDe(c);
+    for (const [sku, cantidad] of vigentes[c.Id] || []) {
       if (!sku) continue;
-      const cant = Number(it.Cantidad || 0) * (esNC ? -1 : 1);
+      const cant = cantidad * (esNC ? -1 : 1);
       const v = ventas.get(sku) || { unidades: 0, ultima: null };
       v.unidades += cant;
       if (!esNC && fecha && (!v.ultima || fecha > v.ultima)) v.ultima = fecha;
       ventas.set(sku, v);
     }
-  });
+  }
   console.log(`  ${ventas.size} SKU con movimiento en la ventana`);
 
   // 3) Escribir en MP, SOLO los productos que ese taller ya tiene cargados
   let prods = [], off = 0;
   for (;;) {
-    const { data } = await db.from('productos_taller').select('id,sku,nombre').eq('taller_id', taller.id).range(off, off + 999);
+    const { data, error } = await db.from('productos_taller').select('id,sku,nombre').eq('taller_id', taller.id).range(off, off + 999);
+    if (error) throw new Error(`no pude leer los productos del taller en Supabase: ${error.message}`);
     prods = prods.concat(data); if (data.length < 1000) break; off += 1000;
   }
   console.log(`· ${prods.length} productos del taller en MP`);
@@ -232,5 +238,5 @@ const fmt = d => d.toISOString().slice(0, 10);
     if (error) { console.error('ERROR al escribir:', error.message); process.exit(1); }
     process.stdout.write(`\r  escritos ${Math.min(i + 500, updates.length)}/${updates.length}`);
   }
-  console.log('\n✓ listo');
+  console.log(`\n✓ listo en ${Math.round((Date.now() - t0) / 1000)} s · ${cb.stats.pedidos} pedidos al ERP · ${cb.stats.r429} esperas por límite (${cb.stats.esperaS} s)`);
 })().catch(e => { console.error('ERROR', e.message); process.exit(1); });

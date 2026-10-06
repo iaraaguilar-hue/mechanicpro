@@ -1,5 +1,5 @@
 import { useState, Fragment, useMemo } from 'react';
-import { textoAvisoERP } from "@/lib/ordenVentaERP";
+import { textoAvisoERP, avisoEnTaller } from "@/lib/ordenVentaERP";
 import { useAuthStore } from '@/store/authStore';
 import { StatusBadge, grupoDeEstado, type GrupoDeEstado } from "@/components/StatusBadge";
 import { useDataStore } from '@/store/dataStore';
@@ -611,6 +611,7 @@ export default function History() {
                                         >
                                             <TableCell className="pl-6 py-4">
                                                 <StatusBadge status={job.status} />
+                                                <AvisoEnTallerCorto service={job.rawJob} />
                                             </TableCell>
                                             <TableCell className="py-4 w-28">
                                                 <div className="flex flex-col gap-1">
@@ -771,10 +772,26 @@ interface MobileHistoryCardProps {
     onPrint: () => void;
 }
 
+/**
+ * La línea roja de la orden en taller (<N>-T) en la lista del Historial, con el
+ * mismo formato que en el Taller Activo. El título ya dice qué hacer; el detalle
+ * completo está al abrir la orden.
+ */
+function AvisoEnTallerCorto({ service }: { service: any }) {
+    const aviso = avisoEnTaller(service);
+    if (!aviso) return null;
+    return (
+        <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-red-600 uppercase" title={aviso.cuerpo}>
+            <Info className="h-3 w-3 shrink-0" /> {aviso.titulo}
+        </div>
+    );
+}
+
 function MobileHistoryCard({ job, isExpanded, onToggle, onEdit, onDelete, onPrint }: MobileHistoryCardProps) {
     return (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-3 active:scale-[0.99] transition-transform">
             {/* Top row: Status badge + Dates (ingreso + finalizado) */}
+            <AvisoEnTallerCorto service={job.rawJob} />
             <div className="flex items-center justify-between mb-2.5">
                 <StatusBadge status={job.status} />
                 <div className="flex flex-col items-end leading-tight">
@@ -946,6 +963,18 @@ function ExpandedServiceDetail({ job }: { job: any }) {
                     <p className="text-sm text-red-700">
                         {textoAvisoERP(service.webhook_erp_detalle).cuerpo}
                     </p>
+                </div>
+            )}
+
+            {/* La orden en taller (<N>-T) quedó abierta en el ERP o falló (5-oct-2026).
+                Una orden entregada ya no está en el Taller Activo: si esto no se dijera
+                acá, el stock reservado de más no lo vería nadie. */}
+            {avisoEnTaller(service) && (
+                <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4">
+                    <h4 className="text-red-700 flex items-center gap-2 font-semibold uppercase tracking-widest text-sm mb-1">
+                        <Info className="w-4 h-4" /> {avisoEnTaller(service)!.titulo}
+                    </h4>
+                    <p className="text-sm text-red-700">{avisoEnTaller(service)!.cuerpo}</p>
                 </div>
             )}
 

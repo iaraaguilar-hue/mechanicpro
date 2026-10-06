@@ -166,6 +166,8 @@ export interface RespuestaERP {
      * haberse creado igual, y quien lo lea tiene que suponer lo peor.
      */
     rechazada: boolean;
+    /** Lo que devolvió el ERP al rechazar (Contabilium: 0, -1, -99). Como campo, no adentro del texto. */
+    codigo?: number | null;
 }
 
 /**
@@ -182,8 +184,9 @@ export function leerRespuestaERP(httpOk: boolean, status: number, texto: string)
     try { cuerpo = JSON.parse(texto); } catch { /* sin JSON: se juzga por el HTTP */ }
     if (Array.isArray(cuerpo)) cuerpo = cuerpo[0];
     if (cuerpo && typeof cuerpo === 'object' && cuerpo.ok === false) {
-        const codigo = cuerpo.id_orden ?? cuerpo.codigo;
-        return { ok: false, detalle: `${RECHAZADA_ERP}${codigo != null ? ` (código ${codigo})` : ''}`, rechazada: true };
+        const crudo = cuerpo.id_orden ?? cuerpo.codigo;
+        const codigo = crudo != null && Number.isFinite(Number(crudo)) ? Number(crudo) : null;
+        return { ok: false, detalle: `${RECHAZADA_ERP}${codigo != null ? ` (código ${codigo})` : ''}`, rechazada: true, codigo };
     }
     return { ok: true, detalle: `HTTP ${status}`, rechazada: false };
 }
@@ -349,10 +352,14 @@ export interface ErpTaller {
     /** Los renglones del último envío: los necesita la cancelación. */
     productos: ProductoOrdenERP[];
     at: string;
-    /** Qué fue el último envío. */
+    /** Qué fue el último envío (o el que está saliendo). */
     etapa?: 'en_taller' | 'cancelar_taller';
-    /** Qué contestó, si falló. La pantalla lo muestra (ver textoAvisoEnTaller). */
+    /** Qué contestó, si falló. La pantalla lo muestra (ver avisoEnTaller). */
     error?: string | null;
+    /** true = el ERP dijo que no (seguro que no cambió); false = falla incierta (HTTP 500, red). */
+    rechazada?: boolean;
+    /** El código del rechazo, si lo hubo. */
+    codigo?: number | null;
 }
 
 /**
@@ -374,6 +381,17 @@ export interface ServicioParaEnTaller {
     erp_taller?: ErpTaller | null;
 }
 
+/**
+ * ¿Esta orden puede tener una -T? Solo EN CURSO, sin borrar y con la final SIN
+ * MANDAR. Se mira `webhook_erp_disparado` y no `ordenExisteEnERP` a propósito:
+ * si la final se intentó y falló, el taller pudo haberla cargado a mano, y una -T
+ * reservaría el stock dos veces. Una orden reabierta la sigue corrigiendo
+ * `corregirOrdenEnERP` (las dos se excluyen por esta condición).
+ */
+export function laOrdenPuedeTenerT(s: ServicioParaEnTaller): boolean {
+    return !s.eliminado_en && grupoDeEstado(s.estado) === 'en_curso' && !s.webhook_erp_disparado;
+}
+
 /** Cambia si y solo si cambia algo de lo que la -T tiene adentro. */
 function huellaProductos(productos: ProductoOrdenERP[] | null | undefined): string {
     return (productos || [])
@@ -385,11 +403,7 @@ function huellaProductos(productos: ProductoOrdenERP[] | null | undefined): stri
 /**
  * Qué hacer con la -T, según cómo está el service y qué renglones viajarían hoy.
  *
- *  · Solo hay -T con el service EN CURSO y la final SIN MANDAR. Se mira
- *    `webhook_erp_disparado` y no `ordenExisteEnERP` a propósito: si la final se
- *    intentó y falló, el taller pudo haberla cargado a mano, y una -T reservaría
- *    el stock dos veces. Una orden reabierta la sigue corrigiendo
- *    `corregirOrdenEnERP` (las dos se excluyen por esta condición).
+ *  · Solo hay -T si `laOrdenPuedeTenerT`.
  *  · Fuera de eso, una -T que quedó abierta se CANCELA: nunca puede convivir con
  *    la final (reservaría dos veces), y es el reintento de un cierre que falló.
  *  · Sin repuestos que viajen (se sacaron todos, o pasaron a "(ML)"): se cancela.
@@ -397,8 +411,7 @@ function huellaProductos(productos: ProductoOrdenERP[] | null | undefined): stri
  */
 export function accionOrdenEnTaller(s: ServicioParaEnTaller, productos: ProductoOrdenERP[]): AccionEnTaller {
     const abierta = !!s.erp_taller?.abierta;
-    const puedeTenerT = !s.eliminado_en && grupoDeEstado(s.estado) === 'en_curso' && !s.webhook_erp_disparado;
-    if (!puedeTenerT || productos.length === 0) return abierta ? 'cancelar_taller' : 'nada';
+    if (!laOrdenPuedeTenerT(s) || productos.length === 0) return abierta ? 'cancelar_taller' : 'nada';
     if (abierta && !s.erp_taller?.error && huellaProductos(s.erp_taller?.productos) === huellaProductos(productos)) return 'nada';
     return 'en_taller';
 }
@@ -424,61 +437,116 @@ export function armarPayloadCancelacion(d: DatosEtapa, guardado: Pick<ErpTaller,
     };
 }
 
+/** Sin error: lo que se escribe cuando un envío salió bien (o todavía no contestó). */
+const SIN_ERROR = { error: null, rechazada: false, codigo: null } as const;
+
 /**
- * Lo que queda escrito después de un envío. Si salió bien, es lo que se mandó.
- * Si falló, se supone lo PEOR para el stock:
+ * Lo que se escribe ANTES de mandar un en_taller (hallazgo del auditor, 5-oct-2026).
+ * El POST sale con `keepalive`: si el mecánico guarda y cierra la pestaña en los
+ * 2 a 4 s que tarda la respuesta, la -T se crea igual pero nadie llega a anotarla,
+ * y al finalizar no había nada que cancelar: stock reservado para siempre. Anotada
+ * antes, en el peor caso queda "abierta sin confirmar" y el cierre (o el
+ * reconciliador) la cancela. Si ya había una confirmada, sigue confirmada: existe
+ * seguro, con los renglones viejos o con estos.
+ */
+export function erpTallerAntesDeMandar(previo: ErpTaller | null | undefined, productos: ProductoOrdenERP[], at: string): ErpTaller {
+    return { abierta: true, confirmada: !!(previo?.abierta && previo.confirmada), productos, at, etapa: 'en_taller', ...SIN_ERROR };
+}
+
+/**
+ * El único rechazo que prueba que la -T NO existe: medido contra Contabilium el
+ * 5-oct, cancelar una -T que nunca se creó devuelve 0 y el stock no se mueve. El
+ * -1 se midió como "Cancelado sin renglones", que no dice nada de si existe: no
+ * entra. Cualquier otro código se trata como "puede seguir reservando".
+ */
+export const CODIGO_NO_EXISTE = 0;
+
+/**
+ * Lo que queda escrito después de un envío. `previo` es lo que había ANTES de
+ * anotar el envío. Si salió bien, es lo que se mandó. Si falló, se supone lo PEOR
+ * para el stock:
  *  · un en_taller RECHAZADO no cambió nada: queda lo de antes;
  *  · un en_taller que falló sin saber cómo (HTTP 500, red) pudo haber creado la
- *    -T: se marca abierta (sin confirmar), para que el cierre la cancele igual.
- *    No cancelar deja stock reservado para siempre y en silencio;
+ *    -T: queda abierta (sin confirmar), para que el cierre la cancele igual;
  *  · una cancelación que falló sigue abierta, con sus renglones, para reintentar.
- *    SALVO un rechazo sobre una -T nunca confirmada: medido contra Contabilium el
- *    5-oct, cancelar una -T que no existe se RECHAZA (código 0) y el stock no se
- *    mueve. Ahí el rechazo dice que no hay nada reservado, y gritar "cancelala a
- *    mano" sería una falsa alarma.
+ *    SALVO el rechazo con CODIGO_NO_EXISTE sobre una -T nunca confirmada: ahí no
+ *    había nada reservado, y gritar "anulala a mano" sería una falsa alarma.
  */
 export function erpTallerTrasEnvio(
     previo: ErpTaller | null | undefined,
     accion: Exclude<AccionEnTaller, 'nada'>,
     productos: ProductoOrdenERP[],
-    r: Pick<RespuestaERP, 'ok' | 'detalle' | 'rechazada'>,
+    r: Pick<RespuestaERP, 'ok' | 'detalle' | 'rechazada' | 'codigo'>,
     at: string,
 ): ErpTaller {
     const abiertaSegura = !!(previo?.abierta && previo.confirmada);
     if (r.ok) {
         const abierta = accion === 'en_taller';
-        return { abierta, confirmada: abierta, productos, at, etapa: accion, error: null };
+        return { abierta, confirmada: abierta, productos, at, etapa: accion, ...SIN_ERROR };
     }
+    const fallo = { error: r.detalle, rechazada: !!r.rechazada, codigo: r.codigo ?? null };
     if (accion === 'en_taller') {
         return r.rechazada
-            ? { abierta: !!previo?.abierta, confirmada: abiertaSegura, productos: previo?.productos ?? [], at, etapa: accion, error: r.detalle }
-            : { abierta: true, confirmada: abiertaSegura, productos, at, etapa: accion, error: r.detalle };
+            ? { abierta: !!previo?.abierta, confirmada: abiertaSegura, productos: previo?.productos ?? [], at, etapa: accion, ...fallo }
+            : { abierta: true, confirmada: abiertaSegura, productos, at, etapa: accion, ...fallo };
     }
     const guardados = previo?.productos?.length ? previo.productos : productos;
-    if (r.rechazada && !abiertaSegura) return { abierta: false, confirmada: false, productos: guardados, at, etapa: accion, error: null };
-    return { abierta: true, confirmada: abiertaSegura, productos: guardados, at, etapa: accion, error: r.detalle };
+    if (r.rechazada && r.codigo === CODIGO_NO_EXISTE && !abiertaSegura) {
+        return { abierta: false, confirmada: false, productos: guardados, at, etapa: accion, ...SIN_ERROR };
+    }
+    return { abierta: true, confirmada: abiertaSegura, productos: guardados, at, etapa: accion, ...fallo };
+}
+
+export interface ServicioConEnTaller extends ServicioParaEnTaller {
+    id?: string;
+    numero_orden?: number | null;
+    fecha_finalizacion?: string | null;
 }
 
 /**
- * El cartel de la fila del Taller Activo cuando la -T falló. Sin pantalla nueva:
- * va al lado del aviso de la orden de venta, con el mismo formato.
+ * Cuánto se espera antes de avisar que una -T sigue abierta en una orden que ya
+ * no la necesita. Al finalizar o borrar, la cancelación tarda 2 a 4 s en volver:
+ * sin esta espera, cada cierre sano mostraría un cartel rojo un instante, y un
+ * cartel que salta en cada operación sana se deja de leer.
  */
-export function textoAvisoEnTaller(
-    erp: ErpTaller | null | undefined,
-    numeroOrden?: number | null,
-): { titulo: string; cuerpo: string } | null {
-    if (!erp?.error) return null;
-    const n = numeroOrden != null ? `${numeroOrden}-T` : 'en taller';
-    if (erp.etapa === 'cancelar_taller') {
+export const ESPERA_AVISO_MS = 2 * 60 * 1000;
+
+/**
+ * El cartel de la -T, el mismo en el Taller Activo, en el Historial y para las
+ * borradas. null = no hay nada que decir.
+ */
+export function avisoEnTaller(s: ServicioConEnTaller, ahora: number = Date.now()): { titulo: string; cuerpo: string } | null {
+    const erp = s.erp_taller;
+    if (!erp) return null;
+    const n = `${ordenNumberForWebhook(s.numero_orden ?? undefined, s.id)}-T`;
+    const puede = laOrdenPuedeTenerT(s);
+
+    // Una -T abierta que ya no debería estarlo, o una cancelación que falló.
+    const cancelacionFallida = erp.etapa === 'cancelar_taller' && !!erp.error;
+    if (erp.abierta && (!puede || cancelacionFallida)) {
+        const desde = Date.parse(s.eliminado_en || s.fecha_finalizacion || '');
+        const recien = !erp.error && Number.isFinite(desde) && ahora - desde < ESPERA_AVISO_MS;
+        if (recien) return null;
         return {
-            titulo: 'Orden en taller sin cancelar en el ERP',
-            cuerpo: `No se pudo cancelar la orden ${n} en el ERP (${erp.error}): sigue reservando el stock de sus repuestos. Hay que cancelarla a mano.`,
+            titulo: `Anular la ${n} a mano en Contabilium`,
+            cuerpo: `La orden en taller ${n} sigue abierta en el ERP y reserva el stock de sus repuestos${erp.error ? ` (la cancelación falló: ${erp.error})` : ''}, pero esta orden ya no la necesita. MP vuelve a intentar cancelarla sola; si este aviso sigue, hay que anular la ${n} a mano en Contabilium.`,
         };
     }
-    return {
-        titulo: 'Repuestos sin reservar en el ERP',
-        cuerpo: `No se pudo crear o actualizar la orden ${n} en el ERP (${erp.error}), así que el stock de estos repuestos todavía no bajó. Se vuelve a intentar al cambiar los repuestos, y al finalizar sale la orden de venta de siempre.`,
-    };
+
+    // El en_taller falló con la orden todavía en el taller.
+    if (puede && erp.etapa === 'en_taller' && erp.error) {
+        if (erp.rechazada) {
+            return {
+                titulo: 'Repuestos sin reservar en el ERP',
+                cuerpo: `El ERP no aceptó la orden en taller ${n} (${erp.error}), así que el stock de estos repuestos no bajó. Se vuelve a intentar al cambiar los repuestos, y al finalizar sale la orden de venta de siempre.`,
+            };
+        }
+        return {
+            titulo: 'Reserva de repuestos sin confirmar en el ERP',
+            cuerpo: `No se pudo confirmar si la orden en taller ${n} quedó en el ERP (${erp.error}): el stock puede haber bajado o no. Se vuelve a intentar al cambiar los repuestos, y al finalizar se cancela por las dudas y sale la orden de venta de siempre.`,
+        };
+    }
+    return null;
 }
 
 export type ResultadoEnTaller = 'no_aplica' | 'nada' | 'abierta' | 'cancelada' | 'fallo';
@@ -494,10 +562,82 @@ export function sincronizarOrdenEnTaller(servicioId: string): Promise<ResultadoE
 
 /**
  * Cancela la -T si quedó abierta. Al finalizar (DESPUÉS de la final, en la misma
- * fila) y al borrar la orden. Nunca crea nada.
+ * fila), al borrar la orden y desde el reconciliador. Nunca crea nada.
  */
 export function cerrarOrdenEnTaller(servicioId: string): Promise<ResultadoEnTaller> {
     return enFila(servicioId, () => enTallerAhora(servicioId, true));
+}
+
+/**
+ * Al finalizar: la final (si sale) y DESPUÉS, en la misma fila, el cierre de la
+ * -T. Juntas en una función para que el orden sea una garantía y no una
+ * casualidad de la pantalla (auditor, 5-oct-2026):
+ *  · la cancelación nunca sale antes que la final: entre las dos, el stock no
+ *    queda libre;
+ *  · la cancelación sale aunque la final no (sin repuestos, reabierta, taller sin
+ *    webhook).
+ * `cerrar` se puede cambiar solo para probarlo.
+ */
+export function mandarFinalYCerrarEnTaller(
+    servicioId: string,
+    mandarFinal: (() => Promise<unknown>) | null,
+    cerrarT: boolean,
+    cerrar: (id: string) => Promise<ResultadoEnTaller> = cerrarOrdenEnTaller,
+): { final: Promise<unknown> | null; cierre: Promise<ResultadoEnTaller> | null } {
+    const final = mandarFinal ? enFila(servicioId, mandarFinal) : null;
+    const cierre = cerrarT ? cerrar(servicioId) : null;
+    return { final, cierre };
+}
+
+/** Lo que el reconciliador lee de cada orden con una -T abierta. */
+export interface FilaEnTaller extends ServicioConEnTaller {
+    id: string;
+}
+
+const COLUMNAS_EN_TALLER = 'id,numero_orden,estado,eliminado_en,webhook_erp_disparado,fecha_finalizacion,erp_taller';
+
+/**
+ * Qué órdenes tienen una -T abierta que ya no debería estarlo: finalizadas,
+ * entregadas, borradas o con la final mandada. Son las que quedaron colgadas
+ * porque la pestaña se cerró antes de cancelar (la cancelación espera en la fila
+ * detrás de la final) o porque el cierre falló.
+ */
+export function ordenesParaReconciliar(filas: FilaEnTaller[]): string[] {
+    return filas.filter(f => f.erp_taller?.abierta && !laOrdenPuedeTenerT(f)).map(f => f.id);
+}
+
+/**
+ * El reconciliador (auditor, 5-oct-2026): corre al cargar los servicios del
+ * taller (Probikes tiene MP abierto todo el día) y cancela toda -T colgada.
+ * Cancelar dos veces no hace daño: medido contra Contabilium el 6-oct, una
+ * segunda cancelación de una -T ya cancelada contesta bien y no mueve el stock.
+ * Devuelve cómo quedaron las que tocó (las borradas no están en el store y la
+ * pantalla las muestra aparte).
+ */
+export async function reconciliarOrdenesEnTaller(tallerId: string | null | undefined): Promise<FilaEnTaller[]> {
+    if (!tallerId || !aceptaOrdenEnTaller(tallerId)) return [];
+    try {
+        const { data, error } = await supabase
+            .from('servicios')
+            .select(COLUMNAS_EN_TALLER)
+            .eq('taller_id', tallerId)
+            .eq('erp_taller->>abierta', 'true');
+        if (error || !data?.length) return [];
+        const ids = ordenesParaReconciliar(data as FilaEnTaller[]);
+        if (!ids.length) return [];
+        await Promise.all(ids.map(id => cerrarOrdenEnTaller(id)));
+        const { data: despues } = await supabase.from('servicios').select(COLUMNAS_EN_TALLER).in('id', ids);
+        return (despues || []) as FilaEnTaller[];
+    } catch (e: any) {
+        console.error('[ERP] Reconciliar órdenes en taller:', e?.message);
+        return [];
+    }
+}
+
+/** Una orden con su -T, leída de la base (para la que se acaba de borrar). */
+export async function leerOrdenEnTaller(servicioId: string): Promise<FilaEnTaller | null> {
+    const { data } = await supabase.from('servicios').select(COLUMNAS_EN_TALLER).eq('id', servicioId).maybeSingle();
+    return (data as FilaEnTaller | null) ?? null;
 }
 
 async function enTallerAhora(servicioId: string, soloCerrar: boolean): Promise<ResultadoEnTaller> {
@@ -509,7 +649,15 @@ async function enTallerAhora(servicioId: string, soloCerrar: boolean): Promise<R
             .maybeSingle();
         if (error || !s || !aceptaOrdenEnTaller(s.taller_id)) return 'no_aplica';
         const guardado = (s.erp_taller ?? null) as ErpTaller | null;
-        if (soloCerrar && !guardado?.abierta) return 'nada';
+        if (soloCerrar && !guardado?.abierta) {
+            // No hay -T que cancelar. Si quedó un error viejo (un en_taller que
+            // falló antes de finalizar), ya no dice nada cierto: se limpia, para que
+            // no quede un cartel contradiciendo a una orden cerrada sin problemas.
+            if (guardado?.error) {
+                await supabase.from('servicios').update({ erp_taller: { ...guardado, ...SIN_ERROR } }).eq('id', servicioId);
+            }
+            return 'nada';
+        }
 
         // Primero la decisión (lo más común es "nada"), después lo que cuesta ir a buscar.
         const items = (s.servicio_items || []) as ItemOrden[];
@@ -542,6 +690,20 @@ async function enTallerAhora(servicioId: string, soloCerrar: boolean): Promise<R
         const payload = accion === 'en_taller'
             ? { ...armarPayloadOrden({ ...datos, items, vinculos }), etapa: 'en_taller' satisfies EtapaOrden }
             : armarPayloadCancelacion(datos, guardado ?? { productos: [] });
+
+        // Se anota ANTES de mandar (ver erpTallerAntesDeMandar). Si no se puede
+        // anotar, no se manda: una -T que nadie sabe que existe es la que queda
+        // reservando stock para siempre.
+        if (accion === 'en_taller') {
+            const { error: eAntes } = await supabase.from('servicios')
+                .update({ erp_taller: erpTallerAntesDeMandar(guardado, payload.productos, new Date().toISOString()) })
+                .eq('id', servicioId);
+            if (eAntes) {
+                console.error('[ERP] No pude anotar la orden en taller antes de mandarla:', eAntes.message);
+                return 'fallo';
+            }
+        }
+
         const r = await mandarOrden(url, payload);
         if (!r.ok) console.error(`[ERP] La orden en taller (${accion}) no salió —`, r.detalle);
 
@@ -550,7 +712,19 @@ async function enTallerAhora(servicioId: string, soloCerrar: boolean): Promise<R
         if (e2) console.error('[ERP] No pude registrar la orden en taller:', e2.message);
 
         if (!r.ok) return 'fallo';
-        return accion === 'en_taller' ? 'abierta' : 'cancelada';
+        if (accion === 'cancelar_taller') return 'cancelada';
+
+        // Dos equipos (auditor, 5-oct-2026): mientras este en_taller viajaba, otra
+        // compu pudo finalizar o borrar la orden, y su cierre leyó la -T todavía
+        // sin crear. Se relee y, si ya no está en curso, se cancela en esta misma
+        // tarea (sin pasar por la fila: esperaría a esta misma tarea).
+        const { data: ahora } = await supabase
+            .from('servicios')
+            .select('estado,eliminado_en,webhook_erp_disparado')
+            .eq('id', servicioId)
+            .maybeSingle();
+        if (ahora && !laOrdenPuedeTenerT(ahora)) return enTallerAhora(servicioId, true);
+        return 'abierta';
     } catch (e: any) {
         console.error('[ERP] Orden en taller:', e?.message);
         return 'fallo';

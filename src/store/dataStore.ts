@@ -1,5 +1,8 @@
 import { create } from 'zustand';
-import { huellaItemsERP, corregirOrdenEnERP, sincronizarOrdenEnTaller, cerrarOrdenEnTaller, aceptaOrdenEnTaller, type ErpTaller } from '@/lib/ordenVentaERP';
+import {
+    huellaItemsERP, corregirOrdenEnERP, sincronizarOrdenEnTaller, cerrarOrdenEnTaller, aceptaOrdenEnTaller,
+    reconciliarOrdenesEnTaller, leerOrdenEnTaller, avisoEnTaller, type ErpTaller, type FilaEnTaller,
+} from '@/lib/ordenVentaERP';
 import { supabase } from '@/lib/supabase';
 import { claveProducto, type ProductoTaller } from '@/lib/buscadorProductos';
 
@@ -260,6 +263,14 @@ interface DataState {
     isHydrating: boolean;
     hydrateError: string | null;
     lastHydratedAt: number | null;
+    /**
+     * Órdenes BORRADAS cuya -T del ERP sigue abierta (5-oct-2026). No están en
+     * `servicios` (el store no carga las borradas), así que el Taller Activo las
+     * muestra aparte: un stock reservado no puede quedar a la vista de nadie.
+     */
+    enTallerDeBorradas: FilaEnTaller[];
+    /** Trae de la base lo que dejaron los envíos al ERP de una orden y lo pega en el store. */
+    refrescarERP: (id: string) => Promise<void>;
 
     // Hidratación
     fetchDashboardData: (tallerId: string) => Promise<void>;
@@ -366,6 +377,12 @@ export const useDataStore = create<DataState>((set, get) => ({
     isHydrating: false,
     hydrateError: null,
     lastHydratedAt: null,
+    enTallerDeBorradas: [],
+
+    refrescarERP: async (id) => {
+        const fila = await traerEstadoERP(id);
+        if (fila) set({ servicios: get().servicios.map(s => s.id === id ? { ...s, ...fila } : s) });
+    },
 
     // ─────────────────────────────────────────────────────────
     // MOTOR DE HIDRATACIÓN
@@ -438,6 +455,25 @@ export const useDataStore = create<DataState>((set, get) => ({
             // de filas y no tiene por qué demorar la pantalla. Mientras no esté,
             // el campo de repuestos funciona como texto libre, igual que antes.
             void get().fetchProductos(tallerId, { forzar: true });
+
+            // ── El reconciliador de la orden en taller (<N>-T, 5-oct-2026) ──
+            // Una -T queda colgada si la pestaña se cerró antes de cancelarla (la
+            // cancelación espera en la fila detrás de la final) o si el cierre
+            // falló. Probikes tiene MP abierto todo el día: cada carga la barre.
+            // Sin `await`: la pantalla no espera al ERP.
+            if (aceptaOrdenEnTaller(tallerId)) {
+                void reconciliarOrdenesEnTaller(tallerId).then((filas) => {
+                    if (!filas.length) return;
+                    const porId = new Map(filas.map(f => [f.id, f]));
+                    set({
+                        servicios: get().servicios.map(s => porId.has(s.id) ? { ...s, erp_taller: porId.get(s.id)!.erp_taller } : s),
+                        enTallerDeBorradas: [
+                            ...get().enTallerDeBorradas.filter(b => !porId.has(b.id)),
+                            ...filas.filter(f => f.eliminado_en && avisoEnTaller(f, Infinity)),
+                        ],
+                    });
+                });
+            }
         } catch (error: any) {
             console.error('[DataStore] ❌ Error en hidratación:', error.message);
             set({ isHydrating: false, hydrateError: error.message });
@@ -448,6 +484,7 @@ export const useDataStore = create<DataState>((set, get) => ({
         clientes: [], bicicletas: [], servicios: [], recordatorios: [], carreras: [],
         productos: [], productosCargados: false,
         isHydrating: false, hydrateError: null, lastHydratedAt: null,
+        enTallerDeBorradas: [],
     }),
 
     // ═════════════════════════════════════════════════════════
@@ -751,11 +788,7 @@ export const useDataStore = create<DataState>((set, get) => ({
             // tiene qué mandar.
             if (!itemsError && aceptaOrdenEnTaller(createdService.taller_id) && huellaItemsERP(itemsToInsert) !== '') {
                 const id = createdService.id;
-                void sincronizarOrdenEnTaller(id).then(async (r) => {
-                    if (r === 'no_aplica' || r === 'nada') return;
-                    const fila = await traerEstadoERP(id);
-                    if (fila) set({ servicios: get().servicios.map(s => s.id === id ? { ...s, ...fila } : s) });
-                });
+                void sincronizarOrdenEnTaller(id).then((r) => { if (r !== 'no_aplica') void get().refrescarERP(id); });
             }
         }
 
@@ -857,11 +890,7 @@ export const useDataStore = create<DataState>((set, get) => ({
             // la final SIN mandar; la corrección solo con la final mandada) y van en
             // la misma fila, así que nunca se adelantan entre sí.
             if (itemsGuardados && huellaItemsERP(itemsArray) !== huellaAntes) {
-                const traer = async (r: string) => {
-                    if (r === 'no_aplica' || r === 'nada') return;
-                    const fila = await traerEstadoERP(id);
-                    if (fila) set({ servicios: get().servicios.map(s => s.id === id ? { ...s, ...fila } : s) });
-                };
+                const traer = (r: string) => { if (r !== 'no_aplica') void get().refrescarERP(id); };
                 void corregirOrdenEnERP(id).then(traer);
                 const tallerDeLaOrden = get().servicios.find(s => s.id === id)?.taller_id || serviceData.taller_id;
                 if (aceptaOrdenEnTaller(tallerDeLaOrden)) void sincronizarOrdenEnTaller(id).then(traer);
@@ -890,8 +919,17 @@ export const useDataStore = create<DataState>((set, get) => ({
         set({ servicios: get().servicios.filter(s => s.id !== id) });
         // Una orden borrada no puede seguir reservando stock en el ERP (5-oct-2026):
         // si tenía la -T abierta, se cancela. Lee la base, así que no depende de que
-        // el store esté al día.
-        if (aceptaOrdenEnTaller(tallerDeLaOrden)) void cerrarOrdenEnTaller(id);
+        // el store esté al día. Y como la fila ya salió de la pantalla, si la
+        // cancelación falla la orden pasa a `enTallerDeBorradas`, que el Taller
+        // Activo muestra: si no, el error no lo vería nadie.
+        if (aceptaOrdenEnTaller(tallerDeLaOrden)) {
+            void cerrarOrdenEnTaller(id).then(async (r) => {
+                if (r === 'no_aplica' || r === 'nada') return;
+                const fila = await leerOrdenEnTaller(id);
+                const otras = get().enTallerDeBorradas.filter(b => b.id !== id);
+                set({ enTallerDeBorradas: fila && avisoEnTaller(fila, Infinity) ? [...otras, fila] : otras });
+            });
+        }
     },
 
     dismissAlert: async (servicioId, alertId) => {

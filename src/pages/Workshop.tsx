@@ -24,7 +24,7 @@ import { Label } from "@/components/ui/label";
 import { HealthCheckWidget, type HealthCheckData } from "@/components/HealthCheckWidget";
 import { estadoDeEspera } from "@/lib/avisoDeLaOrden";
 import { resolveOrdenWebhookUrl, resolveEntregadoWebhookUrl } from "@/lib/ordenWebhook";
-import { armarPayloadOrden, cargarVinculosERP as cargarVinculosERPDelTaller, enFila, mandarOrden, registrarRespuestaERP, textoAvisoERP, textoAvisoEnTaller, cerrarOrdenEnTaller, aceptaOrdenEnTaller, type ErpTaller } from "@/lib/ordenVentaERP";
+import { armarPayloadOrden, cargarVinculosERP as cargarVinculosERPDelTaller, mandarOrden, registrarRespuestaERP, textoAvisoERP, avisoEnTaller, mandarFinalYCerrarEnTaller, aceptaOrdenEnTaller, type ErpTaller } from "@/lib/ordenVentaERP";
 import { buscarProductos } from "@/lib/buscadorProductos";
 import { instanteAR, diaCalendario, horaCorta, ZONA_AR } from "@/lib/fechaAR";
 import { ETIQUETAS_NOTAS } from "@/lib/notasServicio";
@@ -80,8 +80,10 @@ interface DashboardJob {
     /** false = el POST de la orden de venta al ERP no llegó. */
     webhook_erp_ok?: boolean | null;
     webhook_erp_detalle?: string | null;
-    /** La orden en taller (<N>-T): si su último envío falló, la fila lo dice. */
+    /** La orden en taller (<N>-T): si falló o quedó abierta de más, la fila lo dice. */
     erp_taller?: ErpTaller | null;
+    webhook_erp_disparado?: boolean | null;
+    fecha_finalizacion?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -173,6 +175,7 @@ export default function Workshop() {
     const isHydrating = useDataStore(s => s.isHydrating);
     const fetchDashboardData = useDataStore(s => s.fetchDashboardData);
     const updateServicio = useDataStore(s => s.updateServicio);
+    const enTallerDeBorradas = useDataStore(s => s.enTallerDeBorradas);
     const taller_id = useAuthStore(s => s.taller_id);
 
     const [editingJob, setEditingJob] = useState<DashboardJob | null>(null);
@@ -219,6 +222,8 @@ export default function Workshop() {
                     webhook_erp_ok: s.webhook_erp_ok ?? null,
                     webhook_erp_detalle: s.webhook_erp_detalle ?? null,
                     erp_taller: s.erp_taller ?? null,
+                    webhook_erp_disparado: s.webhook_erp_disparado ?? null,
+                    fecha_finalizacion: s.fecha_finalizacion ?? null,
                     pieza: s.pieza ?? null,
                 };
             });
@@ -413,6 +418,20 @@ export default function Workshop() {
                 </div>
             </div>
 
+            {/* Órdenes BORRADAS cuya orden en taller (<N>-T) sigue abierta en el ERP
+                (5-oct-2026). Ya no están en ninguna lista, así que si la cancelación
+                falla, este es el único lugar donde se ve. */}
+            {enTallerDeBorradas.map(f => {
+                const aviso = avisoEnTaller(f, Infinity);
+                if (!aviso) return null;
+                return (
+                    <div key={f.id} className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                        <p className="font-semibold flex items-center gap-1.5"><PackageSearch className="h-4 w-4 shrink-0" /> {aviso.titulo} (orden {formatOrdenNumber(f.numero_orden ?? undefined, f.id)}, borrada)</p>
+                        <p className="mt-0.5">{aviso.cuerpo}</p>
+                    </div>
+                );
+            })}
+
             {/* 🔴 Las dos tarjetas iban RELLENAS con los colores del taller (15-sep-2026).
                 Con el rojo puro de Leira la de "En proceso" era un bloque rojo que gritaba
                 más que cualquier bici, y su secundario es BLANCO: la otra no se veía.
@@ -593,6 +612,18 @@ function ChipDeEspera({ serviceId }: { serviceId: string }) {
     );
 }
 
+/** El cartel de la orden en taller (<N>-T) de una orden del Taller Activo (5-oct-2026). */
+function avisoEnTallerDe(job: DashboardJob) {
+    return avisoEnTaller({
+        id: job.service_id,
+        numero_orden: job.numero_orden,
+        estado: job.status,
+        webhook_erp_disparado: job.webhook_erp_disparado,
+        fecha_finalizacion: job.fecha_finalizacion,
+        erp_taller: job.erp_taller,
+    });
+}
+
 function MobileJobCard({ job, onClick, onFinalize, onDeliver, onReopen }: { job: DashboardJob; onClick: () => void; onFinalize: () => void; onDeliver: () => void; onReopen: () => void }) {
     const taller = useAuthStore(s => s.taller);
     const mostrarEtapas = avancesActivos(taller);
@@ -601,6 +632,7 @@ function MobileJobCard({ job, onClick, onFinalize, onDeliver, onReopen }: { job:
     // Leira, 14-sep-2026: "va a usar mucho el número de orden". Solo en el taller
     // que lo prendió (Configuración → Número de orden grande).
     const ordenGrande = taller?.config_vista?.numero_orden_grande === true;
+    const avisoT = avisoEnTallerDe(job);
     return (
         <div
             onClick={onClick}
@@ -626,6 +658,19 @@ function MobileJobCard({ job, onClick, onFinalize, onDeliver, onReopen }: { job:
                         </span>
                     )}
                     <ChipDeEspera serviceId={job.service_id} />
+                    {/* Los avisos del ERP, como en la fila de la compu (5-oct-2026). Hasta hoy
+                        la tarjeta del celular no mostraba NINGUNO, ni el de la orden de venta
+                        que no salió: en el celular el ERP fallaba en silencio. */}
+                    {job.webhook_erp_ok === false && (
+                        <div className="flex items-center gap-1 text-[10px] font-bold text-red-600 uppercase">
+                            <PackageSearch className="h-3 w-3 shrink-0" /> {textoAvisoERP(job.webhook_erp_detalle).titulo}
+                        </div>
+                    )}
+                    {avisoT && (
+                        <div className="flex items-center gap-1 text-[10px] font-bold text-red-600 uppercase">
+                            <PackageSearch className="h-3 w-3 shrink-0" /> {avisoT.titulo}
+                        </div>
+                    )}
                     {(mostrarEtapas || mostrarTareas) && <EtapasChecklist serviceId={job.service_id} />}
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
@@ -707,7 +752,7 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
     const isReady = (job.status || '').toLowerCase() === 'ready';
 
     const statusBadge = <StatusBadge status={job.status} />;
-    const avisoEnTaller = textoAvisoEnTaller(job.erp_taller, job.numero_orden);
+    const avisoT = avisoEnTallerDe(job);
 
     const [showToast, setShowToast] = useState<{type: 'success' | 'error', message: string} | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -886,12 +931,13 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                                 <PackageSearch className="h-3 w-3" /> {textoAvisoERP(job.webhook_erp_detalle).titulo}
                             </div>
                         )}
-                        {/* La orden en taller (<N>-T) no se pudo crear, pisar o cancelar
-                            (5-oct-2026). Mismo formato que el de arriba: un stock que no
-                            bajó, o que quedó reservado, no puede fallar en silencio. */}
-                        {avisoEnTaller && (
-                            <div className="flex items-center gap-1 text-[10px] font-bold text-red-600 uppercase" title={avisoEnTaller.cuerpo}>
-                                <PackageSearch className="h-3 w-3" /> {avisoEnTaller.titulo}
+                        {/* La orden en taller (<N>-T) no se pudo crear, pisar o cancelar, o
+                            quedó abierta de más (5-oct-2026). Mismo formato que el de arriba:
+                            un stock que no bajó, o que quedó reservado, no falla en silencio.
+                            El título ya dice qué hacer: en el celular el `title` no se ve. */}
+                        {avisoT && (
+                            <div className="flex items-center gap-1 text-[10px] font-bold text-red-600 uppercase" title={avisoT.cuerpo}>
+                                <PackageSearch className="h-3 w-3" /> {avisoT.titulo}
                             </div>
                         )}
                         <ChipDeEspera serviceId={job.service_id} />
@@ -1059,6 +1105,7 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
     const bicicletas = useDataStore(s => s.bicicletas);
     const clientes = useDataStore(s => s.clientes);
     const updateServicio = useDataStore(s => s.updateServicio);
+    const refrescarERP = useDataStore(s => s.refrescarERP);
     const upsertRecordatorios = useDataStore(s => s.upsertRecordatorios);
     const taller_id = useAuthStore(s => s.taller_id);
     const taller = useAuthStore(s => s.taller);
@@ -1406,7 +1453,10 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                     clientPhone: job.client_phone || '',
                 });
 
-                // 2. Inmediatamente después del éxito del update, enviamos el Webhook
+                // 2. Inmediatamente después del éxito del update, enviamos el Webhook.
+                // Se ARMA acá y se encola abajo, junto con el cierre de la -T (ver
+                // `mandarFinalYCerrarEnTaller`): el orden entre las dos es una garantía.
+                let mandarFinal: (() => Promise<void>) | null = null;
                 try {
                     // Solo los ítems que son productos (sin mano de obra ni ML).
                     // 🚩 El filtro vive en `chequeoOrdenERP.ts` y lo usan los DOS:
@@ -1472,11 +1522,11 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                             // ahora también recibe la orden EN TALLER (<N>-T); esta es la <N>
                             // de siempre, la que se factura. Sin etapa también la toma como
                             // final: el campo es para que se lea sin adivinar.
-                            void enFila(servicioId, async () => {
+                            mandarFinal = async () => {
                                 const { ok, detalle } = await mandarOrden(ordenUrl, { ...payload, etapa: 'finalizada' });
                                 if (!ok) console.error("Webhook de orden: no llegó —", detalle);
                                 await registrarRespuestaERP(servicioId, ok, detalle);
-                            });
+                            };
                             await updateServicio(job.service_id, { webhook_erp_disparado: true });
                         } else if (service.webhook_erp_disparado) {
                             console.log("Webhook de orden NO re-disparado: ya corrió para este service (reabierto y re-finalizado).");
@@ -1490,14 +1540,19 @@ function FinalizeJobDialog({ job, isOpen, onClose, ordenWebhookUrl }: { job: Das
                     console.error("Error preparando el Webhook:", err);
                 }
 
-                // ── La orden EN TALLER (<N>-T) se cierra al finalizar (5-oct-2026) ──
-                // Reservó el stock mientras la bici estaba en el taller; ahora la
-                // reserva pasa a la final. Va FUERA del `if` de los repuestos a
-                // propósito: si se sacaron todos antes de finalizar, o la final no
-                // sale (reabierta, taller sin webhook), una -T abierta igual se
-                // cancela. Y va DESPUÉS de la final y en su misma fila: entre las dos
-                // el stock nunca queda libre. Lee la base y no hace nada si no hay -T.
-                if (aceptaOrdenEnTaller(taller_id)) void cerrarOrdenEnTaller(job.service_id);
+                // ── La final y el cierre de la orden EN TALLER (<N>-T), 5-oct-2026 ──
+                // La -T reservó el stock mientras la bici estaba en el taller; ahora
+                // la reserva pasa a la final. El cierre va FUERA del `if` de los
+                // repuestos a propósito: si se sacaron todos antes de finalizar, o la
+                // final no sale (reabierta, taller sin webhook), una -T abierta igual
+                // se cancela. Y sale DESPUÉS de la final, en su misma fila: entre las
+                // dos el stock nunca queda libre. Si la pestaña se cierra antes, la
+                // -T queda abierta y la cancela el reconciliador en la próxima carga.
+                // Al terminar se trae lo que quedó escrito: si el cierre falló, la
+                // fila lo muestra sin recargar.
+                const { final, cierre } = mandarFinalYCerrarEnTaller(job.service_id, mandarFinal, aceptaOrdenEnTaller(taller_id));
+                const refrescar = () => { void refrescarERP(job.service_id); };
+                (cierre ?? final)?.then(refrescar, refrescar);
             }
 
             onClose();

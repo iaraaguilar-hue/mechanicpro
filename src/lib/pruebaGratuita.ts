@@ -81,3 +81,18 @@ export function diaYMes(iso: string | null | undefined): string {
     if (Number.isNaN(t)) return '';
     return new Intl.DateTimeFormat('es-AR', { timeZone: ZONA_AR, day: 'numeric', month: 'long' }).format(new Date(t));
 }
+
+/**
+ * Prueba EXTENDIDA (7-oct-2026, Bike Pro Alvear): si el taller tiene más días que la
+ * prueba de siempre, el Taller Activo se lo dice, con el último día entero en hora de
+ * Argentina. Se extiende desde el SuperAdmin subiendo los días: el aviso sale solo.
+ * Para que termine al final de un día, el inicio va a las 00:00 de Argentina.
+ */
+export function avisoPruebaExtendida(t: TallerConPrueba, ahoraMs: number = Date.now()): string | null {
+    const e = estadoPrueba(t, ahoraMs);
+    if (e.tipo !== 'corriendo' || e.dias <= DIAS_DE_PRUEBA) return null;
+    const ultimoDia = new Intl.DateTimeFormat('es-AR', { timeZone: ZONA_AR, weekday: 'long', day: 'numeric', month: 'long' })
+        .format(new Date(Date.parse(e.vence) - 1))
+        .replace(',', '');
+    return `Extendimos tu prueba gratuita hasta el ${ultimoDia} inclusive, para que puedas ver con tiempo todo lo que tiene Mechanic Pro.`;
+}

@@ -3,6 +3,7 @@ import { AvisoDeVuelta } from '@/components/AvisoDeVuelta';
 import { useSearchParams } from "react-router-dom";
 import { useDataStore } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
+import { avisoPruebaExtendida } from "@/lib/pruebaGratuita";
 import { supabase } from "@/lib/supabase";
 import { formatOrdenNumber, ordenNumberForWebhook } from "@/lib/formatId";
 import { printServiceReport } from "@/lib/printServiceBtn";
@@ -12,7 +13,7 @@ import { dispararMensajesAutomaticos } from "@/lib/comprobanteALaNube";
 import { ServiceModal } from "@/components/ServiceModal";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { Wrench, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign, PackageSearch, Phone, Bike, Send, Loader2 } from "lucide-react";
+import { Wrench, CalendarClock, CheckCircle, Save, FileDown, Pencil, RefreshCcw, MessageCircle, ChevronRight, Clock, PackageCheck, ClipboardList, Undo2, ListChecks, Lock, CircleDollarSign, PackageSearch, Phone, Bike, Send, Loader2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { TildarAntesDeCerrar } from "@/components/TildarAntesDeCerrar";
 import { servicioRevenue } from "@/lib/servicioRevenue";
@@ -176,6 +177,7 @@ export default function Workshop() {
     const fetchDashboardData = useDataStore(s => s.fetchDashboardData);
     const updateServicio = useDataStore(s => s.updateServicio);
     const enTallerDeBorradas = useDataStore(s => s.enTallerDeBorradas);
+    const tallerPrueba = useAuthStore(s => s.taller);
     const taller_id = useAuthStore(s => s.taller_id);
 
     const [editingJob, setEditingJob] = useState<DashboardJob | null>(null);
@@ -389,6 +391,9 @@ export default function Workshop() {
 
     if (isHydrating) return <div className="p-8 text-center text-muted-foreground">Cargando taller...</div>;
 
+    // Prueba extendida (7-oct-2026): se avisa arriba de todo, en la primera pantalla.
+    const avisoExtendida = tallerPrueba ? avisoPruebaExtendida(tallerPrueba) : null;
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -417,6 +422,13 @@ export default function Workshop() {
                     </Button>
                 </div>
             </div>
+
+            {avisoExtendida && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700 flex items-start gap-2">
+                    <CalendarClock className="h-4 w-4 shrink-0 mt-0.5 text-slate-500" />
+                    <p>{avisoExtendida}</p>
+                </div>
+            )}
 
             {/* Órdenes BORRADAS cuya orden en taller (<N>-T) sigue abierta en el ERP
                 (5-oct-2026). Ya no están en ninguna lista, así que si la cancelación

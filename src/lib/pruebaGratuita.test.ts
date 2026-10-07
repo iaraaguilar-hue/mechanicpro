@@ -3,7 +3,7 @@
 //
 // El caso de referencia: un taller que carga su primer cliente el jueves 25-sep-2026
 // a las 11:30 de Argentina (14:30 UTC). Con 15 días, vence el viernes 10-oct a las 11:30.
-import { accesoCortado, cortePorPrueba, diaYMes, estadoPrueba, etiquetaPrueba, fechaDelCorte } from './pruebaGratuita';
+import { accesoCortado, avisoPruebaExtendida, cortePorPrueba, diaYMes, estadoPrueba, etiquetaPrueba, fechaDelCorte } from './pruebaGratuita';
 
 let ok = 0, fail = 0;
 const eq = (nombre: string, a: unknown, b: unknown) => {
@@ -61,6 +61,17 @@ eq('etiqueta corriendo', etiquetaPrueba({ prueba_dias: 15, prueba_inicio_at: INI
     'En prueba desde el 25 de septiembre · vence el 10 de octubre (queda 1 día)');
 eq('etiqueta vencida', etiquetaPrueba({ prueba_dias: 15, prueba_inicio_at: INICIO }, ms('2026-10-11T00:00:00Z')),
     'Prueba vencida el 10 de octubre · acceso cortado');
+
+// ── Prueba extendida (7-oct-2026, Bike Pro): 21 días desde el 23-sep a las 00:00 AR ──
+const BP = { prueba_dias: 21, prueba_inicio_at: '2026-09-23T03:00:00.000Z' };
+const avisoBP = avisoPruebaExtendida(BP, ms('2026-10-07T15:00:00Z'));
+eq('extendida: dice el último día entero', avisoBP?.includes('hasta el martes 13 de octubre inclusive'), true);
+eq('extendida: martes 13 a las 23:59 AR sigue abierta', accesoCortado(BP, ms('2026-10-14T02:59:00Z')), false);
+eq('extendida: miércoles 14 a las 00:00 AR se corta', accesoCortado(BP, ms('2026-10-14T03:00:00Z')), true);
+eq('extendida: vencida no muestra el aviso', avisoPruebaExtendida(BP, ms('2026-10-14T03:00:00Z')), null);
+eq('15 días de siempre: sin aviso', avisoPruebaExtendida({ prueba_dias: 15, prueba_inicio_at: INICIO }, ms('2026-10-02T12:00:00Z')), null);
+eq('paga: sin aviso', avisoPruebaExtendida({ prueba_dias: null, prueba_inicio_at: INICIO }), null);
+eq('extendida sin cargar nada: sin aviso', avisoPruebaExtendida({ prueba_dias: 21, prueba_inicio_at: null }), null);
 
 console.log(`${ok} ok · ${fail} fallas`);
 if (fail) process.exit(1);

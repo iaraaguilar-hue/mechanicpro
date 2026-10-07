@@ -14,8 +14,10 @@
  *      Con la IA: la línea de la IA está en el texto que se ve. La tabla de próximos igual.
  *   3. Sin WhatsApp: wa.me como siempre, sin ¡ ni ¿.
  *   4. Configuración → Mensajes: la fila, guardar "Salen solos", la línea de cómo salen;
- *      sin WhatsApp la opción apagada con el motivo y el botón; el mecánico no la cambia;
- *      en Sport no aparece.
+ *      sin WhatsApp la opción apagada con el motivo y el botón; el MECÁNICO también la
+ *      cambia (Iara, 7-oct-2026: "que lo pueda cambiar el mecánico directamente"); en Sport
+ *      no aparece. Lo que la base deja hacer al mecánico (y lo que no) se prueba contra prod
+ *      con un usuario mecánico real: progress/2026-10-07_mp_recordatorios_los_elige_el_mecanico.md.
  * Control negativo: con "Los mando yo" la misma tarjeta NO dice "Salió solo" (si lo dijera,
  * el chequeo 1 no distingue nada).
  *
@@ -279,12 +281,18 @@ const tarjeta = (page, a) => page.locator('[data-tour="retencion-urgentes"] .gri
         await ctx.close();
     }
     {
-        const { ctx, page } = await entrar(b, { envio: 'a_mano', wa: true, rol: 'mecanico' });
+        // Desde el 7-oct-2026 el mecánico la cambia igual que el admin (antes: apagada y
+        // "Lo cambia el administrador.").
+        const { ctx, page, capturado } = await entrar(b, { envio: 'a_mano', wa: true, rol: 'mecanico' });
         await irA(page, 'Configuración');
         await page.getByRole('tab', { name: 'Mensajes' }).click();
         await page.waitForTimeout(800);
         const fila = page.locator('[data-ajuste="recordatorios_auto"]');
-        ok(await fila.locator('select').isDisabled() && /Lo cambia el administrador/.test(await fila.innerText()), 'el mecánico la ve pero no la cambia');
+        ok(!(await fila.locator('select').isDisabled()) && !/Lo cambia el administrador/.test(await fila.innerText()), 'el mecánico la ve y la puede cambiar');
+        await fila.locator('select').selectOption('solo');
+        await page.waitForTimeout(1200);
+        ok(capturado.patch.some(p => p.recordatorios_envio === 'solo'), 'el mecánico guarda recordatorios_envio = solo (interceptado)', capturado.patch);
+        ok(/Salen a las 10 y media, de lunes a sábado/.test(await fila.innerText()), 'y ve en una línea cómo salen');
         await ctx.close();
     }
     {

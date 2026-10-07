@@ -671,9 +671,14 @@ function ComoEscribis({ taller, setTaller, avisar }: {
 // Iara, textual: "que el mecánico de algunas cosas ni las tenga que auditar y sepa
 // que los mensajes se envían solos. Como que pueda decidir si lo quiere auditar o
 // no". El default es "Los mando yo" (lo de siempre): ningún taller cambia de
-// comportamiento hasta que su admin lo elige acá. Lo manda la Edge Function
+// comportamiento hasta que alguien del taller lo elige acá. Lo manda la Edge Function
 // `recordatorios-auto`, que además vuelve a chequear el plan, el WhatsApp y el
 // acceso: esta pantalla solo guarda lo que eligió.
+//
+// 🔴 Lo cambia el admin O EL MECÁNICO (Iara, 7-oct-2026: "que no sea configuración del
+// admin, sino del mecánico, que lo pueda cambiar el mecánico directamente"). En Probikes
+// lo decidieron Leandro y Luis. El candado está en la base (trigger
+// `proteger_recordatorios_envio`, migración 20261007160000): pasa el equipo de ESE taller.
 // ═════════════════════════════════════════════════════════════
 function RecordatoriosQueSalenSolos({ taller, setTaller, avisar, irAWhatsApp }: {
     taller: TallerData;
@@ -681,8 +686,6 @@ function RecordatoriosQueSalenSolos({ taller, setTaller, avisar, irAWhatsApp }: 
     avisar: (tipo: 'ok' | 'error', msg: string) => void;
     irAWhatsApp: () => void;
 }) {
-    const rol = useAuthStore(s => s.rol);
-    const esAdmin = rol?.toLowerCase()?.trim() === 'admin';
     const [modo, setModo] = useState<'a_mano' | 'solo'>(taller.recordatorios_envio === 'solo' ? 'solo' : 'a_mano');
     const [guardando, setGuardando] = useState(false);
     const conWhatsApp = taller.wa_activo === true;
@@ -710,7 +713,7 @@ function RecordatoriosQueSalenSolos({ taller, setTaller, avisar, irAWhatsApp }: 
             control={
                 <select
                     value={modo}
-                    disabled={!esAdmin || guardando}
+                    disabled={guardando}
                     onChange={e => void guardar(e.target.value as 'a_mano' | 'solo')}
                     className="h-9 rounded-md border bg-background px-2 text-xs"
                     aria-label="Cómo salen los recordatorios de desgaste"
@@ -721,9 +724,7 @@ function RecordatoriosQueSalenSolos({ taller, setTaller, avisar, irAWhatsApp }: 
                     <option value="solo" disabled={!conWhatsApp}>Salen solos</option>
                 </select>
             }
-            aviso={!esAdmin ? (
-                <p className="text-xs text-muted-foreground">Lo cambia el administrador.</p>
-            ) : !conWhatsApp ? (
+            aviso={!conWhatsApp ? (
                 <div className="flex flex-wrap items-center gap-2 text-xs text-amber-900">
                     <span>{modo === 'solo' ? 'No está saliendo ninguno' : 'Para que salgan solos'}: falta conectar el WhatsApp.</span>
                     <Button type="button" size="sm" variant="outline" className="h-7 text-xs hover:text-amber-900" onClick={irAWhatsApp}>

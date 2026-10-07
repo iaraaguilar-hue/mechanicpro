@@ -68,7 +68,7 @@ export interface TallerData {
     /**
      * Los recordatorios de desgaste (27-sep-2026): 'a_mano' = el mecánico los manda
      * desde Retención (default); 'solo' = salen a las 10 y media, de lunes a sábado, con la
-     * plantilla fija. Lo elige el admin en Configuración → Mensajes. Solo sale si
+     * plantilla fija. Lo elige el admin o el mecánico en Configuración → Mensajes. Solo sale si
      * además el plan lo incluye (`recordatorios_auto`) y el WhatsApp está conectado.
      */
     recordatorios_envio?: 'a_mano' | 'solo' | null;

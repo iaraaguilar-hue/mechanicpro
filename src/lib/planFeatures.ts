@@ -81,7 +81,7 @@ const FEATURES: Record<string, Plan[]> = {
     /** Los recordatorios de desgaste que salen solos (Iara, 27-sep-2026: "que el
      *  mecánico pueda decidir si lo quiere auditar o no"). Cuelga del WhatsApp
      *  propio: sin número conectado no sale nada. Además es opt-in por taller
-     *  (`talleres.recordatorios_envio = 'solo'`, lo elige el admin en Configuración
+     *  (`talleres.recordatorios_envio = 'solo'`, lo elige el admin o el mecánico en Configuración
      *  → Mensajes). Gate espejo server-side en la Edge Function `recordatorios-auto`
      *  (PLANES_CON_RECORDATORIOS_AUTO en `_shared/recordatorios_auto.ts`). */
     recordatorios_auto: ['Pro', 'Expert'],

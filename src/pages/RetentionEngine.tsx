@@ -433,7 +433,7 @@ export default function RetentionEngine() {
 
     const taller = useAuthStore(s => s.taller);
     // Los recordatorios que salen solos (27-sep-2026). `modoSolo` es lo que eligió
-    // el admin; si además falta el WhatsApp, la franja lo dice.
+    // alguien del taller (admin o mecánico); si además falta el WhatsApp, la franja lo dice.
     const conAuto = tieneFeature(taller, 'recordatorios_auto');
     const modoSolo = conAuto && taller?.recordatorios_envio === 'solo';
     const auto = useRecordatoriosAuto(conAuto);

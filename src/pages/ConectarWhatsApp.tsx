@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
     MessageCircle, CheckCircle2, AlertTriangle, ShieldCheck,
-    Smartphone, Clock, ArrowLeft, Loader2,
+    Smartphone, Clock, ArrowLeft, Loader2, CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import type { TallerData } from "@/store/authStore";
 import { supabase } from "@/lib/supabase";
+import { estadoTarjeta, URL_FACTURACION_META, type EstadoTarjeta } from "@/lib/tarjetaMeta";
 
 /**
  * Configuración → Conectar el WhatsApp del taller (Coexistencia).
@@ -315,6 +316,19 @@ function FlujoDeConexion({ avisar, etiqueta, alVolver }: {
                         ))}
                     </div>
 
+                    {/* Lo que pregunta la ventana de Meta, en el momento de usarlo. Las dos
+                        trampas: el portfolio de Mechanic Pro y "crear una cuenta nueva", que le
+                        da al taller un número distinto (outputs/mechanic_pro/app_meta/CONECTAR_HOY_paso_a_paso.md). */}
+                    <section className="p-4 rounded-lg border border-slate-200">
+                        <h3 className="font-semibold text-slate-900 mb-2">Lo que te va a preguntar Meta</h3>
+                        <ol className="text-sm text-slate-700 space-y-1.5 list-decimal pl-5">
+                            <li>Entrá con tu Facebook de siempre. No cierres esa ventana hasta el final.</li>
+                            <li><strong>Portfolio comercial:</strong> elegí el de tu taller. Si no tenés, lo creás ahí mismo. Nunca el de Mechanic Pro.</li>
+                            <li><strong>Cuenta de WhatsApp:</strong> elegí conectar la cuenta de WhatsApp Business que ya tenés, no crear una nueva, y escribí el número del taller.</li>
+                            <li><strong>En el celular del taller</strong> te llega un mensaje en WhatsApp Business: tocá Conectar con la plataforma de empresas y después Confirmar.</li>
+                        </ol>
+                    </section>
+
                     <Button onClick={conectar} disabled={lanzando} className="w-full" size="lg">
                         {lanzando
                             ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Abriendo…</>
@@ -338,6 +352,19 @@ function FlujoDeConexion({ avisar, etiqueta, alVolver }: {
             </CardHeader>
 
             <CardContent className="space-y-5">
+                {/* Los dos pasos, en orden (7-oct-2026, Diego de Bike Pro): la tarjeta va en la
+                    cuenta de WhatsApp que se arma al conectar, así que antes no hay dónde cargarla. */}
+                <ol className="grid gap-2 sm:grid-cols-2 text-sm text-slate-700">
+                    <li className="p-3 rounded-lg border border-slate-200">
+                        <span className="font-semibold text-slate-900">Paso 1 · Conectar tu número.</span>{" "}
+                        Acá mismo, en 10 minutos, con la compu y el celular del taller al mismo tiempo.
+                    </li>
+                    <li className="p-3 rounded-lg border border-slate-200">
+                        <span className="font-semibold text-slate-900">Paso 2 · Cargar la tarjeta en Meta.</span>{" "}
+                        Recién cuando el número quedó conectado. Te lo explicamos en esta pantalla.
+                    </li>
+                </ol>
+
                 {/* Bloque 1 — lo que NO cambia. Va primero: es lo que más les preocupa. */}
                 <section className="p-4 rounded-lg border border-emerald-200 bg-emerald-50">
                     <h3 className="font-semibold text-emerald-900 flex items-center gap-2 mb-2">
@@ -361,7 +388,7 @@ function FlujoDeConexion({ avisar, etiqueta, alVolver }: {
                         <li>La app actualizada: <strong>versión 2.24.17 o más nueva</strong></li>
                         <li>El número con el que atendés a tus clientes</li>
                         <li>La cuenta de Facebook de tu negocio a mano</li>
-                        <li>Una <strong>tarjeta cargada en tu cuenta de WhatsApp</strong>: los recordatorios automáticos los cobra Meta y se facturan a tu nombre, no al nuestro</li>
+                        <li>Una <strong>tarjeta de crédito o débito</strong> para cargar en Meta <strong>después</strong> de conectar (es el paso 2): los mensajes automáticos los cobra Meta y se facturan a tu nombre, no al nuestro</li>
                     </ul>
                     <p className="text-xs text-muted-foreground mt-3">
                         <strong>¿Usás el WhatsApp común?</strong> Se puede pasar a WhatsApp Business gratis
@@ -485,8 +512,93 @@ function EstadoConectado({ taller, alAgregarLinea }: {
                 </CardContent>
             </Card>
 
+            <PasoTarjeta tallerId={taller.id} />
+
             <OtraLinea alAgregarLinea={alAgregarLinea} />
         </div>
+    );
+}
+
+/**
+ * Paso 2: la tarjeta en Meta (7-oct-2026). Sin ella Meta rechaza los mensajes
+ * automáticos (131042) y el taller cree que el sistema no anda. Se muestra abierto
+ * mientras no salió ningún automático, en rojo si Meta los está frenando por pago, y
+ * plegado cuando ya salen (para cuando haya que cambiar la tarjeta).
+ */
+function PasoTarjeta({ tallerId }: { tallerId: string }) {
+    const [estado, setEstado] = useState<EstadoTarjeta | "sin_dato" | null>(null);
+
+    useEffect(() => {
+        let vivo = true;
+        supabase
+            .from("mensajes_whatsapp")
+            .select("estado, error_codigo, plantilla")
+            .eq("taller_id", tallerId)
+            .not("plantilla", "is", null)
+            .order("created_at", { ascending: false })
+            .limit(50)
+            .then(({ data, error }) => {
+                if (vivo) setEstado(error ? "sin_dato" : estadoTarjeta(data ?? []));
+            });
+        return () => { vivo = false; };
+    }, [tallerId]);
+
+    if (estado === null) return null;
+
+    if (estado === "lista" || estado === "sin_dato") {
+        return (
+            <details className="text-sm">
+                <summary className="cursor-pointer text-slate-600 underline underline-offset-4 hover:text-slate-900">
+                    Cómo se carga o se cambia la tarjeta en Meta
+                </summary>
+                <div className="mt-3 p-4 rounded-lg border border-slate-200 space-y-3">
+                    <PasosTarjeta />
+                </div>
+            </details>
+        );
+    }
+
+    const falta = estado === "falta";
+    return (
+        <Card data-paso-tarjeta={estado} className={falta ? "border-red-300" : undefined}>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    {falta
+                        ? <AlertTriangle className="h-5 w-5 text-red-600" />
+                        : <CreditCard className="h-5 w-5 text-slate-500" />}
+                    {falta ? "Meta está frenando los mensajes automáticos: falta la tarjeta" : "Paso 2 · Cargá la tarjeta en Meta"}
+                </CardTitle>
+                <CardDescription>
+                    Sin la tarjeta, Meta no deja salir los mensajes automáticos. Lo que escribís a mano
+                    desde el celular sigue sin costo.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+                <PasosTarjeta />
+            </CardContent>
+        </Card>
+    );
+}
+
+function PasosTarjeta() {
+    return (
+        <>
+            <ol className="text-sm text-slate-700 space-y-1.5 list-decimal pl-5">
+                <li>Abrí <strong>Facturación y pagos</strong> de Meta (el botón de abajo) con el mismo Facebook con el que conectaste el número.</li>
+                <li>En <strong>Métodos de pago</strong>, apretá <strong>Agregar</strong> y cargá la tarjeta.</li>
+                <li>Arriba, en la pestaña de <strong>cuentas de WhatsApp Business</strong>, elegí la de tu taller y apretá <strong>Agregar método de pago</strong>.</li>
+                <li><strong>Cuando te pida la moneda, elegí la de tu país (en Argentina, peso argentino, ARS).</strong> Después no se puede cambiar.</li>
+            </ol>
+            <p className="text-xs text-muted-foreground">
+                Si te rechaza la tarjeta, casi siempre es el banco que frena el pago a Meta: pedile que te
+                habilite las compras online y del exterior en esa tarjeta. Las prepagas y las virtuales no suelen andar.
+            </p>
+            <Button asChild variant="outline" className="gap-2 hover:text-slate-900">
+                <a href={URL_FACTURACION_META} target="_blank" rel="noopener noreferrer">
+                    <CreditCard className="h-4 w-4" /> Abrir Facturación de Meta
+                </a>
+            </Button>
+        </>
     );
 }
 

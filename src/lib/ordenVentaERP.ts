@@ -26,14 +26,14 @@
  *     Contabilium hay que anularla a mano.
  *   · Si la orden ya estaba FACTURADA, la factura no cambia con la orden.
  *
- * LA ORDEN EN TALLER, <N>-T (5-oct-2026, sección 5):
+ * LA ORDEN PENDIENTE (5 y 6-oct-2026, sección 5):
  *   La orden de venta baja el stock en el momento en que se CREA, y salía recién
  *   al finalizar: todo lo que tardaba el mecánico, el stock mentía (Iara: una de
  *   las trabas para que Leira y Nacho contraten la integración). Ahora, con el
- *   service en curso, cada cambio de repuestos crea o pisa la "<N>-T"
- *   (Pendiente, EN TALLER, NO FACTURAR), y al finalizar sale la <N> de siempre y
- *   la -T se cancela. Son dos órdenes porque pisar una no le cambia la fecha y
- *   el libro diario lee por fecha de creación.
+ *   service en curso, cada cambio de repuestos crea o pisa la orden <N> como
+ *   Pendiente, y al finalizar la MISMA <N> pasa a Aceptado. Hasta el 6-oct a la
+ *   tarde fueron dos órdenes (la "<N>-T" en taller y la <N> final); desde ese día,
+ *   por decisión de Iara y Mica, es una sola.
  */
 import { supabase } from '@/lib/supabase';
 import { ordenNumberForWebhook } from '@/lib/formatId';
@@ -351,24 +351,28 @@ async function leerCliente(bicicletaId: string | null | undefined): Promise<{ dn
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 5. La orden EN TALLER (<N>-T): el stock baja con el primer repuesto (5-oct-2026)
+// 5. La orden PENDIENTE: el stock baja con el primer repuesto (5 y 6-oct-2026)
 //
-// El contrato con la automatización (en producción desde el 5-oct, 18:39): el
-// MISMO payload de siempre más `etapa`:
-//   en_taller       → crea o pisa la "<N>-T", Pendiente. Reserva el stock.
-//   cancelar_taller → la cancela y libera el stock. 🔴 Tiene que llevar los
-//                     renglones del último en_taller: Contabilium rechaza (-1)
-//                     un Cancelado sin renglones. Por eso se guardan.
-//   finalizada      → la <N> de siempre (sin etapa = finalizada).
-// Medido contra Contabilium ese día: crear baja el stock en el acto, pisar con
-// el mismo número mueve la reserva, Cancelado la libera.
+// UNA SOLA ORDEN por service (decisión de Iara y Mica, 6-oct-2026; en n8n desde
+// ese día a las 18:12 AR). El MISMO payload de siempre más `etapa`:
+//   en_taller       → crea o pisa la orden <N>, Pendiente. Reserva el stock.
+//   cancelada       → cancela la MISMA <N> (Cancelado, "- ANULADA") y libera el
+//                     stock: se sacaron todos los repuestos o se borró la orden.
+//   finalizada      → la MISMA <N> pasa a Aceptado (sin etapa = finalizada).
+//   cancelar_taller → SOLO las "<N>-T" del esquema anterior de dos órdenes (5 y
+//                     6-oct); si no hay, Contabilium contesta 0 y se da por cerrado.
+// 🔴 Toda cancelación lleva los renglones del último en_taller: Contabilium
+// rechaza (-1) un Cancelado sin renglones. Por eso se guardan.
+// Medido contra Contabilium: crear baja el stock en el acto, pisar con el mismo
+// número mueve la reserva, Cancelado la libera, y un en_taller sobre una
+// cancelada la reabre (Pendiente) y vuelve a reservar.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type EtapaOrden = 'en_taller' | 'cancelar_taller' | 'finalizada';
+export type EtapaOrden = 'en_taller' | 'cancelada' | 'cancelar_taller' | 'finalizada';
 
-/** `servicios.erp_taller` (migración 20261005190000). null = nunca hubo -T. */
+/** `servicios.erp_taller` (migración 20261005190000). null = nunca hubo orden pendiente. */
 export interface ErpTaller {
-    /** true = puede haber una -T reservando stock en el ERP. */
+    /** true = puede haber una orden pendiente reservando stock en el ERP. */
     abierta: boolean;
     /**
      * true = el ERP CONFIRMÓ que la -T existe (un en_taller contestó bien y nada
@@ -379,13 +383,43 @@ export interface ErpTaller {
     productos: ProductoOrdenERP[];
     at: string;
     /** Qué fue el último envío (o el que está saliendo). */
-    etapa?: 'en_taller' | 'cancelar_taller';
+    etapa?: 'en_taller' | 'cancelada' | 'cancelar_taller';
     /** Qué contestó, si falló. La pantalla lo muestra (ver avisoEnTaller). */
     error?: string | null;
     /** true = el ERP dijo que no (seguro que no cambió); false = falla incierta (HTTP 500, red). */
     rechazada?: boolean;
     /** El código del rechazo, si lo hubo. */
     codigo?: number | null;
+    /** 'dos' = lo que reserva es una "<N>-T" del esquema anterior (ver esDelEsquemaDeDosOrdenes). */
+    esquema?: 'dos';
+}
+
+/** Desde cuándo n8n arma UNA sola orden (commit 3de1533f del estudio, 6-oct 18:12 AR). */
+export const UNA_SOLA_ORDEN_DESDE = '2026-10-06T21:12:11Z';
+
+/**
+ * ¿Lo que reserva este registro es una "<N>-T" del esquema anterior? Sí si lo
+ * dice la marca, o si su último envío es de antes del cambio (la 404 del 6-oct).
+ * Esa se sigue cancelando con `cancelar_taller`: `cancelada` iría a la <N>.
+ */
+export function esDelEsquemaDeDosOrdenes(e: ErpTaller | null | undefined): boolean {
+    if (!e) return false;
+    if (e.esquema === 'dos') return true;
+    const t = Date.parse(e.at || '');
+    return Number.isFinite(t) && t < Date.parse(UNA_SOLA_ORDEN_DESDE);
+}
+
+/**
+ * Con qué etapa se cancela (6-oct-2026, una sola orden por service):
+ *  · 'cancelada' → la MISMA <N>: se sacaron todos los repuestos de un service en
+ *    curso, o se borró la orden (también al borrar su bici). n8n la anula y libera
+ *    el stock; si después vuelven a cargar un repuesto, el en_taller la reabre.
+ *  · 'cancelar_taller' → con la final MANDADA (lo que va después de la final no
+ *    cambia: la <N> ES la venta, y `cancelada` la anularía) o con un registro del
+ *    esquema anterior (lo que reserva es la -T). Si no hay -T, contesta 0 y cierra.
+ */
+export function etapaDeCancelacion(s: { webhook_erp_disparado?: boolean | null; erp_taller?: ErpTaller | null }): 'cancelada' | 'cancelar_taller' {
+    return s.webhook_erp_disparado || esDelEsquemaDeDosOrdenes(s.erp_taller) ? 'cancelar_taller' : 'cancelada';
 }
 
 /**
@@ -398,7 +432,8 @@ export function aceptaOrdenEnTaller(tallerId: string | null | undefined): boolea
     return isProbikesTaller(tallerId);
 }
 
-export type AccionEnTaller = 'en_taller' | 'cancelar_taller' | 'nada';
+/** 'cancelar' = cancelar lo que reserve; la etapa (cancelada o cancelar_taller) la elige `etapaDeCancelacion`. */
+export type AccionEnTaller = 'en_taller' | 'cancelar' | 'nada';
 
 export interface ServicioParaEnTaller {
     estado?: string | null;
@@ -442,7 +477,7 @@ function huellaProductos(productos: ProductoOrdenERP[] | null | undefined): stri
 export function accionOrdenEnTaller(s: ServicioParaEnTaller, productos: ProductoOrdenERP[]): AccionEnTaller {
     const erp = s.erp_taller;
     const abierta = !!erp?.abierta;
-    if (!laOrdenPuedeTenerT(s) || productos.length === 0) return abierta ? 'cancelar_taller' : 'nada';
+    if (!laOrdenPuedeTenerT(s) || productos.length === 0) return abierta ? 'cancelar' : 'nada';
     if (abierta && erp?.confirmada && !erp.error && huellaProductos(erp.productos) === huellaProductos(productos)) return 'nada';
     return 'en_taller';
 }
@@ -466,7 +501,7 @@ type DatosEtapa = Omit<DatosOrdenERP, 'items' | 'vinculos'>;
  * porque se sacaron todos los repuestos, los de ahora son cero, y Contabilium
  * rechaza un Cancelado sin renglones.
  */
-export function armarPayloadCancelacion(d: DatosEtapa, guardado: Pick<ErpTaller, 'productos'>) {
+export function armarPayloadCancelacion(d: DatosEtapa, guardado: Pick<ErpTaller, 'productos'>, etapa: 'cancelada' | 'cancelar_taller' = 'cancelar_taller') {
     const productos = guardado.productos || [];
     return {
         numero_orden: ordenNumberForWebhook(d.numeroOrden ?? undefined, d.servicioId),
@@ -476,7 +511,7 @@ export function armarPayloadCancelacion(d: DatosEtapa, guardado: Pick<ErpTaller,
         nombre_producto: productos.map(p => p.descripcion).join(', '),
         productos,
         total_service: productos.reduce((s, p) => s + (Number(p.precio) || 0), 0),
-        etapa: 'cancelar_taller' satisfies EtapaOrden,
+        etapa: etapa satisfies EtapaOrden,
     };
 }
 
@@ -520,27 +555,30 @@ export const CODIGO_NO_EXISTE = 0;
  */
 export function erpTallerTrasEnvio(
     previo: ErpTaller | null | undefined,
-    accion: Exclude<AccionEnTaller, 'nada'>,
+    etapa: 'en_taller' | 'cancelada' | 'cancelar_taller',
     productos: ProductoOrdenERP[],
     r: Pick<RespuestaERP, 'ok' | 'detalle' | 'rechazada' | 'codigo'>,
     at: string,
 ): ErpTaller {
     const abiertaSegura = !!(previo?.abierta && previo.confirmada);
+    // Si no cambió nada, un registro del esquema anterior lo sigue siendo (su fecha
+    // nueva no lo tiene que hacer pasar por uno de la orden única).
+    const sigueViejo = esDelEsquemaDeDosOrdenes(previo) ? { esquema: 'dos' as const } : {};
     if (r.ok) {
-        const abierta = accion === 'en_taller';
-        return { abierta, confirmada: abierta, productos, at, etapa: accion, ...SIN_ERROR };
+        const abierta = etapa === 'en_taller';
+        return { abierta, confirmada: abierta, productos, at, etapa, ...SIN_ERROR };
     }
     const fallo = { error: r.detalle, rechazada: !!r.rechazada, codigo: r.codigo ?? null };
-    if (accion === 'en_taller') {
+    if (etapa === 'en_taller') {
         return r.rechazada
-            ? { abierta: !!previo?.abierta, confirmada: abiertaSegura, productos: previo?.productos ?? [], at, etapa: accion, ...fallo }
-            : { abierta: true, confirmada: abiertaSegura, productos, at, etapa: accion, ...fallo };
+            ? { abierta: !!previo?.abierta, confirmada: abiertaSegura, productos: previo?.productos ?? [], at, etapa, ...fallo, ...sigueViejo }
+            : { abierta: true, confirmada: abiertaSegura, productos, at, etapa, ...fallo };
     }
     const guardados = previo?.productos?.length ? previo.productos : productos;
     if (r.rechazada && r.codigo === CODIGO_NO_EXISTE) {
-        return { abierta: false, confirmada: false, productos: guardados, at, etapa: accion, ...SIN_ERROR };
+        return { abierta: false, confirmada: false, productos: guardados, at, etapa, ...SIN_ERROR };
     }
-    return { abierta: true, confirmada: abiertaSegura, productos: guardados, at, etapa: accion, ...fallo };
+    return { abierta: true, confirmada: abiertaSegura, productos: guardados, at, etapa, ...fallo, ...sigueViejo };
 }
 
 export interface ServicioConEnTaller extends ServicioParaEnTaller {
@@ -564,18 +602,23 @@ export const ESPERA_AVISO_MS = 2 * 60 * 1000;
 export function avisoEnTaller(s: ServicioConEnTaller, ahora: number = Date.now()): { titulo: string; cuerpo: string } | null {
     const erp = s.erp_taller;
     if (!erp) return null;
-    const n = `${ordenNumberForWebhook(s.numero_orden ?? undefined, s.id)}-T`;
+    // Una sola orden: el número es el de la orden de venta. "-T" solo para lo que
+    // reserva una del esquema anterior.
+    const viejo = esDelEsquemaDeDosOrdenes(erp);
+    const n = `${ordenNumberForWebhook(s.numero_orden ?? undefined, s.id)}${viejo ? '-T' : ''}`;
     const puede = laOrdenPuedeTenerT(s);
 
-    // Una -T abierta que ya no debería estarlo, o una cancelación que falló.
-    const cancelacionFallida = erp.etapa === 'cancelar_taller' && !!erp.error;
-    if (erp.abierta && (!puede || cancelacionFallida)) {
+    // Una orden pendiente que ya no debería estarlo, o una cancelación que falló.
+    // 🔴 Con la final mandada, la <N> ES la venta: nunca se pide anularla (salvo una -T vieja).
+    const cancelacionFallida = !!erp.error && (erp.etapa === 'cancelada' || (erp.etapa === 'cancelar_taller' && viejo));
+    const colgada = !puede && (!s.webhook_erp_disparado || viejo);
+    if (erp.abierta && (colgada || cancelacionFallida)) {
         const desde = Date.parse(s.eliminado_en || s.fecha_finalizacion || '');
         const recien = !erp.error && Number.isFinite(desde) && ahora - desde < ESPERA_AVISO_MS;
         if (recien) return null;
         return {
-            titulo: `Anular la ${n} a mano en Contabilium`,
-            cuerpo: `La orden en taller ${n} sigue abierta en el ERP y reserva el stock de sus repuestos${erp.error ? ` (la cancelación falló: ${erp.error})` : ''}, pero esta orden ya no la necesita. MP vuelve a intentar cancelarla sola; si este aviso sigue, hay que anular la ${n} a mano en Contabilium.`,
+            titulo: `Anular la orden ${n} a mano en Contabilium`,
+            cuerpo: `La orden de venta ${n} sigue pendiente en el ERP y reserva el stock de sus repuestos${erp.error ? ` (la cancelación falló: ${erp.error})` : ''}, pero esta orden ya no la necesita. MP vuelve a intentar cancelarla sola; si este aviso sigue, hay que anular la orden ${n} a mano en Contabilium.`,
         };
     }
 
@@ -584,12 +627,12 @@ export function avisoEnTaller(s: ServicioConEnTaller, ahora: number = Date.now()
         if (erp.rechazada) {
             return {
                 titulo: 'Repuestos sin reservar en el ERP',
-                cuerpo: `El ERP no aceptó la orden en taller ${n} (${erp.error}), así que el stock de estos repuestos no bajó. Se vuelve a intentar al cambiar los repuestos, y al finalizar sale la orden de venta de siempre.`,
+                cuerpo: `El ERP no aceptó la orden ${n} (${erp.error}), así que el stock de estos repuestos no bajó. Se vuelve a intentar al cambiar los repuestos, y al finalizar la orden de venta sale igual.`,
             };
         }
         return {
             titulo: 'Reserva de repuestos sin confirmar en el ERP',
-            cuerpo: `No se pudo confirmar si la orden en taller ${n} quedó en el ERP (${erp.error}): el stock puede haber bajado o no. Se vuelve a intentar al cambiar los repuestos, y al finalizar se cancela por las dudas y sale la orden de venta de siempre.`,
+            cuerpo: `No se pudo confirmar si la orden ${n} quedó en el ERP (${erp.error}): el stock puede haber bajado o no. Se vuelve a intentar al cambiar los repuestos, y al finalizar la orden de venta sale igual.`,
         };
     }
     return null;
@@ -683,9 +726,10 @@ export async function reconciliarOrdenesEnTaller(tallerId: string | null | undef
 /**
  * Antes de borrar una BICI (auditor, 6-oct-2026). Borrarla borra EN CASCADA sus
  * órdenes: medido en la base ese día con una bici y una orden de usar y tirar en
- * el Demo, la orden desapareció. Con la orden se va el registro de su -T, y una
- * -T abierta quedaría reservando stock donde ni el reconciliador la encuentra.
- * Se cancelan ANTES de borrar. Devuelve las que no se pudieron cerrar.
+ * el Demo, la orden desapareció. Con la orden se va el registro de su orden
+ * pendiente, que quedaría reservando stock donde ni el reconciliador la
+ * encuentra. Se cancelan ANTES de borrar (`cancelada`, como al borrar la orden).
+ * Devuelve las que no se pudieron cerrar.
  */
 export async function cerrarOrdenesEnTallerDeLaBici(bicicletaId: string): Promise<{ pudoLeer: boolean; sinCerrar: string[] }> {
     try {
@@ -702,7 +746,7 @@ export async function cerrarOrdenesEnTallerDeLaBici(bicicletaId: string): Promis
         if (e2) return { pudoLeer: false, sinCerrar: [] };
         const sinCerrar = ((despues || []) as FilaEnTaller[])
             .filter(f => f.erp_taller?.abierta)
-            .map(f => `${ordenNumberForWebhook(f.numero_orden ?? undefined, f.id)}-T`);
+            .map(f => `${ordenNumberForWebhook(f.numero_orden ?? undefined, f.id)}${esDelEsquemaDeDosOrdenes(f.erp_taller) ? '-T' : ''}`);
         return { pudoLeer: true, sinCerrar };
     } catch {
         return { pudoLeer: false, sinCerrar: [] };
@@ -728,7 +772,7 @@ async function enTallerAhora(servicioId: string, soloCerrar: boolean): Promise<R
         // Primero la decisión (lo más común es "nada"), después lo que cuesta ir a buscar.
         const items = (s.servicio_items || []) as ItemOrden[];
         let vinculos = new Map<string, VinculoProducto>();
-        let accion: AccionEnTaller = guardado?.abierta ? 'cancelar_taller' : 'nada';
+        let accion: AccionEnTaller = guardado?.abierta ? 'cancelar' : 'nada';
         if (!soloCerrar) {
             vinculos = (await cargarVinculosERP(s.taller_id, items)).vinculos;
             const productos = armarPayloadOrden({ numeroOrden: s.numero_orden, servicioId, dni: null, nombre: null, fechaFinalizacion: '', items: itemsQueVanALaT(items), vinculos }).productos;
@@ -757,12 +801,15 @@ async function enTallerAhora(servicioId: string, soloCerrar: boolean): Promise<R
             servicioId,
             dni,
             nombre,
-            // La fecha de la -T es la de su creación: pisarla no la cambia.
+            // La fecha de la orden es la de su creación: pisarla no la cambia.
             fechaFinalizacion: new Date().toISOString(),
         };
+        // Cancelar: `cancelada` (la misma <N>) si se sacaron los repuestos o se borró
+        // la orden; `cancelar_taller` (solo -T viejas) después de la final.
+        const etapa = accion === 'en_taller' ? 'en_taller' as const : etapaDeCancelacion(s);
         const payload = accion === 'en_taller'
             ? { ...armarPayloadOrden({ ...datos, items: itemsQueVanALaT(items), vinculos }), etapa: 'en_taller' satisfies EtapaOrden }
-            : armarPayloadCancelacion(datos, guardado ?? { productos: [] });
+            : armarPayloadCancelacion(datos, guardado ?? { productos: [] }, etapa as 'cancelada' | 'cancelar_taller');
 
         // Se anota ANTES de mandar (ver erpTallerAntesDeMandar). Si no se puede
         // anotar, no se manda: una -T que nadie sabe que existe es la que queda
@@ -778,14 +825,15 @@ async function enTallerAhora(servicioId: string, soloCerrar: boolean): Promise<R
         }
 
         const r = await mandarOrden(url, payload);
-        if (!r.ok) console.error(`[ERP] La orden en taller (${accion}) no salió —`, r.detalle);
+        if (!r.ok) console.error(`[ERP] La orden pendiente (${etapa}) no salió —`, r.detalle);
 
-        const nuevo = erpTallerTrasEnvio(guardado, accion, payload.productos, r, new Date().toISOString());
+        const nuevo = erpTallerTrasEnvio(guardado, etapa, payload.productos, r, new Date().toISOString());
         const { error: e2 } = await supabase.from('servicios').update({ erp_taller: nuevo }).eq('id', servicioId);
         if (e2) console.error('[ERP] No pude registrar la orden en taller:', e2.message);
 
+        // Una cancelación se juzga por cómo quedó: un 0 ("no existe") la deja cerrada.
+        if (accion === 'cancelar') return nuevo.abierta ? 'fallo' : 'cancelada';
         if (!r.ok) return 'fallo';
-        if (accion === 'cancelar_taller') return 'cancelada';
 
         // Dos equipos (auditor, 5-oct-2026): mientras este en_taller viajaba, otra
         // compu pudo BORRAR la orden, y su cierre leyó la -T todavía sin crear. Se

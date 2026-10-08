@@ -15,12 +15,8 @@
  */
 import type { TallerData } from '@/store/authStore';
 import { cortePorPrueba, diaYMes, fechaDelCorte } from '@/lib/pruebaGratuita';
-
-// El celular de Iara (factura de Personal, portfolio de Meta) y el mail de la app.
-const TELEFONO = '+54 9 11 2567-7858';
-const TELEFONO_WA = '5491125677858';
-const CORREO = 'iara@mechanicpro.com.ar';
-const CONTACTO = 'Iara Aguilar';
+// El contacto vive en un solo lugar: lo usa también el aviso de prueba del Taller Activo.
+import { CONTACTO, CORREO, TELEFONO, linkWhatsAppContacto } from '@/lib/contactoMechanicPro';
 
 function textoDeLaPrueba(taller: TallerData): string {
     const dias = Number(taller.prueba_dias) > 0 ? Number(taller.prueba_dias) : null;
@@ -75,7 +71,7 @@ export function AccesoSuspendido({ taller, onLogout }: { taller: TallerData; onL
                         <dt className="text-sm text-slate-500">WhatsApp</dt>
                         <dd className="font-medium whitespace-nowrap tabular-nums">
                             <a
-                                href={`https://wa.me/${TELEFONO_WA}?text=${encodeURIComponent(textoWhatsApp)}`}
+                                href={linkWhatsAppContacto(textoWhatsApp)}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-slate-900 underline decoration-slate-300 underline-offset-4 hover:decoration-slate-500"

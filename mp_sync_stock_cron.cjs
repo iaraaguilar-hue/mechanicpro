@@ -161,6 +161,22 @@ function correrSync() {
   log(`✗ sync terminó con código ${r.code} después de ${ESPERAS_MIN.length} intentos`);
   if (NUBE) process.exit(r.code || 1);
 
+  // 🔴 10-oct-2026 — NO TIRAR DEL ANDÓN SI EL STOCK DE HOY YA ESTÁ. Ese día a las 17:00 se cayó la red
+  // de la Mac: alDia() no pudo medir ("TypeError: fetch failed"), los 3 intentos murieron a los 0 s con
+  // "No encontré el taller" (Supabase tampoco respondía) y el vigía (Opus) se despertó al vacío — el
+  // stock de hoy estaba cargado entero desde las 08:05. Así que antes del andón se vuelve a medir.
+  // La alarma se calla SOLO si se pudo VERIFICAR que el stock de hoy está: si no se puede medir, suena.
+  const reviso = await alDia().catch(e => ({ medido: false, motivo: e.message }));
+  if (reviso.medido && reviso.ok) {
+    log(`✓ pero el stock de hoy SÍ está (${reviso.deHoy}/${reviso.conDato} · último: ${reviso.ultimo}): fue falla de red, no abro andón`);
+    if (tarea('ver', ID_TAREA) !== null) {
+      tarea('nota', ID_TAREA, `${hoyAR()} · la corrida falló (${error}) pero el stock de hoy ya estaba cargado: fue falla de red.`);
+      tarea('completar', ID_TAREA);
+    }
+    guardarEstado({ ...estado, ok: true, error: null, nota: `la corrida falló (${error}) con el stock de hoy ya cargado` });
+    process.exit(0);
+  }
+
   // El andón que NO depende de Claude: la tarea queda en el tablero aunque el vigía no pueda correr.
   if (tarea('ver', ID_TAREA) === null) {
     tarea('crear', '--id', ID_TAREA, '--marca', 'Mechanic Pro', '--prioridad', 'alta', '--status', 'en_curso',

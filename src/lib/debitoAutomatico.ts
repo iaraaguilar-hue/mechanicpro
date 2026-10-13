@@ -17,6 +17,8 @@ export const LINK_DEBITO = 'https://mpago.la/1gWKULV';
 
 export interface TallerConDebito extends TallerConPrueba {
     debito_automatico_at?: string | null;
+    /** El taller no paga suscripción (cliente cero, demo, canje): no ve nada del débito. */
+    sin_cobro?: boolean | null;
 }
 
 /** Dónde corresponde ofrecer el botón, o null si en ningún lado. */
@@ -24,14 +26,15 @@ export type LugarDelDebito = 'prueba' | 'corte' | 'paga';
 
 /**
  * Solo lo ve el ADMIN del taller (el mecánico no paga ni decide). Desaparece apenas el
- * super admin marca `debito_automatico_at`.
+ * super admin marca `debito_automatico_at`. Y no la ve nunca un taller con `sin_cobro`
+ * (`prueba_dias = NULL` NO significa "paga": los anteriores al 2-oct quedaron sin reloj).
  */
 export function lugarDelDebito(
     taller: TallerConDebito | null | undefined,
     rol: string | null | undefined,
     ahoraMs: number = Date.now(),
 ): LugarDelDebito | null {
-    if (!taller || rol !== 'admin' || taller.debito_automatico_at) return null;
+    if (!taller || rol !== 'admin' || taller.debito_automatico_at || taller.sin_cobro) return null;
     if (accesoCortado(taller, ahoraMs)) return cortePorPrueba(taller, ahoraMs) ? 'corte' : null;
     const e = estadoPrueba(taller, ahoraMs);
     if (e.tipo === 'corriendo') return 'prueba';

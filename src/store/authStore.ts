@@ -64,6 +64,8 @@ export interface TallerData {
      * el admin ve el botón. Lo marca a mano el super admin; ver `src/lib/debitoAutomatico.ts`.
      */
     debito_automatico_at?: string | null;
+    /** El taller no paga suscripción (cliente cero, demo, canje): no ve nada del débito. Solo el super admin. */
+    sin_cobro?: boolean;
     /**
      * El calendario de turnos (Juan Otero, Private Garage, 25-sep-2026). Opt-in: casi
      * ningún taller da turnos. `leer_whatsapp` = la app carga 'a_confirmar' los turnos

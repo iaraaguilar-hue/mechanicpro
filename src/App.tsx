@@ -161,7 +161,7 @@ function AppContent() {
       setAhora(Date.now());
       const { data } = await supabase
         .from('talleres')
-        .select('acceso_suspendido_at, acceso_suspendido_motivo, prueba_dias, prueba_inicio_at, debito_automatico_at')
+        .select('acceso_suspendido_at, acceso_suspendido_motivo, prueba_dias, prueba_inicio_at, debito_automatico_at, sin_cobro')
         .eq('id', tallerId)
         .single();
       if (!data) return;

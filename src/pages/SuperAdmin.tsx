@@ -9,10 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Pencil, Loader2, Save, UploadCloud, Plus, Trash2, Edit2, Check, X, AlertCircle } from 'lucide-react';
+import { Pencil, Loader2, Save, UploadCloud, Plus, Trash2, Edit2, Check, X, AlertCircle, Ban } from 'lucide-react';
 import { PedidosDelTaller } from '@/components/PedidosDelTaller';
 import { NovedadesAdmin } from '@/components/NovedadesAdmin';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { FilaAjuste } from '@/components/FilaAjuste';
+import { Switch } from '@/components/ui/switch';
 import { cambiosDelDebito } from '@/lib/debitoAutomatico';
 import { DIAS_DE_PRUEBA, diaYMes, estadoPrueba, etiquetaPrueba } from '@/lib/pruebaGratuita';
 
@@ -35,6 +37,7 @@ interface Taller {
     acceso_suspendido_motivo?: string | null;
     // Débito automático de Mercado Pago (13-oct-2026): ver src/lib/debitoAutomatico.ts
     debito_automatico_at?: string | null;
+    sin_cobro?: boolean;
 }
 
 interface ServicioCatalogo {
@@ -213,6 +216,28 @@ export default function SuperAdmin() {
     const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             handleFileUpload(e.target.files[0]);
+        }
+    };
+
+    // "Este taller no paga" (13-oct-2026): al instante, como el débito. Solo toca `sin_cobro`.
+    const cambiarSinCobro = async (valor: boolean) => {
+        if (!editingTaller) return;
+        try {
+            setSaving(true);
+            const { data: guardado, error } = await supabase
+                .from('talleres')
+                .update({ sin_cobro: valor })
+                .eq('id', editingTaller.id)
+                .select('*')
+                .single();
+            if (error) throw error;
+            const campos = { sin_cobro: guardado.sin_cobro };
+            setEditingTaller({ ...editingTaller, ...campos });
+            setTalleres(talleres.map(t => t.id === editingTaller.id ? { ...t, ...campos } : t));
+        } catch (err: unknown) {
+            alert('No se pudo guardar: ' + (err instanceof Error ? err.message : String(err)));
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -718,6 +743,24 @@ export default function SuperAdmin() {
                                                 Pasa el taller a Paga y, si estaba cortado por la prueba, le devuelve el acceso. Se guarda al instante.
                                             </span>
                                         )}
+                                    </div>
+
+                                    {/* Taller que no paga (13-oct-2026): una fila, se guarda al instante */}
+                                    <div className="rounded-md border border-input">
+                                        <FilaAjuste
+                                            id="sin-cobro"
+                                            icono={Ban}
+                                            titulo="Este taller no paga"
+                                            resumen="Cliente cero, demo o canje: no ve nada del débito automático."
+                                            control={
+                                                <Switch
+                                                    checked={!!editingTaller.sin_cobro}
+                                                    disabled={saving}
+                                                    onCheckedChange={cambiarSinCobro}
+                                                    aria-label="Este taller no paga"
+                                                />
+                                            }
+                                        />
                                     </div>
 
                                     {/* Webhook ERP URL */}

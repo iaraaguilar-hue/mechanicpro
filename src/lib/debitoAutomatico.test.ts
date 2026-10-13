@@ -40,6 +40,15 @@ eq('activo + prueba: nada', lugarDelDebito({ ...EN_PRUEBA, ...ACTIVO }, 'admin',
 eq('activo + cortada: nada', lugarDelDebito({ ...CORTADA_POR_PRUEBA, ...ACTIVO }, 'admin', HOY), null);
 eq('activo + paga: nada', lugarDelDebito({ ...PAGA, ...ACTIVO }, 'admin', HOY), null);
 
+// Sin cobro (Probikes, Demo, canje): no ve nada del débito en ningún lugar
+const SIN_COBRO = { sin_cobro: true };
+eq('sin cobro + sin reloj: nada', lugarDelDebito({ ...PAGA, ...SIN_COBRO }, 'admin', HOY), null);
+eq('sin cobro + prueba: nada', lugarDelDebito({ ...EN_PRUEBA, ...SIN_COBRO }, 'admin', HOY), null);
+eq('sin cobro + vencida: nada', lugarDelDebito({ ...VENCIDA, ...SIN_COBRO }, 'admin', HOY), null);
+eq('sin cobro + cortada por la prueba: nada', lugarDelDebito({ ...CORTADA_POR_PRUEBA, ...SIN_COBRO }, 'admin', HOY), null);
+eq('sin_cobro false: se comporta como siempre', lugarDelDebito({ ...PAGA, sin_cobro: false }, 'admin', HOY), 'paga');
+eq('sin_cobro null: se comporta como siempre', lugarDelDebito({ ...PAGA, sin_cobro: null }, 'admin', HOY), 'paga');
+
 // Pasa de un lugar a otro con el reloj
 eq('el último milisegundo de la prueba: aviso de prueba', lugarDelDebito(EN_PRUEBA, 'admin', ms('2026-10-23T14:59:59Z')), 'prueba');
 eq('el milisegundo siguiente: cartel', lugarDelDebito(EN_PRUEBA, 'admin', ms('2026-10-23T15:00:00Z')), 'corte');

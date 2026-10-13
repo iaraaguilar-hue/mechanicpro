@@ -161,7 +161,7 @@ function AppContent() {
       setAhora(Date.now());
       const { data } = await supabase
         .from('talleres')
-        .select('acceso_suspendido_at, acceso_suspendido_motivo, prueba_dias, prueba_inicio_at')
+        .select('acceso_suspendido_at, acceso_suspendido_motivo, prueba_dias, prueba_inicio_at, debito_automatico_at')
         .eq('id', tallerId)
         .single();
       if (!data) return;
@@ -199,7 +199,7 @@ function AppContent() {
   // Con el acceso cortado no se ve NADA de la app: solo el cartel y cerrar
   // sesión. El super admin pasa (es quien lo pone y lo saca).
   if (taller && cortado && rol !== 'super_admin') {
-    return <AccesoSuspendido taller={taller} onLogout={handleLogout} />;
+    return <AccesoSuspendido taller={taller} rol={rol} onLogout={handleLogout} />;
   }
 
   // Obtenemos el nombre del usuario (o fallback al email)

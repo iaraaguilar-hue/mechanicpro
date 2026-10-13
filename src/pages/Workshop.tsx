@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { useDataStore } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
 import { AvisoDePrueba } from "@/components/AvisoDePrueba";
+import { AvisoDeDebito } from "@/components/AvisoDeDebito";
 import { supabase } from "@/lib/supabase";
 import { formatOrdenNumber, ordenNumberForWebhook } from "@/lib/formatId";
 import { printServiceReport } from "@/lib/printServiceBtn";
@@ -178,6 +179,7 @@ export default function Workshop() {
     const updateServicio = useDataStore(s => s.updateServicio);
     const enTallerDeBorradas = useDataStore(s => s.enTallerDeBorradas);
     const tallerPrueba = useAuthStore(s => s.taller);
+    const rolTaller = useAuthStore(s => s.rol);
     const taller_id = useAuthStore(s => s.taller_id);
 
     const [editingJob, setEditingJob] = useState<DashboardJob | null>(null);
@@ -424,7 +426,8 @@ export default function Workshop() {
                 prender al taller y, los últimos 2 días, con quién hablar para seguir. Reemplaza
                 los WhatsApp que Iara mandaba a mano y absorbe el cartel de prueba extendida
                 del 7-oct. Solo con la prueba corriendo: el que paga no ve nada. */}
-            <AvisoDePrueba taller={tallerPrueba} ordenes={servicios} />
+            <AvisoDePrueba taller={tallerPrueba} ordenes={servicios} rol={rolTaller} />
+            <AvisoDeDebito taller={tallerPrueba} rol={rolTaller} />
 
             {/* Órdenes BORRADAS cuya orden en taller (<N>-T) sigue abierta en el ERP
                 (5-oct-2026). Ya no están en ninguna lista, así que si la cancelación

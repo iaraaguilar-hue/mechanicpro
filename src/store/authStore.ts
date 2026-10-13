@@ -60,6 +60,11 @@ export interface TallerData {
     prueba_dias?: number | null;
     prueba_inicio_at?: string | null;
     /**
+     * Cuándo activó el débito automático de Mercado Pago (13-oct-2026). NULL = no lo activó:
+     * el admin ve el botón. Lo marca a mano el super admin; ver `src/lib/debitoAutomatico.ts`.
+     */
+    debito_automatico_at?: string | null;
+    /**
      * El calendario de turnos (Juan Otero, Private Garage, 25-sep-2026). Opt-in: casi
      * ningún taller da turnos. `leer_whatsapp` = la app carga 'a_confirmar' los turnos
      * que se acuerdan en la charla del WhatsApp conectado.

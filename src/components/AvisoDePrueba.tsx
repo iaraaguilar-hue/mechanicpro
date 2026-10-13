@@ -18,9 +18,11 @@ import { supabase } from '@/lib/supabase';
 import type { TallerData } from '@/store/authStore';
 import { estadoPrueba } from '@/lib/pruebaGratuita';
 import { avisoDePrueba, type OrdenParaElAviso, type ServiceDelMenu } from '@/lib/avisoDePrueba';
+import { lugarDelDebito } from '@/lib/debitoAutomatico';
+import { BotonDebito } from '@/components/BotonDebito';
 import { CONTACTO_NOMBRE, CORREO, TELEFONO, linkWhatsAppContacto } from '@/lib/contactoMechanicPro';
 
-export function AvisoDePrueba({ taller, ordenes }: { taller: TallerData | null; ordenes: OrdenParaElAviso[] }) {
+export function AvisoDePrueba({ taller, ordenes, rol }: { taller: TallerData | null; ordenes: OrdenParaElAviso[]; rol: string | null }) {
     const navigate = useNavigate();
     const corriendo = !!taller && estadoPrueba(taller).tipo === 'corriendo';
 
@@ -80,6 +82,16 @@ export function AvisoDePrueba({ taller, ordenes }: { taller: TallerData | null; 
                             </li>
                         ))}
                     </ul>
+                </div>
+            )}
+
+            {lugarDelDebito(taller, rol) === 'prueba' && (
+                <div data-aviso-debito-prueba className="mt-3 border-t border-slate-200 pt-3 sm:pl-6">
+                    <p>
+                        Para no cortar el acceso, se puede activar el débito automático de Mercado Pago.
+                        El primer cobro sale el día que se activa y después cada mes, el mismo día.
+                    </p>
+                    <BotonDebito className="mt-2" />
                 </div>
             )}
 

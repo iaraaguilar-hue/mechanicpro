@@ -13,6 +13,7 @@ import { Pencil, Loader2, Save, UploadCloud, Plus, Trash2, Edit2, Check, X, Aler
 import { PedidosDelTaller } from '@/components/PedidosDelTaller';
 import { NovedadesAdmin } from '@/components/NovedadesAdmin';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { cambiosDelDebito } from '@/lib/debitoAutomatico';
 import { DIAS_DE_PRUEBA, diaYMes, estadoPrueba, etiquetaPrueba } from '@/lib/pruebaGratuita';
 
 const HTTPS_URL_REGEX = /^https:\/\/.+/;
@@ -32,6 +33,8 @@ interface Taller {
     prueba_inicio_at?: string | null;
     acceso_suspendido_at?: string | null;
     acceso_suspendido_motivo?: string | null;
+    // Débito automático de Mercado Pago (13-oct-2026): ver src/lib/debitoAutomatico.ts
+    debito_automatico_at?: string | null;
 }
 
 interface ServicioCatalogo {
@@ -210,6 +213,38 @@ export default function SuperAdmin() {
     const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             handleFileUpload(e.target.files[0]);
+        }
+    };
+
+    // Débito automático (13-oct-2026): UN clic, UN update. Al activarlo el taller pasa a Paga
+    // y, si estaba cortado por la prueba, recupera el acceso (ver `cambiosDelDebito`).
+    // Se guarda al toque y no con "Guardar": es un hecho que Iara acaba de ver en su mail.
+    // Solo se vuelcan al formulario los campos que tocó, para no pisar lo que esté editando.
+    const cambiarDebito = async (activar: boolean) => {
+        if (!editingTaller) return;
+        try {
+            setSaving(true);
+            const { data: guardado, error } = await supabase
+                .from('talleres')
+                .update(cambiosDelDebito(editingTaller, activar))
+                .eq('id', editingTaller.id)
+                .select('*')
+                .single();
+            if (error) throw error;
+            const campos = {
+                debito_automatico_at: guardado.debito_automatico_at,
+                prueba_dias: guardado.prueba_dias,
+                acceso_suspendido_at: guardado.acceso_suspendido_at,
+                acceso_suspendido_motivo: guardado.acceso_suspendido_motivo,
+            };
+            setEditingTaller({ ...editingTaller, ...campos });
+            setTalleres(talleres.map(t => t.id === editingTaller.id ? { ...t, ...campos } : t));
+            setPruebaAlAbrir(campos.prueba_dias ?? null);
+            setDevolverAcceso(false);
+        } catch (err: unknown) {
+            alert('No se pudo guardar el débito automático: ' + (err instanceof Error ? err.message : String(err)));
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -658,6 +693,30 @@ export default function SuperAdmin() {
                                                     </span>
                                                 )}
                                             </div>
+                                        )}
+                                    </div>
+
+                                    {/* Débito automático de Mercado Pago (13-oct-2026): una fila, un clic */}
+                                    <div data-debito-superadmin className="flex flex-wrap items-center gap-2 rounded-md border border-input px-3 py-2">
+                                        <span className="text-sm">
+                                            {editingTaller.debito_automatico_at
+                                                ? `Débito automático activo desde el ${diaYMes(editingTaller.debito_automatico_at)}.`
+                                                : 'Débito automático sin activar.'}
+                                        </span>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="hover:bg-slate-50 hover:text-slate-900"
+                                            disabled={saving}
+                                            onClick={() => cambiarDebito(!editingTaller.debito_automatico_at)}
+                                        >
+                                            {editingTaller.debito_automatico_at ? 'Desmarcar' : 'Marcar como activo'}
+                                        </Button>
+                                        {!editingTaller.debito_automatico_at && (
+                                            <span className="w-full text-xs text-muted-foreground">
+                                                Pasa el taller a Paga y, si estaba cortado por la prueba, le devuelve el acceso. Se guarda al instante.
+                                            </span>
                                         )}
                                     </div>
 

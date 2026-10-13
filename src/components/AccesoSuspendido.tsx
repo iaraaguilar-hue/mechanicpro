@@ -14,6 +14,8 @@
  * mano usa el texto genérico, que no lo afirma.
  */
 import type { TallerData } from '@/store/authStore';
+import { lugarDelDebito } from '@/lib/debitoAutomatico';
+import { BotonDebito } from '@/components/BotonDebito';
 import { cortePorPrueba, diaYMes, fechaDelCorte } from '@/lib/pruebaGratuita';
 // El contacto vive en un solo lugar: lo usa también el aviso de prueba del Taller Activo.
 import { CONTACTO, CORREO, TELEFONO, linkWhatsAppContacto } from '@/lib/contactoMechanicPro';
@@ -28,8 +30,9 @@ function textoDeLaPrueba(taller: TallerData): string {
         + `El plazo se cumplió${cuando} y el sistema pausó el acceso de forma automática.`;
 }
 
-export function AccesoSuspendido({ taller, onLogout }: { taller: TallerData; onLogout: () => void }) {
+export function AccesoSuspendido({ taller, rol, onLogout }: { taller: TallerData; rol: string | null; onLogout: () => void }) {
     const porPrueba = cortePorPrueba(taller);
+    const ofrecerDebito = lugarDelDebito(taller, rol) === 'corte';
     const textoWhatsApp = `Hola, te escribo de ${taller.nombre ?? 'mi taller'} por la cuenta de Mechanic Pro.`;
     return (
         <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4 py-10">
@@ -60,6 +63,16 @@ export function AccesoSuspendido({ taller, onLogout }: { taller: TallerData; onL
                 <p className={`${porPrueba ? 'mt-3' : 'mt-5'} text-sm text-slate-500 leading-relaxed`}>
                     Toda la información de la cuenta queda guardada, sin cambios.
                 </p>
+
+                {ofrecerDebito && (
+                    <div data-debito-corte className="mt-8 border-t border-slate-200 pt-6">
+                        <p className="text-sm text-slate-700">
+                            El débito automático de Mercado Pago permite seguir usando Mechanic Pro.
+                            Al activarlo, el acceso vuelve apenas se acredita el pago.
+                        </p>
+                        <BotonDebito className="mt-3" />
+                    </div>
+                )}
 
                 <div className="mt-8 border-t border-slate-200 pt-6">
                     <p className="text-sm text-slate-700">

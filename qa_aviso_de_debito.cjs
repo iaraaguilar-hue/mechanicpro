@@ -32,7 +32,7 @@ const fallas = [];
 const ok = (cond, que) => { console.log(`${cond ? '✅' : '❌'} ${que}`); if (!cond) fallas.push(que); };
 const planOPrecio = (t) => (t.match(/\$|\b(Sport|Expert)\b|(?<!Mechanic )\bPro\b|¡/) || [])[0] || '';
 
-const PAGA = { prueba_dias: null, prueba_inicio_at: null, acceso_suspendido_at: null, acceso_suspendido_motivo: null, debito_automatico_at: null };
+const PAGA = { prueba_dias: null, prueba_inicio_at: null, acceso_suspendido_at: null, acceso_suspendido_motivo: null, debito_automatico_at: null, sin_cobro: false };
 const EN_PRUEBA = { ...PAGA, prueba_dias: 15, prueba_inicio_at: new Date(Date.now() - 3 * DIA).toISOString() };
 const CORTADA = { ...PAGA, prueba_dias: 15, prueba_inicio_at: new Date(Date.now() - 20 * DIA).toISOString(),
     acceso_suspendido_at: new Date(Date.now() - 5 * DIA).toISOString(), acceso_suspendido_motivo: 'prueba_finalizada' };
@@ -152,6 +152,9 @@ const bueno = (cuando, bt) => {
                 ['débito activo + prueba', { ...EN_PRUEBA, ...ACTIVO }, 'admin', false],
                 ['débito activo + paga', { ...PAGA, ...ACTIVO }, 'admin', false],
                 ['débito activo + cortada', { ...CORTADA, ...ACTIVO }, 'admin', true],
+                ['sin cobro + prueba', { ...EN_PRUEBA, sin_cobro: true }, 'admin', false],
+                ['sin cobro + paga (sin reloj)', { ...PAGA, sin_cobro: true }, 'admin', false],
+                ['sin cobro + cortada', { ...CORTADA, sin_cobro: true }, 'admin', true],
                 ['mecánico + prueba', EN_PRUEBA, 'mecanico', false],
                 ['mecánico + paga', PAGA, 'mecanico', false],
                 ['mecánico + cortada', CORTADA, 'mecanico', true],

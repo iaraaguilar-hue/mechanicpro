@@ -11,6 +11,9 @@
  * QUÉ ESCRIBE (y nada más): productos_taller.stock, .stock_reservado,
  * .stock_actualizado_en, .ultima_venta, .unidades_vendidas. NUNCA toca nombre,
  * precio, familia, sugerible ni el aprendizaje del taller (veces_usado).
+ * Además (13-oct-2026) da de ALTA los productos activos del ERP que faltan en MP
+ * (ver `altasDesdeERP`): sin eso, lo cargado en Contabilium después de la
+ * importación nunca aparecía en el buscador.
  *
  * SOLO LECTURAS contra Contabilium. Credencial por env, nunca en el repo:
  *   set -a && . .secrets/contabilium.env && set +a
@@ -103,6 +106,69 @@ async function pool(arr, n, fn) {
 }
 const fmt = d => d.toISOString().slice(0, 10);
 
+// Familias del ERP que NO son repuesto de taller: la MISMA lista de mp_clasificar_familias.cjs
+// (decisión de Iara, 10-ago-2026). Si cambia allá, cambia acá.
+const NO_SON_REPUESTO = new Set([
+  'Bike', 'Apparel', 'Custom Apparel', 'Magenta', 'PAVE', 'SANTINI', 'Ziroox',
+  'Helmet', 'Lazer', 'Shoe', 'DMT', 'Glove', 'Bag', 'Oakley',
+]);
+// Espejo de public.clave_producto() (el unique del catálogo es taller_id + clave).
+const claveProducto = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+async function altasDesdeERP(taller) {
+  console.log('· altas: productos del ERP que faltan en MP…');
+  const conceptos = await paginado('/api/conceptos/search?filtro=');
+  const rubros = (await cb.get('/api/conceptos/rubros?includeChilds=true')).data;
+  const nombreRubro = new Map((rubros?.Items || rubros || []).map(r => [String(r.Id), r.Nombre]));
+
+  let existentes = [], off = 0;
+  for (;;) {
+    const { data, error } = await db.from('productos_taller').select('id,sku,clave').eq('taller_id', taller.id).range(off, off + 999);
+    if (error) throw new Error(`no pude leer los productos del taller en Supabase: ${error.message}`);
+    existentes = existentes.concat(data); if (data.length < 1000) break; off += 1000;
+  }
+  const skus = new Set(existentes.map(p => (p.sku || '').trim()).filter(Boolean));
+  const porClave = new Map(existentes.map(p => [p.clave, p]));
+
+  const nuevos = [], aSku = [];
+  for (const c of conceptos) {
+    const sku = String(c.Codigo || '').trim();
+    if (!sku || skus.has(sku) || !/^activo$/i.test(c.Estado || '') || !(c.Nombre || '').trim()) continue;
+    skus.add(sku);
+    let nombre = c.Nombre.trim();
+    const previo = porClave.get(claveProducto(nombre));
+    if (previo && !previo.sku) { aSku.push({ id: previo.id, sku, id_externo: String(c.Id) }); previo.sku = sku; continue; }
+    // Mismo nombre que otro producto con OTRO SKU (pasa con talles/colores): el unique es por
+    // nombre, así que se le agrega el SKU al nombre para que entre y se encuentre igual.
+    if (previo || porClave.has(claveProducto(nombre))) nombre = `${nombre} (${sku})`;
+    const familia = nombreRubro.get(String(c.IdRubro)) || null;
+    const fila = {
+      taller_id: taller.id, nombre, sku, id_externo: String(c.Id),
+      precio: Number(c.PrecioFinal) > 0 ? Number(c.PrecioFinal) : null,
+      categoria: /servicio/i.test(c.Tipo || '') ? 'labor' : 'part',
+      origen: 'contabilium', activo: true, familia,
+      sugerible: !(familia && NO_SON_REPUESTO.has(familia)),
+    };
+    porClave.set(claveProducto(nombre), { sku });
+    nuevos.push(fila);
+  }
+  const sugeribles = nuevos.filter(n => n.sugerible).length;
+  console.log(`  ${conceptos.length} conceptos en el ERP · ${nuevos.length} faltaban en MP (${sugeribles} van al buscador) · ${aSku.length} cargados a mano reciben su SKU`);
+  nuevos.slice(0, 8).forEach(n => console.log(`    + ${n.sku} · ${n.nombre}${n.sugerible ? '' : '  [no repuesto]'}`));
+  if (DRY || (!nuevos.length && !aSku.length)) return;
+
+  for (let i = 0; i < nuevos.length; i += 500) {
+    const { error } = await db.from('productos_taller').insert(nuevos.slice(i, i + 500));
+    if (error) throw new Error(`no pude dar de alta productos nuevos: ${error.message}`);
+  }
+  for (const u of aSku) {
+    const { error } = await db.from('productos_taller').update({ sku: u.sku, id_externo: u.id_externo }).eq('id', u.id).is('sku', null);
+    if (error) throw new Error(`no pude ponerle SKU a un producto existente: ${error.message}`);
+  }
+  console.log(`  ✓ ${nuevos.length} altas escritas`);
+}
+
 (async () => {
   // taller destino
   const { data: talleres } = await db.from('talleres').select('id,nombre')
@@ -187,6 +253,15 @@ const fmt = d => d.toISOString().slice(0, 10);
     }
   }
   console.log(`  ${ventas.size} SKU con movimiento en la ventana`);
+
+  // 2-bis) ALTAS: lo que se cargó en el ERP después de la importación entra solo al buscador.
+  /* 🔴 13-oct-2026 — Lean buscó por SKU la cubierta 00025-3242 (Armadillo Flat Proof 700x30C,
+     4 en stock en Contabilium) y el buscador no la encontraba: no existía en MP. El catálogo se
+     importó UNA vez (mp_import_catalogo.cjs) y este sync solo actualizaba lo ya cargado, así que
+     todo producto nuevo del ERP quedaba afuera para siempre. Ahora cada corrida da de alta lo que
+     falta, con la misma regla de familia/sugerible de mp_clasificar_familias.cjs. Nunca toca
+     filas existentes, salvo para ponerle SKU a una que el taller cargó a mano con el mismo nombre. */
+  await altasDesdeERP(taller);
 
   // 3) Escribir en MP, SOLO los productos que ese taller ya tiene cargados
   let prods = [], off = 0;

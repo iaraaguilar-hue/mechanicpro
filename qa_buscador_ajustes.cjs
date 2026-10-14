@@ -43,7 +43,9 @@ const PALABRAS_DE_MECANICO = [
     ['logo', 'logo'],
     ['tutorial', 'recorrido'],
     ['plantilla', 'plantillas'],
-    ['contabilium', 'altas_erp'],
+    // «contabilium» a secas ya es de dos ajustes (14-oct-2026): la bici que entra sola y el precio que manda el ERP.
+    ['bici vendida', 'altas_erp'],
+    ['precio contabilium', 'precio_erp_manda'],
     ['no contesta', 'horas'],
 ];
 

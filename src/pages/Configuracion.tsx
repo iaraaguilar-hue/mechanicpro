@@ -2218,7 +2218,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                     id="precio_erp_manda"
                     icono={RefreshCw}
                     titulo="El precio de los repuestos lo manda Contabilium"
-                    resumen="Se actualizan solos desde Contabilium, y lo que se cobra en una orden no cambia el precio de lista."
+                    resumen="Se actualizan solos desde Contabilium; lo que se cobra en una orden no cambia el precio de lista."
                     control={
                         <Switch
                             checked={precioErp}

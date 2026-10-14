@@ -31,6 +31,7 @@ const fs = require('fs');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const { crearCliente } = require('./contabilium_http.cjs');
+const { actualizarPreciosDesdeERP } = require('./mp_precios_erp.cjs');
 
 const DEPOSITO = 56990; // Probikes: depósito único PRINCIPAL
 const argv = process.argv.slice(2);
@@ -156,7 +157,7 @@ async function altasDesdeERP(taller) {
   const sugeribles = nuevos.filter(n => n.sugerible).length;
   console.log(`  ${conceptos.length} conceptos en el ERP · ${nuevos.length} faltaban en MP (${sugeribles} van al buscador) · ${aSku.length} cargados a mano reciben su SKU`);
   nuevos.slice(0, 8).forEach(n => console.log(`    + ${n.sku} · ${n.nombre}${n.sugerible ? '' : '  [no repuesto]'}`));
-  if (DRY || (!nuevos.length && !aSku.length)) return;
+  if (DRY || (!nuevos.length && !aSku.length)) return conceptos;
 
   for (let i = 0; i < nuevos.length; i += 500) {
     const { error } = await db.from('productos_taller').insert(nuevos.slice(i, i + 500));
@@ -167,11 +168,12 @@ async function altasDesdeERP(taller) {
     if (error) throw new Error(`no pude ponerle SKU a un producto existente: ${error.message}`);
   }
   console.log(`  ✓ ${nuevos.length} altas escritas`);
+  return conceptos;
 }
 
 (async () => {
   // taller destino
-  const { data: talleres } = await db.from('talleres').select('id,nombre')
+  const { data: talleres } = await db.from('talleres').select('id,nombre,precio_erp_manda')
     .or(`id.eq.${/^[0-9a-f-]{36}$/i.test(TALLER) ? TALLER : '00000000-0000-0000-0000-000000000000'},nombre.ilike.${TALLER}`);
   if (!talleres?.length) { console.error('No encontré el taller:', TALLER); process.exit(1); }
   if (talleres.length > 1) { console.error('Ambiguo:', talleres.map(t => t.nombre).join(', ')); process.exit(1); }
@@ -261,7 +263,7 @@ async function altasDesdeERP(taller) {
      todo producto nuevo del ERP quedaba afuera para siempre. Ahora cada corrida da de alta lo que
      falta, con la misma regla de familia/sugerible de mp_clasificar_familias.cjs. Nunca toca
      filas existentes, salvo para ponerle SKU a una que el taller cargó a mano con el mismo nombre. */
-  await altasDesdeERP(taller);
+  const conceptosERP = await altasDesdeERP(taller);
 
   // 3) Escribir en MP, SOLO los productos que ese taller ya tiene cargados
   let prods = [], off = 0;
@@ -313,5 +315,13 @@ async function altasDesdeERP(taller) {
     if (error) { console.error('ERROR al escribir:', error.message); process.exit(1); }
     process.stdout.write(`\r  escritos ${Math.min(i + 500, updates.length)}/${updates.length}`);
   }
-  console.log(`\n✓ listo en ${Math.round((Date.now() - t0) / 1000)} s · ${cb.stats.pedidos} pedidos al ERP · ${cb.stats.r429} esperas por límite (${cb.stats.esperaS} s)`);
+  console.log('');
+
+  // 4) PRECIOS (14-oct-2026): solo si el admin del taller prendió "El precio lo manda Contabilium"
+  //    (talleres.precio_erp_manda, apagado por defecto). Reusa los conceptos ya bajados para las altas:
+  //    cero pedidos extra al ERP. Si falla, no tira el sync de stock: queda dicho en el log.
+  try {
+    await actualizarPreciosDesdeERP(db, taller, conceptosERP, { dry: DRY });
+  } catch (e) { console.error('ERROR PRECIOS (el stock sí quedó cargado):', e.message); }
+  console.log(`✓ listo en ${Math.round((Date.now() - t0) / 1000)} s · ${cb.stats.pedidos} pedidos al ERP · ${cb.stats.r429} esperas por límite (${cb.stats.esperaS} s)`);
 })().catch(e => { console.error('ERROR', e.message); process.exit(1); });

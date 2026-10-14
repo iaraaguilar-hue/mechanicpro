@@ -72,6 +72,12 @@ export interface TallerData {
      */
     mecanico_no_baja_repuestos?: boolean;
     /**
+     * "El precio de los repuestos lo manda Contabilium" (14-oct-2026): si es true, lo que se cobra en una
+     * orden no cambia el precio de lista de un producto con SKU y el sync diario del ERP lo actualiza.
+     * Apagado por defecto; solo lo cambia el admin (trigger proteger_precio_erp_manda).
+     */
+    precio_erp_manda?: boolean;
+    /**
      * El cronómetro de trabajo (14-oct-2026): { activo, hora_cierre 'HH:MM' }. Apagado por defecto,
      * solo lo cambia el admin (trigger en la base). Se lee por `cronometroActivo` (planFeatures.ts).
      */

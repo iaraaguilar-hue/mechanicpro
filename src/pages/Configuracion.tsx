@@ -15,7 +15,7 @@ import { NuevoBadge } from '@/components/NuevoBadge';
 import {
     Settings, Loader2, Save, UploadCloud, Plus, Edit2, Check, X, Users,
     AlertCircle, Sparkles, ListChecks, CheckCircle, Lock, Bell, HeartPulse,
-    GraduationCap, PlayCircle, PhoneCall, Eye, Bike, Hash, Printer, CalendarDays, Clock } from 'lucide-react';
+    GraduationCap, PlayCircle, PhoneCall, Eye, Bike, Hash, Printer, CalendarDays, Clock, RefreshCw } from 'lucide-react';
 import { componerPlantilla } from '@/lib/plantillasDelSistema';
 import { useTourStore } from '@/components/OnboardingTour';
 import { resetTours } from '@/lib/tourSeen';
@@ -1403,6 +1403,8 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     const [paradasMecanico, setParadasMecanico] = useState((taller as any).bicis_paradas_ve_mecanico === true);
     // "El precio que no baja" (14-oct-2026): apagado por defecto. La base lo protege (solo el admin).
     const [precioFijo, setPrecioFijo] = useState(taller.mecanico_no_baja_repuestos === true);
+    // "El precio de los repuestos lo manda Contabilium" (14-oct-2026): apagado por defecto, solo el admin.
+    const [precioErp, setPrecioErp] = useState(taller.precio_erp_manda === true);
     const rolPref = useAuthStore(s => s.rol);
     const esAdminPref = rolPref?.toLowerCase()?.trim() === 'admin';
     // El cronómetro de trabajo (14-oct-2026): apagado por defecto, a las 20:00 corta solo lo que quedó andando.
@@ -1421,7 +1423,7 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     };
 
     const guardarInterruptor = async (
-        columna: 'ia_presupuesto_activa' | 'bicis_paradas_ve_mecanico' | 'mecanico_no_baja_repuestos',
+        columna: 'ia_presupuesto_activa' | 'bicis_paradas_ve_mecanico' | 'mecanico_no_baja_repuestos' | 'precio_erp_manda',
         valor: boolean, poner: (v: boolean) => void, anterior: boolean, ok: string,
     ) => {
         poner(valor);
@@ -2206,6 +2208,43 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                         <p>
                             Solo repuestos: la mano de obra y el precio del service quedan como están. Lo
                             que cobra un mecánico no cambia el precio de lista del catálogo.
+                        </p>
+                    </ComoFunciona>
+                </FilaAjuste>
+
+                {/* Iara, 14-oct-2026: el precio de lista de los productos con código de Contabilium lo manda el ERP.
+                    Apagado por defecto. Lo actualiza el sync diario (mp_sync_stock_erp.cjs). */}
+                <FilaAjuste
+                    id="precio_erp_manda"
+                    icono={RefreshCw}
+                    titulo="El precio de los repuestos lo manda Contabilium"
+                    resumen="Se actualizan solos desde Contabilium, y lo que se cobra en una orden no cambia el precio de lista."
+                    control={
+                        <Switch
+                            checked={precioErp}
+                            disabled={!esAdminPref}
+                            onCheckedChange={v => guardarInterruptor('precio_erp_manda', v, setPrecioErp, precioErp,
+                                v ? 'Listo: los precios de los repuestos de Contabilium se actualizan solos.' : 'Listo: los precios ya no se actualizan desde Contabilium.')}
+                        />
+                    }
+                    aviso={!esAdminPref && (
+                        <p className="text-xs text-muted-foreground">Lo cambia el administrador.</p>
+                    )}
+                >
+                    <ComoFunciona>
+                        <p>
+                            Prendido, <strong>todas las mañanas</strong>, con la actualización de stock de
+                            Contabilium (a las 8, o a las 10:15 si esa vez no pudo), el precio de cada producto con código de Contabilium pasa a
+                            ser el precio final con IVA de su página.
+                        </p>
+                        <p>
+                            Solo toca productos que tienen código de Contabilium: los que cargaste a mano quedan
+                            como están. Y lo que cobrás en una orden no cambia el precio de lista de esos
+                            productos, cobres lo que cobres.
+                        </p>
+                        <p>
+                            Apagado, cada producto aprende el último precio que cobraste y los precios no se
+                            actualizan desde Contabilium.
                         </p>
                     </ComoFunciona>
                 </FilaAjuste>

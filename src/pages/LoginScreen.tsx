@@ -146,7 +146,7 @@ export default function LoginScreen() {
                                 <img src={taller.logo_url} alt="Logo" className="max-h-full max-w-full object-contain" />
                             </div>
                         ) : (
-                            <img src="/logo-mechanic-pro-trim.png" alt="Mechanic Pro" className="w-64 max-w-full object-contain" />
+                            <img src="/brand/mp-wordmark.png" alt="Mechanic Pro" className="w-64 max-w-full object-contain" />
                         )}
                     </div>
                     <h2 className="text-2xl font-semibold text-gray-900 mt-4 tracking-tight">

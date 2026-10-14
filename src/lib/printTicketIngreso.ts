@@ -36,7 +36,7 @@ export const printTicketIngreso = async (
 
     // Mismo criterio que el comprobante: sin logo propio (o plan Sport) va el de Mechanic Pro,
     // nunca el de Probikes. Ver printServiceBtn.ts.
-    const LOGO_MP = `${window.location.origin}/logo-mechanic-pro-trim.png`;
+    const LOGO_MP = `${window.location.origin}/brand/mp-wordmark.png`;
     const logoUrlRaw = esSport ? LOGO_MP : (taller?.logo_url || LOGO_MP);
     let logoUrl = logoUrlRaw;
     if (logoUrlRaw.startsWith('http')) {

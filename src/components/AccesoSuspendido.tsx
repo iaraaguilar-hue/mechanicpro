@@ -43,9 +43,9 @@ export function AccesoSuspendido({ taller, rol, onLogout }: { taller: TallerData
                 className="w-full max-w-lg bg-white border border-slate-200 rounded-lg shadow-sm px-6 sm:px-8 py-10 text-center"
             >
                 <img
-                    src="/logo-mechanic-pro-trim.png"
+                    src="/brand/mp-wordmark.png"
                     alt="Mechanic Pro"
-                    className="h-10 max-w-full object-contain mx-auto mb-8"
+                    className="h-8 max-w-full object-contain mx-auto mb-8"
                 />
                 {porPrueba && (
                     <p className="mb-2 text-xs font-medium uppercase tracking-wider text-slate-500">

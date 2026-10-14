@@ -234,7 +234,7 @@ function AppContent() {
           {taller?.logo_url ? (
             <img src={taller.logo_url} alt="MechanicPro" className="h-8 object-contain" />
           ) : (
-            <img src="/logo-mechanic-pro-trim.png" alt="MechanicPro" className="h-8 object-contain" />
+            <img src="/brand/mp-wordmark.png" alt="Mechanic Pro" className="h-6 object-contain" />
           )}
         </div>
         <div className="flex items-center gap-1 -mr-2">
@@ -305,7 +305,7 @@ function AppContent() {
                 {taller?.logo_url ? (
                   <img src={taller.logo_url} alt="Logo Taller" className="h-10 object-contain mb-1" />
                 ) : (
-                  <img src="/logo-mechanic-pro-trim.png" alt="MechanicPro" className="h-10 object-contain mb-1" />
+                  <img src="/brand/mp-wordmark.png" alt="Mechanic Pro" className="h-7 max-w-full object-contain object-left mb-1" />
                 )}
                 {displayName && <span className="text-xs text-muted-foreground font-mono uppercase tracking-widest">{displayName}</span>}
               </div>
@@ -371,13 +371,14 @@ function AppContent() {
                 <div className="h-16 w-full flex justify-center items-center mb-2 px-2">
                   <img src={taller.logo_url} alt="Logo Taller" className="max-h-full max-w-full object-contain" />
                 </div>
-                <span className="font-bold text-gray-900 text-sm tracking-wide">Mechanic Pro</span>
+                <img src="/brand/mp-wordmark.png" alt="Mechanic Pro" className="w-20 object-contain opacity-80" />
               </>
             ) : (
-              /* Logo recortado (sin el aire blanco del PNG original) → la marca se ve GRANDE.
-                 El wordmark ya dice MechanicPro, no hace falta repetirlo en texto. */
-              <div className="w-full flex justify-center items-center mb-1 px-1">
-                <img src="/logo-mechanic-pro-trim.png" alt="MechanicPro" className="w-full object-contain" />
+              /* La barra mide 112 px: el wordmark nuevo es muy ancho y ahí quedaría de 17 px de alto,
+                 así que va el ícono (la "p" llave) y abajo el wordmark chico. Logo nuevo, 14-oct-2026. */
+              <div className="w-full flex flex-col justify-center items-center gap-2 mb-1 px-1">
+                <img src="/brand/mp-icono.svg" alt="" className="h-12 w-12" />
+                <img src="/brand/mp-wordmark.png" alt="Mechanic Pro" className="w-full object-contain" />
               </div>
             )}
           </div>

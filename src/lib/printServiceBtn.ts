@@ -40,7 +40,7 @@ export const printServiceReport = async (
   // Sin logo propio (o plan Sport, que lleva la marca del software) va el logo de MECHANIC PRO.
   // Antes caía a /img/logo_full.png, que es el logo de PROBIKES: cada taller sin logo le mandaba
   // a sus clientes un comprobante con la marca de otra bicicletería. (30-jul-2026)
-  const LOGO_MP = `${window.location.origin}/logo-mechanic-pro-trim.png`;
+  const LOGO_MP = `${window.location.origin}/brand/mp-wordmark.png`;
   const logoUrlRaw = isSportPlan ? LOGO_MP : (taller?.logo_url || LOGO_MP);
 
   const primaryColor = taller?.color_primario || '#f25a30';

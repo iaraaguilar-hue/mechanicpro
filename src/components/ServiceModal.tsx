@@ -760,7 +760,8 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                 setSuccessMessage(`Servicio ${formatOrdenNumber(created.numero_orden, created.id)} creado con éxito.`);
             }
         } catch (e: any) {
-            alert(`Error: ${e.message}`);
+            // El aviso del piso de precios ya viene escrito para el mecánico: sin "Error:" adelante.
+            alert(/^El precio de lista es \$/.test(e.message || '') ? e.message : `Error: ${e.message}`);
         } finally {
             setIsSaving(false);
         }

@@ -879,33 +879,61 @@ export const useDataStore = create<DataState>((set, get) => ({
             const huellaTAntes = huellaItemsEnTaller(itemsAntes);
             let itemsGuardados = true;
 
+            const existingService = get().servicios.find(s => s.id === id);
+            const tallerId = existingService?.taller_id || serviceData.taller_id;
+            const itemsArray = items_extra || [];
+            const itemsToInsert = itemsArray.map((item: any) => ({
+                servicio_id: id,
+                taller_id: tallerId,
+                descripcion: item.descripcion,
+                precio: item.precio,
+                categoria: item.categoria || 'labor',
+            }));
+
+            // "El precio que no baja": con el ajuste prendido el borrar + reinsertar va en UNA
+            // transacción en la base (reemplazar_items_servicio). Si algún renglón se rechaza, la
+            // orden conserva TODOS los que tenía: nunca queda con menos. Se lee el ajuste de la base
+            // (no del store, que puede estar viejo). Con el ajuste apagado, el camino de siempre.
+            const { data: tallerAjuste } = tallerId
+                ? await supabase.from('talleres').select('mecanico_no_baja_repuestos').eq('id', tallerId).maybeSingle()
+                : { data: null };
+            const precioFijo = (tallerAjuste as any)?.mecanico_no_baja_repuestos === true;
+
+            if (precioFijo) {
+                const { error: rpcError } = await supabase.rpc('reemplazar_items_servicio', {
+                    p_servicio_id: id,
+                    p_items: itemsToInsert.map((i: any) => ({ descripcion: i.descripcion, precio: i.precio, categoria: i.categoria })),
+                });
+                if (rpcError) {
+                    const textoPiso = traducirErrorDePiso(rpcError.message);
+                    if (textoPiso) throw new Error(textoPiso);
+                    // Cualquier otro rechazo: la transacción ya se deshizo, la orden quedó como estaba.
+                    console.error('Error reemplazando items:', rpcError.message);
+                    throw new Error('No se pudieron guardar los renglones de la orden. No se cambió nada, probá de nuevo.');
+                }
+                const nuevos = itemsToInsert.filter((i: any) => !antes.has(claveProducto(i.descripcion || '')));
+                if (nuevos.length) await get().registrarProductosUsados(nuevos);
+            } else {
             // Delete existing items for this service
             await supabase.from('servicio_items').delete().eq('servicio_id', id);
 
             // Insert new items
-            const itemsArray = items_extra || [];
             if (itemsArray.length > 0) {
-                const existingService = get().servicios.find(s => s.id === id);
-                const tallerId = existingService?.taller_id || serviceData.taller_id;
-                const itemsToInsert = itemsArray.map((item: any) => ({
-                    servicio_id: id,
-                    taller_id: tallerId,
-                    descripcion: item.descripcion,
-                    precio: item.precio,
-                    categoria: item.categoria || 'labor',
-                }));
                 const { error: itemsError } = await supabase.from('servicio_items').insert(itemsToInsert);
                 if (itemsError) {
-                    // "El precio que no baja": el borrado de arriba ya pasó, así que se devuelven los
-                    // renglones que tenía (esos ya habían pasado el control, con su piso congelado) y se
-                    // le dice al mecánico lo mismo que le dice la pantalla. Nunca un error crudo.
+                    // Rechazo del piso en un taller que lo apagó recién (o un store viejo): se devuelven
+                    // los renglones que tenía y, si ni eso entra, se avisa en vez de callar.
                     const textoPiso = traducirErrorDePiso(itemsError.message);
                     if (textoPiso) {
                         if (itemsAntes && itemsAntes.length) {
-                            await supabase.from('servicio_items').insert(itemsAntes.map((i: any) => ({
+                            const { error: restauroError } = await supabase.from('servicio_items').insert(itemsAntes.map((i: any) => ({
                                 servicio_id: id, taller_id: tallerId,
                                 descripcion: i.descripcion, precio: i.precio, categoria: i.categoria || 'labor',
                             })));
+                            if (restauroError) {
+                                console.error('Error restaurando items:', restauroError.message);
+                                throw new Error(textoPiso + ' Atención: no se pudieron devolver los renglones anteriores, revisá la orden.');
+                            }
                         }
                         throw new Error(textoPiso);
                     }
@@ -915,6 +943,7 @@ export const useDataStore = create<DataState>((set, get) => ({
 
                 const nuevos = itemsToInsert.filter((i: any) => !antes.has(claveProducto(i.descripcion || '')));
                 if (nuevos.length) await get().registrarProductosUsados(nuevos);
+            }
             }
 
             // ── La orden de venta ya está en el ERP y cambió lo que viaja (372, 23-sep) ──

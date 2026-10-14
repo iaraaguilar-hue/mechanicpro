@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { formatOrdenNumber, ordenNumberForWebhook } from "@/lib/formatId";
 import { printServiceReport } from "@/lib/printServiceBtn";
 import { BotonTicketIngreso } from "@/components/BotonTicketIngreso";
+import { BotonCronometro, OtroTrabajo, useCronometroActivo } from "@/components/Cronometro";
 import { TelefonoCopiable } from "@/components/TelefonoCopiable";
 import { dispararMensajesAutomaticos } from "@/lib/comprobanteALaNube";
 import { ServiceModal } from "@/components/ServiceModal";
@@ -181,6 +182,7 @@ export default function Workshop() {
     const tallerPrueba = useAuthStore(s => s.taller);
     const rolTaller = useAuthStore(s => s.rol);
     const taller_id = useAuthStore(s => s.taller_id);
+    const { activo: cronoActivo } = useCronometroActivo();
 
     const [editingJob, setEditingJob] = useState<DashboardJob | null>(null);
     const [finalizingJob, setFinalizingJob] = useState<DashboardJob | null>(null);
@@ -464,6 +466,9 @@ export default function Workshop() {
                 </Card>
             </div>
 
+            {/* El cronómetro (14-oct-2026): invisible si el admin no lo prendió. */}
+            <OtroTrabajo />
+
             {hayFiltros && (
                 <div className="flex items-center justify-between gap-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
                     <span>Mostrando <strong>{visibles.length}</strong> de {jobs.length}</span>
@@ -513,6 +518,7 @@ export default function Workshop() {
                             <TableHead>{filtro('cliente', 'Cliente', 'encabezado')}</TableHead>
                             <TableHead>Bicicleta</TableHead>
                             <TableHead>{filtro('service', 'Service', 'encabezado')}</TableHead>
+                            {cronoActivo && <TableHead className="w-28">Reloj</TableHead>}
                             <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -529,7 +535,7 @@ export default function Workshop() {
                         ))}
                         {visibles.length === 0 && (
                             <TableRow>
-                                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
+                                <TableCell colSpan={cronoActivo ? 9 : 8} className="h-32 text-center text-muted-foreground">
                                     {jobs.length === 0 ? 'No hay bicicletas en el taller.' : 'Ninguna bici coincide con los filtros.'}
                                 </TableCell>
                             </TableRow>
@@ -702,6 +708,7 @@ function MobileJobCard({ job, onClick, onFinalize, onDeliver, onReopen }: { job:
                 perdían el diagnóstico (que alimenta la retención), el segundo par de
                 ojos y el aviso de vuelta: los tres viven en el modal de finalizar. Es
                 el mismo botón y el mismo modal que en escritorio. */}
+            {!isReady && <div className="mt-3 empty:hidden"><BotonCronometro servicioId={job.service_id} /></div>}
             {!isReady && (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                     <button
@@ -772,6 +779,7 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
     const servicios = useDataStore(s => s.servicios);
     const mostrarEtapas = avancesActivos(taller);
     const mostrarTareas = tareasActivas(taller);
+    const { activo: cronoActivo } = useCronometroActivo();
 
     const notifyCustomer = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -991,6 +999,11 @@ function JobRow({ job, onClick, onFinalize, onDeliver, onReopen }: { job: Dashbo
                     </div>
                 </TableCell>
                 <TableCell>{serviceBadge}</TableCell>
+                {cronoActivo && (
+                    <TableCell className="w-28">
+                        {!isReady && <BotonCronometro servicioId={job.service_id} variante="fila" />}
+                    </TableCell>
+                )}
                 <TableCell className="text-right">
                     {/* Un solo renglón: antes eran tres botones apilados por fila. */}
                     <div className="flex flex-nowrap items-center justify-end gap-1.5">

@@ -8,6 +8,7 @@ import { estadoDeEspera } from "@/lib/avisoDeLaOrden";
 import { ETIQUETAS_NOTAS } from "@/lib/notasServicio";
 import { SuccessModal } from "@/components/SuccessModal";
 import { BotonTicketIngreso } from "@/components/BotonTicketIngreso";
+import { CronometroEnLaOrden } from "@/components/Cronometro";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -890,6 +891,8 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
             {/* Scrollable Body */}
             <div className="flex-1 overflow-y-auto p-6">
               <div className={pestana === 'orden' ? 'space-y-6' : 'hidden'}>
+                {/* El cronómetro (14-oct-2026): el reloj de esta orden y, para el admin, sus tramos. */}
+                {serviceId && <CronometroEnLaOrden servicioId={serviceId} />}
                 {/* La orden dictada (idea 1): precarga el formulario, no lo pisa.
                     Si el navegador no tiene reconocimiento de voz, no aparece. */}
                 <DictadoOrden

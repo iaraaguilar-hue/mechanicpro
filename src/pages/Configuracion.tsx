@@ -1405,6 +1405,20 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     const [precioFijo, setPrecioFijo] = useState(taller.mecanico_no_baja_repuestos === true);
     const rolPref = useAuthStore(s => s.rol);
     const esAdminPref = rolPref?.toLowerCase()?.trim() === 'admin';
+    // El cronómetro de trabajo (14-oct-2026): apagado por defecto, a las 20:00 corta solo lo que quedó andando.
+    const [cronoActivo, setCronoActivo] = useState(taller.config_cronometro?.activo === true);
+    const [cronoHora, setCronoHora] = useState(taller.config_cronometro?.hora_cierre || '20:00');
+
+    const guardarCronometro = async (activo: boolean, hora: string) => {
+        const anterior = { activo: cronoActivo, hora: cronoHora };
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) { avisar('error', 'Poné la hora así: 20:00.'); setCronoHora(anterior.hora); return; }
+        setCronoActivo(activo); setCronoHora(hora);
+        const config_cronometro = { activo, hora_cierre: hora };
+        const { error } = await supabase.from('talleres').update({ config_cronometro }).eq('id', taller.id);
+        if (error) { setCronoActivo(anterior.activo); setCronoHora(anterior.hora); avisar('error', 'No se pudo guardar: ' + error.message); return; }
+        setTaller({ ...taller, config_cronometro } as any);
+        avisar('ok', activo ? 'Listo: cada mecánico ya puede arrancar y pausar el reloj en cada bici.' : 'Listo: el cronómetro quedó apagado. Los tiempos ya registrados no se borran.');
+    };
 
     const guardarInterruptor = async (
         columna: 'ia_presupuesto_activa' | 'bicis_paradas_ve_mecanico' | 'mecanico_no_baja_repuestos',
@@ -2195,6 +2209,60 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                         </p>
                     </ComoFunciona>
                 </FilaAjuste>
+
+                {/* Pro Bike Salta, 14-oct-2026: cuánto lleva cada bici de verdad. Cada mecánico
+                    arranca y pausa su reloj; la base corta sola lo que quedó andando. */}
+                {tieneFeature(taller, 'cronometro') && (
+                    <FilaAjuste
+                        id="cronometro"
+                        icono={Clock}
+                        titulo="Cronómetro de trabajo"
+                        resumen="Cada mecánico arranca y pausa el reloj."
+                        control={
+                            <Switch
+                                checked={cronoActivo}
+                                disabled={!esAdminPref}
+                                onCheckedChange={v => guardarCronometro(v, cronoHora)}
+                            />
+                        }
+                        aviso={!esAdminPref && (
+                            <p className="text-xs text-muted-foreground">Lo cambia el administrador.</p>
+                        )}
+                    >
+                        <SubAjuste
+                            titulo="Hora de cierre"
+                            resumen="A esta hora se corta solo el reloj que quedó andando."
+                            apagado={!cronoActivo}
+                            control={
+                                <Input
+                                    type="time"
+                                    value={cronoHora}
+                                    disabled={!esAdminPref}
+                                    onChange={e => setCronoHora(e.target.value)}
+                                    onBlur={() => { if (cronoHora !== (taller.config_cronometro?.hora_cierre || '20:00')) void guardarCronometro(cronoActivo, cronoHora); }}
+                                    aria-label="Hora de cierre del cronómetro"
+                                    className="h-9 w-28"
+                                />
+                            }
+                        />
+                        <ComoFunciona>
+                            <p>
+                                Cada mecánico arranca el reloj en cada bici y lo pausa cuando le surge otra
+                                cosa. <strong>Tiene un solo reloj andando</strong>: si arranca otro trabajo, el
+                                anterior se pausa solo.
+                            </p>
+                            <p>
+                                Lo que no tiene orden (armar una bici para vender, el mostrador) se cuenta con
+                                <strong> Otro trabajo</strong>. Al finalizar una orden, su reloj se corta solo.
+                            </p>
+                            <p>
+                                Si alguien se olvida el reloj andando, a la hora de cierre se corta y queda
+                                marcado <em>se cortó solo</em>, para que no infle los números. En cada orden
+                                ves quién estuvo, de qué hora a qué hora y cuánto.
+                            </p>
+                        </ComoFunciona>
+                    </FilaAjuste>
+                )}
             </PanelAjustes>
         </GrupoAjustes>
 

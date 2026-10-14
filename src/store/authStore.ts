@@ -71,6 +71,11 @@ export interface TallerData {
      * en la base (controlar_precio_repuesto). Ver `src/lib/precioQueNoBaja.ts`.
      */
     mecanico_no_baja_repuestos?: boolean;
+    /**
+     * El cronómetro de trabajo (14-oct-2026): { activo, hora_cierre 'HH:MM' }. Apagado por defecto,
+     * solo lo cambia el admin (trigger en la base). Se lee por `cronometroActivo` (planFeatures.ts).
+     */
+    config_cronometro?: { activo?: boolean; hora_cierre?: string } | null;
     /** El taller no paga suscripción (cliente cero, demo, canje): no ve nada del débito. Solo el super admin. */
     sin_cobro?: boolean;
     /**

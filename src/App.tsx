@@ -30,6 +30,8 @@ import { tintaSobre, tintaLegible, hexAHslCss, hexARgb, PISO_TEXTO_GRANDE } from
 import { useVersionCheck } from "@/hooks/useVersionCheck";
 import { useIdleTimeout } from "@/hooks/useIdleTimeout";
 import { UpdateBanner } from "@/components/UpdateBanner";
+import { IndicadorCronometro } from "@/components/Cronometro";
+import { useCronometro } from "@/store/cronometroStore";
 import { NotificationBell } from "@/components/NotificationBell";
 import { NovedadesPopup } from "@/components/NovedadesPopup";
 import { OnboardingTour } from "@/components/OnboardingTour";
@@ -47,6 +49,8 @@ function AppContent() {
   const logout = useAuthStore((state) => state.logout);
   const rol = useAuthStore((state) => state.rol);
   const taller = useAuthStore((state) => state.taller);
+  // Con un reloj andando hay una barra fija abajo: la pantalla le deja lugar para que no tape lo último.
+  const tengoReloj = useCronometro((s) => s.andando.some((a) => a.usuario_id === session?.user?.id));
   const setAuth = useAuthStore((state) => state.setAuth);
   const setTaller = useAuthStore((state) => state.setTaller);
   const fetchDashboardData = useDataStore((state) => state.fetchDashboardData);
@@ -215,6 +219,8 @@ function AppContent() {
       {/* 🔒 Idle-timeout guardian — active only when session exists */}
       <IdleGuard />
       {updateAvailable && <UpdateBanner />}
+      {/* El cronómetro de trabajo: la barra fija del reloj propio (invisible si está apagado). */}
+      <IndicadorCronometro />
       {/* Pop-up de novedades al abrir la app — 1 vez por dispositivo (Tarea C) */}
       <NovedadesPopup />
       {/* Recorrido de bienvenida — 1 vez por dispositivo; repetible desde Configuración */}
@@ -428,7 +434,7 @@ function AppContent() {
       </nav>
 
       {/* Main Content */}
-      <main className="flex-1 min-w-0 p-4 md:p-8 max-w-7xl mx-auto w-full">
+      <main className={`flex-1 min-w-0 p-4 md:p-8 max-w-7xl mx-auto w-full ${tengoReloj ? "pb-28 md:pb-28" : ""}`}>
         <Routes>
           {/* Feedback 11 a Fondo (jul-2026): la página principal es el Taller Activo.
               /workshop se mantiene como alias (IntakeWizard y hábitos navegan ahí). */}

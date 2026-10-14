@@ -109,6 +109,11 @@ const FEATURES: Record<string, Plan[]> = {
      *  WhatsApp porque su gracia es que los turnos se lean solos de la charla.
      *  Además es opt-in por taller: ver `turnosActivos`. */
     turnos: ['Pro', 'Expert'],
+
+    /** El cronómetro de trabajo (Pro Bike Salta, 14-oct-2026): cada mecánico arranca y pausa su
+     *  reloj en cada bici. Va con los mecánicos con login, o sea Pro y Expert. Opt-in por taller
+     *  (`talleres.config_cronometro.activo`, lo cambia solo el admin): ver `cronometroActivo`. */
+    cronometro: ['Pro', 'Expert'],
 };
 
 export type Feature = keyof typeof FEATURES;
@@ -221,4 +226,9 @@ export function turnosActivos(taller?: { plan_actual?: string; config_turnos?: a
 /** Tareas libres de una orden que todavía no se tildaron. */
 export function tareasLibresPendientes(servicio?: { tareas_extra?: TareaService[] | null } | null): TareaService[] {
     return (servicio?.tareas_extra || []).filter(t => !t.hecha);
+}
+
+/** true solo si el plan lo permite Y el admin prendió el cronómetro en Configuración. */
+export function cronometroActivo(taller?: { plan_actual?: string; config_cronometro?: any } | null): boolean {
+    return tieneFeature(taller ?? null, 'cronometro') && taller?.config_cronometro?.activo === true;
 }

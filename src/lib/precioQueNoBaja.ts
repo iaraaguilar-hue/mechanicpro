@@ -54,13 +54,20 @@ export function pisoDelRenglon(args: {
 
 const pesos = (n: number) => '$' + n.toLocaleString('es-AR', { maximumFractionDigits: 2 });
 
-export const textoPisoBajo = (piso: number) =>
-    `El precio de lista es ${pesos(piso)}. Podés cobrar más, no menos. Un descuento lo hace el administrador.`;
+/**
+ * El aviso. Si el piso es MENOR que la lista (la orden ya tenía el repuesto cobrado bajo la lista
+ * antes de prender el ajuste), el piso es lo que ya cobraba y decir "precio de lista" sería mentir.
+ * Espejo del mensaje de la base (migración 20261014200000).
+ */
+export const textoPisoBajo = (piso: number, lista?: number | null) =>
+    lista != null && piso < lista
+        ? `Esta orden ya tenía este repuesto a ${pesos(piso)}. Podés cobrar eso o más. Un descuento lo hace el administrador.`
+        : `El precio de lista es ${pesos(piso)}. Podés cobrar más, no menos. Un descuento lo hace el administrador.`;
 
 /** El texto para el mecánico si el precio baja del piso; null si está bien. */
 export function avisoPrecioBajo(r: PisoDelRenglon, precio: number): string | null {
     if (!r.aplica || r.piso == null) return null;
-    return Number(precio || 0) < r.piso ? textoPisoBajo(r.piso) : null;
+    return Number(precio || 0) < r.piso ? textoPisoBajo(r.piso, r.lista) : null;
 }
 
 /** Marca chica para el administrador: el control está prendido pero este repuesto no tiene piso. */
@@ -72,6 +79,8 @@ export const sinPrecioDeLista = (r: PisoDelRenglon) => r.aplica && r.lista == nu
  */
 export function traducirErrorDePiso(mensaje: string | null | undefined): string | null {
     const m = /El precio de lista es \$([\d.,]+)\. Podés cobrar más, no menos/.exec(mensaje || '');
-    if (!m) return null;
-    return `El precio de lista es $${m[1]}. Podés cobrar más, no menos. Un descuento lo hace el administrador.`;
+    if (m) return `El precio de lista es $${m[1]}. Podés cobrar más, no menos. Un descuento lo hace el administrador.`;
+    const o = /Esta orden ya tenía este repuesto a \$([\d.,]+)\. Podés cobrar eso o más/.exec(mensaje || '');
+    if (o) return `Esta orden ya tenía este repuesto a $${o[1]}. Podés cobrar eso o más. Un descuento lo hace el administrador.`;
+    return null;
 }

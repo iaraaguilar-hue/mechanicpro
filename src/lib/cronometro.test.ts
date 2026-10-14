@@ -1,6 +1,6 @@
 // Tests de las cuentas y los textos del cronómetro. Mini-harness propio (no hay vitest):
 //   ./node_modules/.bin/esbuild src/lib/cronometro.test.ts --bundle --platform=node --format=cjs --outfile=/tmp/t.cjs && node /tmp/t.cjs
-import { hhmm, duracionLarga, acumuladoPorOrden, accionDeLaOrden, fraseOtrosConLaBici, otrosConLaBici, fraseDeError, descripcionDelTrabajo } from './cronometro';
+import { hhmm, duracionLarga, acumuladoPorOrden, totalDelReloj, acumuladoLibreDeHoy, claveLibre, inicioDelDiaAR, accionDeLaOrden, fraseOtrosConLaBici, otrosConLaBici, fraseDeError, descripcionDelTrabajo } from './cronometro';
 import { cronometroActivo } from './planFeatures';
 
 let ok = 0, fail = 0;
@@ -45,6 +45,26 @@ eq('error sin código: frase humana, no el crudo', fraseDeError({ message: 'Fetc
 eq('descripción de armado con modelo', descripcionDelTrabajo({ tipo: 'armado', detalle: ' Allez ' }), 'Armado: Allez');
 eq('descripción de mostrador sin detalle', descripcionDelTrabajo({ tipo: 'mostrador', detalle: null }), 'Mostrador');
 eq('descripción de orden', descripcionDelTrabajo({ tipo: 'orden', detalle: null }, { numero: '#0123', bici: 'Trek' }), 'Orden #0123 · Trek');
+
+// La barra fija muestra el MISMO número que el chip de la orden (todo mi tiempo en ella), no el tramo
+const T0 = Date.parse('2026-10-14T15:00:00Z');
+const inicioAndando = new Date(T0 - 5 * 60000).toISOString(); // anda hace 5 min
+eq('orden: tramos cerrados (42 min) + el que anda (5) = 47', hhmm(totalDelReloj({ servicio_id: 'A', tipo: 'orden', detalle: null, inicio: inicioAndando }, { A: 42 * 60000 }, {}, T0)), '00:47');
+eq('orden sin tiempo previo: solo el tramo que anda', hhmm(totalDelReloj({ servicio_id: 'B', tipo: 'orden', detalle: null, inicio: inicioAndando }, { A: 42 * 60000 }, {}, T0)), '00:05');
+eq('recién arrancado con 42 min previos: 00:42, no 00:00', hhmm(totalDelReloj({ servicio_id: 'A', tipo: 'orden', detalle: null, inicio: new Date(T0).toISOString() }, { A: 42 * 60000 }, {}, T0)), '00:42');
+// Sin orden: el total de ese trabajo HOY (cerrados de hoy + el que anda)
+const desde = inicioDelDiaAR(T0);
+eq('el día AR arranca a las 03:00 UTC', new Date(desde).toISOString(), '2026-10-14T03:00:00.000Z');
+const libre = acumuladoLibreDeHoy([
+    { tipo: 'armado', detalle: 'Allez', servicio_id: null, inicio: '2026-10-14T12:00:00Z', fin: '2026-10-14T12:30:00Z' },
+    { tipo: 'armado', detalle: ' allez ', servicio_id: null, inicio: '2026-10-14T13:00:00Z', fin: '2026-10-14T13:10:00Z' },
+    { tipo: 'armado', detalle: 'Allez', servicio_id: null, inicio: '2026-10-13T12:00:00Z', fin: '2026-10-13T15:00:00Z' }, // ayer: no cuenta
+    { tipo: 'mostrador', detalle: null, servicio_id: null, inicio: '2026-10-14T12:00:00Z', fin: '2026-10-14T12:20:00Z' },
+    { tipo: 'armado', detalle: 'Allez', servicio_id: 'A', inicio: '2026-10-14T12:00:00Z', fin: '2026-10-14T12:50:00Z' }, // con orden: no es libre
+], desde);
+eq('libre de hoy: armado Allez = 40 min, ayer y con-orden afuera', libre[claveLibre('armado', 'Allez')], 40 * 60000);
+eq('armado andando hace 5 min con 40 de hoy = 00:45', hhmm(totalDelReloj({ servicio_id: null, tipo: 'armado', detalle: 'Allez', inicio: inicioAndando }, {}, libre, T0)), '00:45');
+eq('mostrador sin detalle andando', hhmm(totalDelReloj({ servicio_id: null, tipo: 'mostrador', detalle: null, inicio: inicioAndando }, {}, libre, T0)), '00:25');
 
 // El gate: Pro y Expert con el ajuste prendido. Sport o apagado, no.
 eq('Pro prendido', cronometroActivo({ plan_actual: 'Pro', config_cronometro: { activo: true } }), true);

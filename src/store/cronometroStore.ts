@@ -3,7 +3,7 @@
 import { create } from 'zustand';
 import { supabase } from '@/lib/supabase';
 import {
-    acumuladoPorOrden, fraseDeError,
+    acumuladoPorOrden, acumuladoLibreDeHoy, inicioDelDiaAR, fraseDeError,
     type TipoTrabajo, type TrabajoAndando,
 } from '@/lib/cronometro';
 
@@ -14,6 +14,8 @@ interface CronometroState {
     andando: TrabajoAndando[];
     /** Mis tramos CERRADOS, sumados por orden (ms). */
     acumulado: Record<string, number>;
+    /** Mis tramos CERRADOS de hoy sin orden (armado, mostrador, otro), por tipo+detalle (ms). */
+    libreHoy: Record<string, number>;
     cargado: boolean;
     ocupado: boolean;
     refrescar: (miId: string) => Promise<void>;
@@ -27,11 +29,12 @@ const HACE_90_DIAS = () => new Date(Date.now() - 90 * 86400e3).toISOString();
 export const useCronometro = create<CronometroState>((set, get) => ({
     andando: [],
     acumulado: {},
+    libreHoy: {},
     cargado: false,
     ocupado: false,
 
     refrescar: async (miId) => {
-        const [a, m] = await Promise.all([
+        const [a, m, l] = await Promise.all([
             supabase.rpc('trabajos_andando'),
             supabase.from('tiempos_trabajo')
                 .select('servicio_id, inicio, fin')
@@ -40,11 +43,19 @@ export const useCronometro = create<CronometroState>((set, get) => ({
                 .not('fin', 'is', null)
                 .gte('inicio', HACE_90_DIAS())
                 .limit(3000),
+            supabase.from('tiempos_trabajo')
+                .select('servicio_id, tipo, detalle, inicio, fin')
+                .eq('usuario_id', miId)
+                .is('servicio_id', null)
+                .not('fin', 'is', null)
+                .gte('inicio', new Date(inicioDelDiaAR(Date.now())).toISOString())
+                .limit(500),
         ]);
         // Si una lectura falla se deja lo que había: un reloj no se borra por un "Failed to fetch".
         set(s => ({
             andando: a.error ? s.andando : ((a.data as TrabajoAndando[]) || []),
             acumulado: m.error ? s.acumulado : acumuladoPorOrden((m.data as any[]) || []),
+            libreHoy: l.error ? s.libreHoy : acumuladoLibreDeHoy((l.data as any[]) || [], inicioDelDiaAR(Date.now())),
             cargado: true,
         }));
     },
@@ -79,5 +90,5 @@ export const useCronometro = create<CronometroState>((set, get) => ({
         } finally { set({ ocupado: false }); }
     },
 
-    limpiar: () => set({ andando: [], acumulado: {}, cargado: false }),
+    limpiar: () => set({ andando: [], acumulado: {}, libreHoy: {}, cargado: false }),
 }));

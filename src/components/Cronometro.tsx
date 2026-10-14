@@ -24,17 +24,25 @@ import { cronometroActivo } from '@/lib/planFeatures';
 import { formatOrdenNumber } from '@/lib/formatId';
 import {
     hhmm, accionDeLaOrden, otrosConLaBici, fraseOtrosConLaBici, descripcionDelTrabajo,
-    duracionDeTramo, duracionLarga, horaAR, diaCortoAR, NOMBRE_DE_TIPO,
+    duracionDeTramo, duracionLarga, totalDelReloj, horaAR, diaCortoAR, NOMBRE_DE_TIPO,
     type TramoTrabajo, type TipoTrabajo,
 } from '@/lib/cronometro';
 
-/** Un "ahora" que se actualiza solo (alcanza cada 10 s: se muestran horas y minutos). */
-function useAhora(cadaMs = 10000) {
-    const [ahora, setAhora] = useState(() => Date.now());
+/** Un "ahora" que se actualiza solo y es EL MISMO para todos los relojes de la pantalla (así la barra
+ *  y el chip de una orden nunca se desfasan un minuto). Cada 10 s alcanza: se muestran horas y minutos. */
+let ahoraComun = Date.now();
+const oyentes = new Set<(t: number) => void>();
+let reloj: ReturnType<typeof setInterval> | null = null;
+function useAhora(_cadaMs = 10000) {
+    const [ahora, setAhora] = useState(() => { if (!reloj) ahoraComun = Date.now(); return ahoraComun; });
     useEffect(() => {
-        const id = setInterval(() => setAhora(Date.now()), cadaMs);
-        return () => clearInterval(id);
-    }, [cadaMs]);
+        oyentes.add(setAhora);
+        if (!reloj) reloj = setInterval(() => { ahoraComun = Date.now(); oyentes.forEach(f => f(ahoraComun)); }, 10000);
+        return () => {
+            oyentes.delete(setAhora);
+            if (oyentes.size === 0 && reloj) { clearInterval(reloj); reloj = null; }
+        };
+    }, []);
     return ahora;
 }
 
@@ -78,17 +86,24 @@ export function BotonCronometro({ servicioId, variante = 'tarjeta' }: { servicio
     };
 
     const chico = variante === 'fila';
+    // Jerarquía (15-oct): Empezar/Seguir es secundario (contorno, como Reabrir); lo que resalta es el
+    // reloj andando, con el verde que ya era la señal de "hay un reloj". Ningún color del taller.
     return (
-        <div data-cronometro={servicioId} className="flex flex-col gap-1" onClick={e => e.stopPropagation()}>
+        <div
+            data-cronometro={servicioId}
+            data-andando={mio ? 'si' : 'no'}
+            className={`flex flex-col gap-1 ${mio && !chico ? 'rounded-xl bg-emerald-50 p-1.5 ring-1 ring-emerald-300' : ''}`}
+            onClick={e => e.stopPropagation()}
+        >
             <div className={chico ? 'flex flex-col items-start gap-1' : 'flex items-center gap-2'}>
                 <button
                     type="button"
                     onClick={tocar}
                     disabled={ocupado}
                     aria-label={`${accion} el reloj en esta orden`}
-                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg border font-semibold transition-colors disabled:opacity-60 ${chico ? 'h-8 px-2.5 text-xs' : 'h-11 flex-1 text-sm'} ${mio
-                        ? 'border-slate-300 bg-white text-slate-800 hover:bg-slate-100 active:bg-slate-100'
-                        : 'border-slate-900 bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-800'}`}
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg border font-semibold transition-colors disabled:opacity-60 ${chico ? 'h-8 px-2.5 text-xs' : 'h-11 px-4 text-sm'} ${mio
+                        ? 'border-emerald-600 bg-white font-bold text-emerald-800 hover:bg-emerald-100 active:bg-emerald-100'
+                        : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-100'}`}
                 >
                     {ocupado ? <Loader2 className="h-4 w-4 animate-spin" /> : mio ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                     {accion}
@@ -98,7 +113,7 @@ export function BotonCronometro({ servicioId, variante = 'tarjeta' }: { servicio
                         data-cronometro-tiempo
                         title={mio ? 'Tu reloj en esta orden, andando' : 'Tu tiempo en esta orden'}
                         className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-bold tabular-nums ${chico ? '' : 'h-8'} ${mio
-                            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                            ? 'border-emerald-700 bg-emerald-600 text-white'
                             : 'border-slate-200 bg-slate-50 text-slate-600'}`}
                     >
                         <Timer className="h-3 w-3" /> {hhmm(total)}
@@ -119,6 +134,8 @@ export function IndicadorCronometro() {
     const pausar = useCronometro(s => s.pausar);
     const ocupado = useCronometro(s => s.ocupado);
     const mio = useMiReloj();
+    const acumulado = useCronometro(s => s.acumulado);
+    const libreHoy = useCronometro(s => s.libreHoy);
     const servicios = useDataStore(s => s.servicios);
     const bicicletas = useDataStore(s => s.bicicletas);
     const ahora = useAhora();
@@ -164,7 +181,7 @@ export function IndicadorCronometro() {
                         <span className="text-slate-300">Estás con: </span>
                         <span className="font-semibold">{descripcion}</span>
                     </span>
-                    <span data-indicador-tiempo className="shrink-0 font-bold tabular-nums">{hhmm(ahora - new Date(mio.inicio).getTime())}</span>
+                    <span data-indicador-tiempo className="shrink-0 font-bold tabular-nums">{hhmm(totalDelReloj(mio, acumulado, libreHoy, ahora))}</span>
                 </p>
                 <button
                     type="button"

@@ -158,6 +158,16 @@ const creados = { usuarios: [], servicios: [], tramos: [] };
             chk(await indicador(L.page).count() === 1 && (await indicador(L.page).innerText()).includes(numero(A)), `1. la barra dice «Estás con: Orden ${numero(A)}»`);
             const tiempoA = await L.page.locator(`[data-cronometro="${A.id}"]:visible [data-cronometro-tiempo]`).first().innerText();
             chk(/^\s*0[0-9]:[0-5][0-9]\s*$/.test(tiempoA) && tiempoA.trim() >= '00:42', `1. el tiempo de A sigue desde 00:42 (${tiempoA.trim()})`);
+            // La barra fija y el chip de la orden dicen EL MISMO número (todo mi tiempo en esa orden), no el tramo
+            const nBarra = (await L.page.locator('[data-indicador-tiempo]').first().innerText()).trim();
+            chk(nBarra === tiempoA.trim() && nBarra >= '00:42', `1. la barra (${nBarra}) y el chip de la orden (${tiempoA.trim()}) muestran el mismo número, con los 42 min de antes`);
+            // Jerarquía: Empezar en B es secundario (fondo blanco, contorno); la orden andando es la que resalta
+            const jer = await L.page.evaluate(([a, bId]) => {
+                const bg = (id) => { const e = [...document.querySelectorAll(`[data-cronometro="${id}"] button`)].find(x => x.offsetParent !== null); return getComputedStyle(e).backgroundColor; };
+                const chipBg = getComputedStyle([...document.querySelectorAll(`[data-cronometro="${a}"] [data-cronometro-tiempo]`)].find(x => x.offsetParent !== null)).backgroundColor;
+                return { parada: bg(bId), andando: bg(a), chipAndando: chipBg, marca: [...document.querySelectorAll(`[data-cronometro="${a}"]`)].some(x => x.offsetParent !== null && x.dataset.andando === 'si') };
+            }, [A.id, B.id]);
+            chk(jer.parada === 'rgb(255, 255, 255)' && jer.marca && jer.chipAndando !== 'rgb(248, 250, 252)', `1. jerarquía: «Empezar» es de contorno (${jer.parada}), la orden andando está marcada y su chip resalta (${jer.chipAndando})`);
             await foto(L.page, `${modo}_2_andando_en_A`);
 
             await btn(L.page, B).click();

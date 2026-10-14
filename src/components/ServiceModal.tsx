@@ -762,7 +762,7 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
             }
         } catch (e: any) {
             // El aviso del piso de precios ya viene escrito para el mecánico: sin "Error:" adelante.
-            alert(/^El precio de lista es \$/.test(e.message || '') ? e.message : `Error: ${e.message}`);
+            alert(/^(El precio de lista es|Esta orden ya tenía este repuesto a) \$/.test(e.message || '') ? e.message : `Error: ${e.message}`);
         } finally {
             setIsSaving(false);
         }

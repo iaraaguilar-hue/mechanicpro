@@ -76,6 +76,45 @@ export function acumuladoPorOrden(tramos: Pick<TramoTrabajo, 'servicio_id' | 'in
     return r;
 }
 
+/** Clave de un trabajo sin orden (armado, mostrador, otro) para sumar su tiempo de hoy. */
+export function claveLibre(tipo: string, detalle: string | null | undefined): string {
+    return `${tipo}|${(detalle || '').trim().toLowerCase()}`;
+}
+
+/** Inicio del día de calendario argentino (UTC-3, sin horario de verano) de `ahora`, en ms UTC. */
+export function inicioDelDiaAR(ahora: number): number {
+    const d = new Date(ahora - 3 * 3600e3);
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 3);
+}
+
+/** Suma de los tramos CERRADOS sin orden desde `desde`, por tipo+detalle. */
+export function acumuladoLibreDeHoy(
+    tramos: { tipo: string; detalle: string | null; servicio_id: string | null; inicio: string; fin: string | null }[],
+    desde: number,
+): Record<string, number> {
+    const r: Record<string, number> = {};
+    for (const t of tramos) {
+        if (t.servicio_id || !t.fin || msDe(t.inicio) < desde) continue;
+        const k = claveLibre(t.tipo, t.detalle);
+        r[k] = (r[k] || 0) + duracionDeTramo(t, 0);
+    }
+    return r;
+}
+
+/**
+ * El número que muestra la barra fija: el MISMO que el chip de esa orden (todo mi tiempo en la
+ * orden, tramos cerrados + el que anda). Sin orden: el total de ese trabajo hoy.
+ */
+export function totalDelReloj(
+    mio: { servicio_id: string | null; tipo: string; detalle: string | null; inicio: string },
+    acumulado: Record<string, number>,
+    libreHoy: Record<string, number>,
+    ahora: number,
+): number {
+    const base = mio.servicio_id ? (acumulado[mio.servicio_id] || 0) : (libreHoy[claveLibre(mio.tipo, mio.detalle)] || 0);
+    return base + Math.max(0, ahora - msDe(mio.inicio));
+}
+
 /** Lo que dice el botón de una orden: Empezar, Seguir (ya tiene tiempo mío) o Pausar (anda ahora). */
 export function accionDeLaOrden(andaAca: boolean, acumuladoMs: number): 'Pausar' | 'Seguir' | 'Empezar' {
     if (andaAca) return 'Pausar';

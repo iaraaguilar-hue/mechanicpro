@@ -208,9 +208,15 @@ async function recorrer(page, { conDescarga, celu = false }) {
             const pegado = txt.replace(/\s+/g, '').toLowerCase();
             if (pegado.includes('comprobantedeingreso')) ok(`${nombre} · el PDF es el comprobante de ingreso`);
             else mal(`${nombre} · el PDF no dice "Comprobante de ingreso"`);
-            // Todos los services del catálogo del Demo empiezan por el lavado: si el checklist
-            // salió vacío, esta palabra no está.
-            if (/lavado/i.test(txt)) ok(`${nombre} · trae el checklist del service del catálogo`);
+            // El checklist es la descripción de algún service del catálogo del Demo. Antes se
+            // buscaba "lavado" (todos empezaban así), pero el 14-oct-2026 el catálogo pasó a
+            // tener Brain y Horquilla, que no lo traen, y el candado dio rojo con el PDF bien.
+            // Se busca el primer renglón REAL de cada descripción, leído de la base.
+            const cat = await (await api(`catalogo_servicios?select=descripcion&taller_id=eq.${DEMO}&activo=eq.true`)).json();
+            const sinEsp = s => s.replace(/\s+/g, '').toLowerCase();
+            const renglones = cat.map(c => (c.descripcion || '').replace(/<[^>]+>/g, '\n').split('\n')
+                .map(l => l.replace(/^[\s•·\-]+/, '').trim()).find(l => l.length > 12)).filter(Boolean);
+            if (renglones.some(r => pegado.includes(sinEsp(r)))) ok(`${nombre} · trae el checklist del service del catálogo`);
             else mal(`${nombre} · el PDF salió SIN el checklist del catálogo (descripcion_catalogo perdida)`);
             if (pegado.includes('checklistdeltaller')) ok(`${nombre} · trae la mitad de abajo, la del taller`);
             else mal(`${nombre} · no aparece la mitad del taller`);

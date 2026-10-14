@@ -54,7 +54,7 @@ eq('entró sin lista: queda sin piso y marcado', [avisoPrecioBajo(pisoDelRenglon
 // Piso congelado MENOR que la lista (la orden ya lo cobraba bajo la lista): no se dice "precio de lista"
 const pisoBajo = new Map<string, PisoOrden>([[claveProducto('Cubierta Alfa'), { precio_lista: 10000, piso: 4000 }]]);
 const rb = pisoDelRenglon({ ...base, pisosDeLaOrden: pisoBajo, descripcion: 'Cubierta Alfa', categoria: 'part' });
-eq('piso 4.000 con lista 10.000: texto de «ya tenía»', avisoPrecioBajo(rb, 3999), 'Esta orden ya tenía este repuesto a $4.000. Podés cobrar eso o más. Un descuento lo hace el administrador.');
+eq('piso 4.000 con lista 10.000: texto de ya tenía', avisoPrecioBajo(rb, 3999), 'Esta orden ya tenía este repuesto a $4.000. Podés cobrar eso o más. Un descuento lo hace el administrador.');
 eq('piso 4.000: cobrar 4.000 no avisa', avisoPrecioBajo(rb, 4000), null);
 eq('piso = lista: sigue el texto de siempre', textoPisoBajo(10000, 10000), 'El precio de lista es $10.000. Podés cobrar más, no menos. Un descuento lo hace el administrador.');
 eq('sin lista conocida: texto de siempre', textoPisoBajo(4000, null), 'El precio de lista es $4.000. Podés cobrar más, no menos. Un descuento lo hace el administrador.');

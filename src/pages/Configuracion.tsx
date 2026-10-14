@@ -1401,11 +1401,13 @@ function TabPreferencias({ taller, setTaller, avisar }: {
     // clientes con su gasto.
     const [segundoOjos, setSegundoOjos] = useState((taller as any).ia_presupuesto_activa !== false);
     const [paradasMecanico, setParadasMecanico] = useState((taller as any).bicis_paradas_ve_mecanico === true);
+    // "El precio que no baja" (14-oct-2026): apagado por defecto. La base lo protege (solo el admin).
+    const [precioFijo, setPrecioFijo] = useState(taller.mecanico_no_baja_repuestos === true);
     const rolPref = useAuthStore(s => s.rol);
     const esAdminPref = rolPref?.toLowerCase()?.trim() === 'admin';
 
     const guardarInterruptor = async (
-        columna: 'ia_presupuesto_activa' | 'bicis_paradas_ve_mecanico',
+        columna: 'ia_presupuesto_activa' | 'bicis_paradas_ve_mecanico' | 'mecanico_no_baja_repuestos',
         valor: boolean, poner: (v: boolean) => void, anterior: boolean, ok: string,
     ) => {
         poner(valor);
@@ -2155,6 +2157,44 @@ function TabPreferencias({ taller, setTaller, avisar }: {
                         )}
                     />
                 )}
+
+                {/* Pro Bike Salta, 14-oct-2026: los mecánicos pueden subir el precio de un repuesto,
+                    no bajarlo; el descuento lo hace el administrador. El candado está en la base. */}
+                <FilaAjuste
+                    id="precio_repuesto"
+                    icono={Lock}
+                    titulo="El mecánico puede subir el precio de un repuesto, no bajarlo"
+                    resumen="El descuento lo hace el administrador."
+                    control={
+                        <Switch
+                            checked={precioFijo}
+                            disabled={!esAdminPref}
+                            onCheckedChange={v => guardarInterruptor('mecanico_no_baja_repuestos', v, setPrecioFijo, precioFijo,
+                                v ? 'Listo: los mecánicos no pueden cobrar un repuesto por debajo del precio de lista.' : 'Listo: los mecánicos pueden cambiar el precio de un repuesto como siempre.')}
+                        />
+                    }
+                    aviso={!esAdminPref && (
+                        <p className="text-xs text-muted-foreground">Lo cambia el administrador.</p>
+                    )}
+                >
+                    <ComoFunciona>
+                        <p>
+                            Prendido, si un mecánico pone un repuesto por menos que su precio de lista, la
+                            orden no se guarda y le dice cuál es el de lista. <strong>Vos podés cobrar el
+                            precio que quieras.</strong>
+                        </p>
+                        <p>
+                            El precio de lista es el del catálogo <strong>en el momento en que el repuesto
+                            entró a esa orden</strong>: si el catálogo sube después, las órdenes ya cargadas
+                            no se traban. Si un repuesto no tiene precio de lista, o está escrito a mano,
+                            se guarda igual y lo ves marcado como <em>sin precio de lista</em>.
+                        </p>
+                        <p>
+                            Solo repuestos: la mano de obra y el precio del service quedan como están. Lo
+                            que cobra un mecánico no cambia el precio de lista del catálogo.
+                        </p>
+                    </ComoFunciona>
+                </FilaAjuste>
             </PanelAjustes>
         </GrupoAjustes>
 

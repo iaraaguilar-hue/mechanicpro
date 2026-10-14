@@ -1,3 +1,4 @@
+import { traducirErrorDePiso } from '@/lib/precioQueNoBaja';
 import { create } from 'zustand';
 import {
     huellaItemsERP, huellaItemsEnTaller, corregirOrdenEnERP, sincronizarOrdenEnTaller, cerrarOrdenEnTaller, aceptaOrdenEnTaller,
@@ -228,7 +229,7 @@ export interface SupabaseService {
     tareas_extra?: { id: string; texto: string; hecha: boolean }[] | null;
     carrera_id?: string | null;
     alertas_ocultas?: string[];
-    items_extra?: { id: string; descripcion: string; precio: number; categoria?: string }[];
+    items_extra?: { id: string; descripcion: string; precio: number; categoria?: string; precio_lista?: number | null }[];
     descripcion_catalogo?: string | null;
 }
 
@@ -791,7 +792,18 @@ export const useDataStore = create<DataState>((set, get) => ({
                 categoria: item.categoria || 'labor',
             }));
             const { error: itemsError } = await supabase.from('servicio_items').insert(itemsToInsert);
-            if (itemsError) console.error('Error insertando items:', itemsError.message);
+            if (itemsError) {
+                // "El precio que no baja": la pantalla avisa antes de guardar, pero si igual llega el
+                // rechazo de la base (otra pestaña, un catálogo que cambió justo) no queda una orden
+                // creada sin renglones ni un error crudo: se anula la orden recién creada y se
+                // dice lo mismo que dice la pantalla.
+                const textoPiso = traducirErrorDePiso(itemsError.message);
+                if (textoPiso) {
+                    await supabase.from('servicios').update({ eliminado_en: new Date().toISOString() }).eq('id', createdService.id);
+                    throw new Error(textoPiso);
+                }
+                console.error('Error insertando items:', itemsError.message);
+            }
 
             // El buscador aprende de esta orden (no bloquea el alta si falla).
             await get().registrarProductosUsados(itemsToInsert);
@@ -884,6 +896,19 @@ export const useDataStore = create<DataState>((set, get) => ({
                 }));
                 const { error: itemsError } = await supabase.from('servicio_items').insert(itemsToInsert);
                 if (itemsError) {
+                    // "El precio que no baja": el borrado de arriba ya pasó, así que se devuelven los
+                    // renglones que tenía (esos ya habían pasado el control, con su piso congelado) y se
+                    // le dice al mecánico lo mismo que le dice la pantalla. Nunca un error crudo.
+                    const textoPiso = traducirErrorDePiso(itemsError.message);
+                    if (textoPiso) {
+                        if (itemsAntes && itemsAntes.length) {
+                            await supabase.from('servicio_items').insert(itemsAntes.map((i: any) => ({
+                                servicio_id: id, taller_id: tallerId,
+                                descripcion: i.descripcion, precio: i.precio, categoria: i.categoria || 'labor',
+                            })));
+                        }
+                        throw new Error(textoPiso);
+                    }
                     console.error('Error insertando items:', itemsError.message);
                     itemsGuardados = false;
                 }

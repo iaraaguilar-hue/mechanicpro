@@ -64,6 +64,13 @@ export interface TallerData {
      * el admin ve el botón. Lo marca a mano el super admin; ver `src/lib/debitoAutomatico.ts`.
      */
     debito_automatico_at?: string | null;
+    /**
+     * "El precio que no baja" (14-oct-2026, Pro Bike Salta): si es true, un mecánico puede subir el
+     * precio de un repuesto en la orden pero no bajarlo del precio de lista. Apagado por defecto.
+     * Solo lo cambia el admin (trigger proteger_precio_repuestos); el candado real del precio vive
+     * en la base (controlar_precio_repuesto). Ver `src/lib/precioQueNoBaja.ts`.
+     */
+    mecanico_no_baja_repuestos?: boolean;
     /** El taller no paga suscripción (cliente cero, demo, canje): no ve nada del débito. Solo el super admin. */
     sin_cobro?: boolean;
     /**

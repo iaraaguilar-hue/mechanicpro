@@ -31,6 +31,7 @@ import { tourBloqueaCierreDialog } from "@/components/OnboardingTour";
 import DictadoOrden from "@/components/DictadoOrden";
 import { buscarProductos, claveProducto } from "@/lib/buscadorProductos";
 import { vieneComoRepuesto } from "@/lib/chequeoOrdenERP";
+import { pisoDelRenglon, avisoPrecioBajo, sinPrecioDeLista, type PisoOrden } from "@/lib/precioQueNoBaja";
 import { type OrdenDictada } from "@/store/dataStore";
 
 // Service types (const object pattern for erasableSyntaxOnly compatibility)
@@ -595,6 +596,33 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
         return vieneComoRepuesto(p) ? p : null;
     };
 
+    // ── "El precio que no baja" (14-oct-2026, Pro Bike Salta) ───────────────────
+    // Con el ajuste prendido, un mecánico no puede cobrar un repuesto por debajo del precio de
+    // lista; el administrador sí. El candado real es de la base (controlar_precio_repuesto):
+    // esto solo avisa ANTES de guardar, al lado del renglón. Ver src/lib/precioQueNoBaja.ts.
+    const rolActual = useAuthStore(s => s.rol);
+    const precioFijoActivo = (taller as any)?.mecanico_no_baja_repuestos === true;
+    const esLibreDePiso = ['admin', 'super_admin'].includes((rolActual || '').toLowerCase().trim());
+    const [pisosDeLaOrden, setPisosDeLaOrden] = useState<Map<string, PisoOrden>>(new Map());
+    useEffect(() => {
+        // El piso de un repuesto en una orden ya guardada es el del momento en que entró a ELLA
+        // (no el de hoy). Solo se pide con el ajuste prendido: a los demás talleres no les cuesta nada.
+        if (!precioFijoActivo || !serviceId) { setPisosDeLaOrden(new Map()); return; }
+        let vivo = true;
+        supabase.from('servicio_piso_repuestos').select('clave,precio_lista,piso').eq('servicio_id', serviceId)
+            .then(({ data }) => {
+                if (!vivo) return;
+                setPisosDeLaOrden(new Map((data || []).map((r: any) => [r.clave, { precio_lista: r.precio_lista, piso: r.piso }])));
+            });
+        return () => { vivo = false; };
+    }, [precioFijoActivo, serviceId]);
+    const pisoDelItem = (item: { description: string; category?: 'part' | 'labor' }) => pisoDelRenglon({
+        activo: precioFijoActivo, descripcion: item.description, categoria: item.category,
+        pisosDeLaOrden, catalogo: catalogoPorClave,
+    });
+    const avisoDePrecio = (item: { description: string; price: number; category?: 'part' | 'labor' }) =>
+        esLibreDePiso ? null : avisoPrecioBajo(pisoDelItem(item), item.price);
+
     const totalPrice = basePrice + extraItems.reduce((acc, item) => acc + item.price, 0);
 
     const handleTypeChange = (type: string, price: number) => {
@@ -653,6 +681,9 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
 
     const handleSubmit = async () => {
         if (!taller_id) return alert("Error: sin taller_id");
+        // El aviso ya está a la vista al lado del renglón; acá se frena el guardado y se dice cuál es.
+        const renglonBajo = extraItems.find(i => avisoDePrecio(i));
+        if (renglonBajo) return alert(`Revisá el precio de "${renglonBajo.description}". ${avisoDePrecio(renglonBajo)}`);
         setIsSaving(true);
         try {
             // Lo que incluye el service según el catálogo: no es una columna de `servicios`
@@ -955,6 +986,8 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                             <div className="space-y-2">
                                 {extraItems.map((item) => {
                                   const avisoRepuesto = pareceRepuesto(item);
+                                  const avisoPiso = avisoDePrecio(item);
+                                  const marcaSinLista = esLibreDePiso && !!item.description.trim() && sinPrecioDeLista(pisoDelItem(item));
                                   return (
                                     <div key={item.id}>
                                     <div className="flex gap-2 items-center">
@@ -999,6 +1032,17 @@ function ServiceDefinitionStep({ bike, serviceId, clientName, dictadoInicial, on
                                             <Trash2 className="w-4 h-4 text-red-500" />
                                         </Button>
                                     </div>
+
+                                    {avisoPiso && (
+                                        <p role="alert" data-aviso="precio-bajo" className="ml-[4.5rem] mt-1 mb-1 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-800">
+                                            {avisoPiso}
+                                        </p>
+                                    )}
+                                    {marcaSinLista && (
+                                        <p data-aviso="sin-precio-de-lista" className="ml-[4.5rem] mt-0.5 mb-1 text-[11px] text-muted-foreground">
+                                            sin precio de lista
+                                        </p>
+                                    )}
 
                                     {avisoRepuesto && (
                                         <div className="ml-[4.5rem] mt-1 mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5">

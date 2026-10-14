@@ -69,6 +69,7 @@ export const AJUSTES: Ajuste[] = [
     { id: 'horas', titulo: 'Cuánto esperar al cliente antes de llamarlo', tab: 'preferencias', palabras: 'horas esperar respuesta llamar plazo no contesta' },
     { id: 'altas_erp', titulo: 'La bici vendida entra sola', tab: 'preferencias', palabras: 'erp contabilium venta vendida alta provincias bici nueva cliente nuevo factura' },
     { id: 'bicis_paradas_mecanico', titulo: 'El mecánico también ve Bicis paradas', tab: 'preferencias', palabras: 'permisos permiso mecanico ver bicis paradas stock acceso', requiere: 'bicis_paradas', soloAdmin: true },
+    { id: 'precio_repuesto', titulo: 'El mecánico puede subir el precio de un repuesto, no bajarlo', tab: 'preferencias', palabras: 'precio repuesto repuestos piso lista descuento bajar subir cobrar menos mecanico mecanicos permiso candado', soloAdmin: true },
     { id: 'ocultos', titulo: 'Productos ocultos del buscador de repuestos', tab: 'preferencias', palabras: 'repuestos buscador ocultos no sugerir productos volver a mostrar' },
     { id: 'recorrido', titulo: 'Ver el recorrido de bienvenida', tab: 'preferencias', palabras: 'tutorial ayuda recorrido capacitar aprender como se usa empleado nuevo' },
 ];
